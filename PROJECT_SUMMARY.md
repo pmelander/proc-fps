@@ -36,10 +36,10 @@ Commands:
 
 ```
 npm install
-npm run dev              # ?seed=anything  or  ?map=test01 / test02 (doors and keys)
+npm run dev              # ?seed=anything  or  ?map=test01 / test02 (doors, keys, secret);  /browse.html = seed browser
 npm run ci               # typecheck + tests + gen:stats (2000 seeds) + build
 npm run maps:build       # regenerate test map JSON (CI fails if it drifted)
-npm run gen:stats -- --seeds 10000
+npm run gen:stats -- --seeds 10000   # health check + distributions (rooms, doors, secrets, templates, attempts, gen time)
 ```
 
 ## Invariants (don't break these)
@@ -109,15 +109,14 @@ npm run gen:stats -- --seeds 10000
 
 ## Roadmap
 
-- **M2 — real generator:**
+- **M2 — real generator:** ✅ complete (v0.6.0).
   - ✅ Slice 0: trap detection in validation.
   - ✅ Slice 1: a mission graph with start, exit, doors, and loops, using cyclic generation in the style of Dormans. Door types are in Doors below.
   - ✅ Slice 2: grid embedding of the graph, flat single-storey floor plans.
   - ✅ Slice 3: room templates (hand-authored archetypes with procedural parameters), emitted through `CellPlan`.
   - ✅ Slice 4: doors and keys in the map format, sim, renderer, HUD, and generator; validation walks the level collecting keys.
   - ✅ Slice 5: secrets: optional dead-end rooms behind secret doors, hidden on the automap until found.
-  - Slice 6: tooling (seed browser, distribution tracking in `gen:stats`).
-  - Tooling: a seed browser with map thumbnails, and distribution tracking in `gen:stats`.
+  - ✅ Slice 6: tooling: `/browse.html` shows thumbnails and stats for pages of seeds (click to play); `gen:stats` reports distributions through `levelStats`.
 - **M3 — combat:**
   - Grid-bound enemies: one per cell, own step timers, BFS pathfinding.
   - Wake-up by noise flood fill across sectors.

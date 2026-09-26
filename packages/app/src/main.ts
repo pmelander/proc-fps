@@ -17,11 +17,9 @@ import test01 from '@proc-fps/core/maps/test01.json';
 import test02 from '@proc-fps/core/maps/test02.json';
 import { drawAutomap } from './automap.js';
 import { InputSampler } from './input.js';
+import { KEY_COLORS, KEY_NAMES } from './keys.js';
 
 const TEST_MAPS: Record<string, MapData> = { test01: test01 as MapData, test02: test02 as MapData };
-/** Key ids 0–3. Matches keyColor() in the level shader. */
-const KEY_NAMES = ['blue', 'red', 'yellow', 'green'] as const;
-const KEY_COLORS = ['#4073ff', '#ff3826', '#ffd933', '#40e64d'] as const;
 const NOTICE_SECONDS = 2.5;
 const MAX_FRAME_TIME = 0.25; // avoid spiral of death after tab-out
 const BOB_HEIGHT = 2.5;

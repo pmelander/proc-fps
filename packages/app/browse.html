@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>proc-fps seeds</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./src/browse.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Seed browser</h1>
+      <form id="controls">
+        <label>prefix <input id="prefix" name="prefix" spellcheck="false" autocomplete="off" /></label>
+        <button type="submit">Go</button>
+        <a id="prev">← prev</a>
+        <a id="next">next →</a>
+        <a href="./index.html">play a random level</a>
+      </form>
+      <p><span id="page"></span> · <span id="status"></span></p>
+      <p class="legend">
+        <span class="swatch" style="--c: #c8b890"></span>walls
+        <span class="swatch" style="--c: #9a9a9a"></span>auto door
+        <span class="swatch" style="--c: #4073ff"></span>key door / key
+        <span class="swatch" style="--c: #b060ff"></span>secret
+        <span class="swatch" style="--c: #ffffff"></span>start
+        <span class="swatch" style="--c: #60e070"></span>exit
+        · brighter floor = higher
+      </p>
+    </header>
+    <main id="grid"></main>
+    <script type="module" src="./src/browse.ts"></script>
+  </body>
+</html>

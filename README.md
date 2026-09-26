@@ -6,7 +6,7 @@ Movement is grid-based with free look: the mouse aims freely, and WASD steps one
 
 ```
 npm install
-npm run dev            # http://localhost:5173/?seed=anything  or  ?map=test01 / test02
+npm run dev            # http://localhost:5173/?seed=anything  or  ?map=test01 / test02;  /browse.html = seed browser
 npm run ci             # typecheck + tests + generator health + build
 ```
 
@@ -51,13 +51,13 @@ npm run ci             # typecheck + tests + generator health + build
 
 ## Status
 
-M1 is in place: map format, grid-aligned test map, WebGL2 renderer with sector lighting and palette quantization, grid movement with free look, replays, CI.
+M1 and M2 are in place: map format, WebGL2 renderer with sector lighting and palette quantization, grid movement with free look, replays, CI, and the level generator (mission graph → grid layout → room templates, with auto doors, key doors, and secrets). `/browse.html` previews seeds.
 
 Next:
 - Portal culling using `LevelRenderer.sectorRanges`.
 - Circle-vs-line collision for projectiles (player collision was replaced by the grid).
 - Enable back-face culling and emit double-sided quads where needed.
-- M2: room grammar, doors and keys, secrets, and generator tooling (mission graph and grid layout are done).
+- M3: combat (grid-bound enemies, hitscan and projectiles, health).
 - A WebGPU backend behind `RenderBackend` when compute is needed.
 
 Press F8 in-game to download the current replay. Drop it into a sim test to pin a bug.

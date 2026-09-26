@@ -10,13 +10,13 @@ TypeScript 7, Vite 8, Vitest 5, tsx, npm workspaces. CI uses Node 22.
 
 ```bash
 npm install
-npm run dev                          # Vite app → http://localhost:5173/?seed=anything  or  ?map=test01 / test02
+npm run dev                          # Vite app → http://localhost:5173/?seed=anything  or  ?map=test01 / test02;  /browse.html = seed browser
 npm run typecheck                    # tsc --noEmit over every package
 npm test                             # vitest run (packages/*/test/**/*.test.ts, Node env)
 npx vitest run packages/sim/test/sim.test.ts          # one file
 npx vitest run -t "buffers a press made mid-step"     # one test by name
 npm run maps:build                   # regenerate packages/core/maps/*.json from build-test-maps.ts
-npm run gen:stats -- --seeds 2000    # headless generator health check; any invalid map exits non-zero
+npm run gen:stats -- --seeds 2000    # generator health check (any invalid map exits non-zero) + level distributions
 npm run ci                           # typecheck + test + gen:stats (2000) + build
 ```
 
@@ -38,7 +38,7 @@ core MapBuilder ────┴─> MapData ─ validate ─┤
 - **gen**: `generate.ts` runs mission → layout → room templates → `CellPlan` → sectors (`GENERATOR_VERSION = '0.6.0'`); `generateDetailed` also returns the mission, layout, room designs, attempt count and failure reasons. `mission.ts` is the mission graph (rooms and door types, built as Dormans-style cycles; `validateMission` checks the key and mini-boss progression). `rooms.ts` holds the room templates (each keeps the room's outer ring as base floor, so doorways stay connected). `layout.ts` embeds the mission on the grid: rooms placed along a spanning tree with straight corridors, loops routed by turn-penalised pathfinding, and a separation rule so structures touch only at doorways. Floors are flat (one storey). Failed layouts retry on the next deterministic RNG fork. `validateGenerated` layers gameplay checks (grid alignment, reachability, traps) on top of core's structural `validateMap`.
 - **sim**: fixed-step state machine. `InputFrame`s go in; `SimState` holds the player, door progress (per door id, doors stay open), held keys, taken pickups, found secrets, and per-tick `events`. `World` derives doors (`doorSectors` order = door id) and key pickups from the map. Movement asks a `DoorGate` whether a cell is blocked by a closed door and bumps auto doors open (key doors open with use while holding the key; secret doors open with use and count as found). `ReplayRecorder` and `runReplay` store a map hash plus the input log, and `hashState` pins behaviour in tests.
 - **render**: `RenderBackend` interface with the WebGL2 implementation behind it. The mesh is static and grouped per sector (`LevelRenderer.sectorRanges`, reserved for portal culling). Moving parts are *movers*: vertices tagged with a mover id (door ids, then key pickups) shift down by `LevelRenderer.movers[id]`, a uniform array the app fills each frame from sim state (door slabs lower, taken keys sink out of view). The scene renders at low resolution, then a 64-colour palette post pass applies Bayer dithering.
-- **app**: browser shell only. It holds the loop with tick interpolation, DOM input → `InputFrame`, the HUD compass, the door prompt (E, or the missing key, upper right), and the automap (hold Tab; look direction up). F8 downloads the current replay.
+- **app**: browser shell only. It holds the loop with tick interpolation, DOM input → `InputFrame`, the HUD compass, the door prompt (E, or the missing key, upper right), and the automap (hold Tab; look direction up). `browse.html` + `src/browse.ts` is the seed browser (a second Vite entry, `vite.config.ts`), drawing `src/thumbnail.ts` top-down maps with `levelStats` from gen. F8 downloads the current replay.
 
 ## Invariants
 
