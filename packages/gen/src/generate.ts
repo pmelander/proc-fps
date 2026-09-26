@@ -26,7 +26,7 @@ import { designRoom, plainDesign, type RoomDesign } from './rooms.js';
  * Bump on ANY change that alters output for an existing seed.
  * seed + GENERATOR_VERSION must always reproduce the same map.
  */
-export const GENERATOR_VERSION = '0.13.0';
+export const GENERATOR_VERSION = '0.14.0';
 
 /** Layout attempts per mission, and missions tried, before giving up on a seed. */
 const LAYOUT_TRIES = 8;
@@ -303,7 +303,7 @@ function emit(seed: string, mission: Mission, layout: Layout, rng: Rng, level: n
       light: 144,
       floorTex: T.Trim,
       ceilTex: T.Ceiling,
-      wallTex: T.Metal,
+      wallTex: kind === DoorKind.Secret ? T.Metal : T.DoorFrame,
       special: kind | (secret === undefined ? 0 : SPECIAL_SECRET_AREA),
       tag: secret ?? edge.key ?? 0,
     }));

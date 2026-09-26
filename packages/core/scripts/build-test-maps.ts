@@ -72,7 +72,7 @@ export function buildTest02(): MapData {
     for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) plan.set(x, y, spec);
   };
   const door = (x: number, y: number, special: number, tag = 0) =>
-    plan.set(x, y, plan.spec({ floor: 0, ceil: 128, light: 160, floorTex: T.Trim, ceilTex: T.Ceiling, wallTex: T.Metal, special, tag }));
+    plan.set(x, y, plan.spec({ floor: 0, ceil: 128, light: 160, floorTex: T.Trim, ceilTex: T.Ceiling, wallTex: (special & 3) === 1 || (special & 3) === 2 ? T.DoorFrame : T.Metal, special, tag }));
   room(0, 0, 4, 3, 176, T.FloorTile);
   room(5, 0, 8, 3, 144, T.Tech);
   room(9, 0, 12, 3, 208, T.FloorTile);
@@ -103,7 +103,7 @@ export function buildTest03(): MapData {
   const lair = plan.spec({ floor: 0, ceil: 256, light: 128, floorTex: T.Slime, ceilTex: T.Ceiling, wallTex: T.Tech });
   for (let y = 0; y < 7; y++) for (let x = 0; x < 12; x++) if (!(x === 5 && (y === 2 || y === 4))) plan.set(x, y, arena);
   for (let y = 1; y < 6; y++) for (let x = 13; x < 18; x++) plan.set(x, y, lair);
-  plan.set(12, 3, plan.spec({ floor: 0, ceil: 128, light: 160, floorTex: T.Trim, ceilTex: T.Ceiling, wallTex: T.Metal, special: DoorKind.Auto }));
+  plan.set(12, 3, plan.spec({ floor: 0, ceil: 128, light: 160, floorTex: T.Trim, ceilTex: T.Ceiling, wallTex: T.DoorFrame, special: DoorKind.Auto }));
   const b = new MapBuilder();
   emitCellPlan(b, plan, CELL_SIZE);
   const at = (type: number, x: number, y: number, angle = 180) => b.thing(type, (x + 0.5) * CELL_SIZE, (y + 0.5) * CELL_SIZE, angle);

@@ -217,12 +217,14 @@ describe('lifts and hazards (test04)', async () => {
     expect(cell(run(m, [...onLift, ...idle(LIFT_WAIT + travel + 2), ...forward]))).toEqual([6, 1]);
     // Before it has risen, the upper room is out of reach.
     expect(cell(run(m, [...onLift, ...forward]))).toEqual([5, 1]);
+    // It stops after the trip: staying aboard does not send it back down.
+    expect(run(m, [...onLift, ...idle(2 * (LIFT_WAIT + travel) + 10)]).player.z).toBe(192);
   });
 
   it('comes down when called from below, instead of being climbed', () => {
     const world = createWorld(m);
     const state = createSimState(world);
-    state.lifts[0] = { pos: world.lifts[0]!.travel, target: 1, wait: 0 }; // parked at the top
+    state.lifts[0] = { pos: world.lifts[0]!.travel, target: 1, wait: 0, armed: true }; // parked at the top
     for (const f of [...forward, ...forward, ...forward, ...forward]) stepSim(world, state, f); // (4, 1)
     expect(cell(state)).toEqual([4, 1]);
     for (const f of tap({ move: 1 }, world.lifts[0]!.travel + STEP_TICKS + 4)) stepSim(world, state, f);

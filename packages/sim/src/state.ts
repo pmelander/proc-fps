@@ -81,6 +81,11 @@ export interface LiftState {
   target: 0 | 1;
   /** Ticks the player has stood still aboard. */
   wait: number;
+  /**
+   * Whether standing aboard sends it: set when the player is off it, cleared by a trip. A lift
+   * stops after each trip; to ride again, step off and back on (or call it by walking into it).
+   */
+  armed: boolean;
 }
 
 export interface Projectile {
@@ -190,7 +195,7 @@ export function createSimState(world: World): SimState {
       hazardTicks: 0,
     },
     doors: world.doors.map(() => 0),
-    lifts: world.lifts.map((): LiftState => ({ pos: 0, target: 0, wait: 0 })),
+    lifts: world.lifts.map((): LiftState => ({ pos: 0, target: 0, wait: 0, armed: true })),
     keys: 0,
     taken: world.pickups.map(() => false),
     secrets: 0,

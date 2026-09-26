@@ -22,6 +22,8 @@ export const BaseTex = {
   Lift: 20,
   /** Catwalk tops: steel grating. */
   Grate: 21,
+  /** The walls of a door cell: a steel jamb with a light strip. */
+  DoorFrame: 22,
 } as const;
 
 /** Visual themes: each picks the colours of the baked texture set (render/src/themes.ts). */

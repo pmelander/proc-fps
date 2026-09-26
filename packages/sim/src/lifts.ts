@@ -4,9 +4,9 @@ import type { World } from './world.js';
 
 /**
  * Lifts: a one-cell platform travelling between a bottom and a top floor. With the player
- * standing still on it for LIFT_WAIT ticks it travels to its other end; walking into it from a
- * floor it is not level with calls it there (nobody climbs or drops onto a lift). Enemies do not
- * use lifts.
+ * standing still on it for LIFT_WAIT ticks it travels to its other end, once: it then stops, and
+ * the player steps off and back on to ride again. Walking into it from a floor it is not level
+ * with calls it there (nobody climbs or drops onto a lift). Enemies do not use lifts.
  */
 export function liftAtCell(world: World, cx: number, cy: number): number {
   return world.grid.inBounds(cx, cy) ? world.liftAt[cx + cy * world.grid.width]! : -1;
@@ -53,8 +53,10 @@ export function stepLifts(world: World, state: SimState): void {
     const aboard = p.stepTick === 0 && p.level === 0 && info.cells.includes(p.cx + p.cy * world.grid.width);
     if (!aboard) {
       s.wait = 0;
-    } else if (++s.wait >= LIFT_WAIT) {
+      s.armed = true;
+    } else if (s.armed && ++s.wait >= LIFT_WAIT) {
       s.wait = 0;
+      s.armed = false;
       s.target = s.target === 1 ? 0 : 1;
       state.events.push({ type: 'lift', lift: i });
     }

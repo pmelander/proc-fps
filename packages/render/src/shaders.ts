@@ -145,17 +145,40 @@ vec4 pattern(int id, vec2 uv) {
   if (id == 7) { // slime or lava (flows in LEVEL_FS)
     return vec4(uSlime * (0.4 + fbm(uv, 1.5)), 0.3);
   }
-  if (id == 8 || (id >= 10 && id <= 13)) { // doors: heavy panel; key doors trimmed in their key's colour
-    vec2 f = fract(uv * vec2(1.0, 0.5));
+  if (id == 8 || (id >= 10 && id <= 13)) { // blast doors: one face per tile, x across, y up
+    vec2 f = fract(uv * 0.5);
+    bool keyed = id >= 10;
+    vec3 trim = keyed ? keyColor(id - 10) : uHazard;
     float frame = 1.0 - edge(f, 0.08);
-    float seam = step(abs(f.x - 0.5), 0.015);
-    float bolts = step(length(fract(uv * vec2(2.0, 1.0)) - 0.5), 0.08);
-    vec3 plate = uDoorPlate * (0.75 + 0.3 * fbm(uv * vec2(1.0, 2.0), 3.0));
-    vec3 trim = id >= 10 ? keyColor(id - 10) : uDoorTrim;
-    vec3 c = mix(plate, trim, frame);
-    c = mix(c, vec3(0.06), seam);
-    if (id >= 10) c = mix(c, trim, step(abs(f.y - 0.5), 0.05));
-    return vec4(c + bolts * 0.12, 0.0);
+    float ribs = step(0.55, fract(f.x * 7.0)) * 0.1;
+    vec3 c = mix(uDoorPlate * (0.8 + 0.25 * fbm(uv, 3.0)) - ribs, uDoorTrim * 0.8, frame);
+    // A band across the middle: hazard chevrons on auto doors, the key's colour on key doors.
+    float band = step(abs(f.y - 0.5), 0.09);
+    float chevron = step(0.5, fract((f.x + abs(f.y - 0.5)) * 6.0));
+    c = mix(c, keyed ? trim * 0.85 : mix(vec3(0.06), uHazard, chevron), band);
+    // Bolts along the frame.
+    vec2 bolt = fract(f * 6.0) - 0.5;
+    c += step(length(bolt), 0.12) * frame * 0.18;
+    // Status lights along the top: they glow (atlas alpha) and pulse.
+    float light = step(abs(f.y - 0.88), 0.025) * step(abs(fract(f.x * 4.0) - 0.5), 0.2) * (1.0 - frame);
+    c = mix(c, keyed ? trim : uTechLight, light);
+    float glow = light;
+    if (keyed) { // a key emblem in the middle of the band
+      vec2 q = f - 0.5;
+      float ring = abs(length(q - vec2(-0.08, 0.0)) - 0.05) - 0.018;
+      float shaft = max(abs(q.y) - 0.014, abs(q.x - 0.05) - 0.09);
+      float emblem = step(min(ring, shaft), 0.0);
+      c = mix(c, vec3(1.0, 0.97, 0.85), emblem);
+      glow = max(glow, emblem * 0.6);
+    }
+    return vec4(c, glow);
+  }
+  if (id == 22) { // door frame: a steel jamb with a vertical light strip
+    vec2 f = fract(uv * 0.5);
+    float strip = step(abs(f.x - 0.5), 0.05) * step(0.1, f.y) * step(f.y, 0.9);
+    vec3 c = uMetal * (0.7 + 0.25 * fbm(uv, 5.0));
+    c = mix(c * 0.6, c, edge(f, 0.1));
+    return vec4(mix(c, uTechLight, strip * 0.9), strip);
   }
   if (id >= 14 && id <= 17) { // key pickups: bright, pulsing
     return vec4(keyColor(id - 14) * (1.1 - 0.4 * fract(uv.y)), 1.0);

@@ -236,6 +236,8 @@ function main(): void {
   const compassArrow = document.getElementById('compass-arrow') as HTMLSpanElement;
   const compassLetter = document.getElementById('compass-letter') as HTMLElement;
   const prompt = document.getElementById('prompt') as HTMLDivElement;
+  const keysHud = document.getElementById('keys') as HTMLDivElement;
+  let shownKeys = -1;
   const health = document.getElementById('health') as HTMLDivElement;
   const gore = new Gore();
   const throws: Throws = new Map();
@@ -449,12 +451,15 @@ function main(): void {
     }
 
     if (!automap.hidden) drawAutomap(automap, map, view, world, state);
-    const held = KEY_NAMES.filter((_, k) => state.keys & (1 << k));
+    // Keys held: an icon each, in the key's colour, above the health.
+    if (state.keys !== shownKeys) {
+      shownKeys = state.keys;
+      keysHud.innerHTML = KEY_COLORS.filter((_, k) => state.keys & (1 << k)).map((c) => KEY_ICON(c)).join('');
+    }
     hud.textContent =
       `${map.meta.seed ? `level ${here.level}  seed ${map.meta.seed}  gen ${GENERATOR_VERSION}` : `map ${map.meta.name}`}  ${map.meta.theme ?? ''}\n` +
       `${fps.toFixed(0)} fps  tick ${state.tick}  sector ${p.sector}\n` +
       `cell ${p.cx}, ${p.cy}  z ${p.z.toFixed(0)}` +
-      (held.length ? `\nkeys: ${held.join(' ')}` : '') +
       (world.secrets ? `\nsecrets ${popcount(state.secrets)}/${world.secrets}` : '') +
       (now < noticeUntil ? `\n${notice}` : '');
 

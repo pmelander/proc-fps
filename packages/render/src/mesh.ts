@@ -125,14 +125,14 @@ export function buildLevelMesh(map: MapData): LevelMesh {
   // sector it is visible from.
   const quad = (
     s: number, ax: number, ay: number, bx: number, by: number, lo: number, hi: number, tex: number,
-    bottom = STILL, top = STILL, always = false,
+    bottom = STILL, top = STILL, always = false, vLo = lo, vHi = hi,
   ) => {
     if (hi <= lo && !always) return;
     const len = Math.sqrt((bx - ax) ** 2 + (by - ay) ** 2) * TEX_SCALE;
-    const a0 = pushVertex(s, ax, lo, ay, 0, lo * TEX_SCALE, tex, bottom);
-    const b0 = pushVertex(s, bx, lo, by, len, lo * TEX_SCALE, tex, bottom);
-    const b1 = pushVertex(s, bx, hi, by, len, hi * TEX_SCALE, tex, top);
-    const a1 = pushVertex(s, ax, hi, ay, 0, hi * TEX_SCALE, tex, top);
+    const a0 = pushVertex(s, ax, lo, ay, 0, vLo * TEX_SCALE, tex, bottom);
+    const b0 = pushVertex(s, bx, lo, by, len, vLo * TEX_SCALE, tex, bottom);
+    const b1 = pushVertex(s, bx, hi, by, len, vHi * TEX_SCALE, tex, top);
+    const a1 = pushVertex(s, ax, hi, ay, 0, vHi * TEX_SCALE, tex, top);
     perSector[s]!.i.push(a0, b0, b1, a0, b1, a1);
   };
 
@@ -170,9 +170,11 @@ export function buildLevelMesh(map: MapData): LevelMesh {
       const door = doorOf.get(doorSide.sector);
       if (door === undefined || doorOf.has(other.sector)) continue;
       const D = map.sectors[doorSide.sector]!;
-      const bottom = { mover: door, move: 1, slide: 1 };
+      // The texture rides with the panel: its bottom edge keeps the closed door's floor-level v,
+      // and the top edge (fixed at the ceiling) hides more of it as the panel rises to open.
+      const bottom = { mover: door, move: 1, slide: 0 };
       const top = { mover: door, move: 0, slide: 1 };
-      quad(other.sector, a.x, a.y, b.x, b.y, D.ceil, D.ceil, doorTex(doorSide.sector, other), bottom, top, true);
+      quad(other.sector, a.x, a.y, b.x, b.y, D.ceil, D.ceil, doorTex(doorSide.sector, other), bottom, top, true, D.floor, D.floor);
     }
     // Slab edges, seen from the neighbour, except where the neighbour's own floor rises to cover them.
     for (const [slabSide, other] of [

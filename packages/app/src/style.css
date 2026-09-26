@@ -25,6 +25,10 @@ canvas[hidden] {
   image-rendering: pixelated;
   pointer-events: none;
 }
+/* The weapon lowers while the automap is up, as in Doom; the HUD stays over the map. */
+#automap:not([hidden]) ~ #gun {
+  visibility: hidden;
+}
 #hud {
   position: fixed;
   top: 8px;
@@ -75,6 +79,11 @@ canvas[hidden] {
   pointer-events: none;
   filter: drop-shadow(2px 2px 0 #000);
 }
+#keys svg {
+  width: 52px;
+  height: 52px;
+  margin: -12px -6px;
+}
 #prompt[hidden] {
   display: none;
 }
@@ -116,6 +125,16 @@ canvas[hidden] {
 }
 #health.low {
   color: #ff5a4a;
+}
+/* Keys held (main.ts): a row of key icons above the health. */
+#keys {
+  position: fixed;
+  left: 12px;
+  bottom: 54px;
+  display: flex;
+  gap: 2px;
+  pointer-events: none;
+  filter: drop-shadow(2px 2px 0 #000);
 }
 #end .stats {
   margin: 0 0 12px;
