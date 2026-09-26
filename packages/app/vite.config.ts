@@ -11,6 +11,7 @@ export default defineConfig({
       input: {
         main: fileURLToPath(new URL('./index.html', import.meta.url)),
         browse: fileURLToPath(new URL('./browse.html', import.meta.url)),
+        sprites: fileURLToPath(new URL('./sprites.html', import.meta.url)),
       },
     },
   },

@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>proc-fps sprites</title>
+    <link rel="icon" href="data:," />
+    <style>
+      body { margin: 0; padding: 16px; background: #0b0b0c; color: #d8d2c4; font: 13px/1.45 ui-monospace, monospace; }
+      canvas { display: block; width: 100%; max-width: 2048px; image-rendering: pixelated; aspect-ratio: 2048 / 320; }
+      h1 { margin: 0 0 6px; font-size: 18px; color: #f2b04a; }
+      p { margin: 0 0 12px; color: #8f8a80; }
+    </style>
+  </head>
+  <body>
+    <h1>Enemy sprite atlas</h1>
+    <p>Rows: grunt, brute, sniper, mini boss, boss (bottom to top). Columns: 8 directions × 4 frames (walk, walk, attack, dead). Eyes tinted red.</p>
+    <canvas id="atlas"></canvas>
+    <script type="module" src="./src/sprites.ts"></script>
+  </body>
+</html>

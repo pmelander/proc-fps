@@ -2,12 +2,17 @@ import type { VertexLayout } from './backend.js';
 
 /**
  * Camera-facing sprites for things that move: enemies, corpses and projectiles. Rebuilt on the
- * CPU every frame into a dynamic buffer (a handful of quads). Shapes are drawn procedurally in
- * the fragment shader until M4 bakes real sprites.
+ * CPU every frame into a dynamic buffer (a handful of quads). Enemies sample the baked sprite
+ * atlas (SPRITE_BAKE_FS: 8 directions × 4 frames); projectiles are drawn procedurally.
  */
 
-/** pos(3) uv(2) shape(1) charge(1) flash(1) light(1) */
-export const SPRITE_FLOATS_PER_VERTEX = 9;
+/** Atlas tile for an enemy shape (row), view direction 0–7 and frame (0/1 walk, 2 attack, 3 dead). */
+export function spriteTile(shape: number, direction: number, frame: number): number {
+  return shape * 32 + direction * 4 + frame;
+}
+
+/** pos(3) uv(2) shape(1) charge(1) flash(1) light(1) tile(1) */
+export const SPRITE_FLOATS_PER_VERTEX = 10;
 export const SPRITE_LAYOUT: VertexLayout = {
   stride: SPRITE_FLOATS_PER_VERTEX * 4,
   attributes: [
@@ -17,6 +22,7 @@ export const SPRITE_LAYOUT: VertexLayout = {
     { name: 'aCharge', components: 1, offset: 24 },
     { name: 'aFlash', components: 1, offset: 28 },
     { name: 'aLight', components: 1, offset: 32 },
+    { name: 'aTile', components: 1, offset: 36 },
   ],
 };
 
@@ -45,6 +51,8 @@ export interface Sprite {
   flash: number;
   /** 0–1 sector light; 1 for things that glow. */
   light: number;
+  /** Baked sprite atlas tile (see SPRITE_BAKE_FS), or -1 to draw `shape` procedurally. */
+  tile: number;
 }
 
 const CORNERS = [
@@ -64,7 +72,7 @@ export function buildSpriteVertices(sprites: readonly Sprite[], yaw: number): Fl
       const mx = s.x + rx * u * s.width;
       const my = s.y + ry * u * s.width;
       // World: X = map.x, Y = height, Z = -map.y
-      out.set([mx, s.z + v * s.height, -my, u + 0.5, v, s.shape, s.charge, s.flash, s.light], o);
+      out.set([mx, s.z + v * s.height, -my, u + 0.5, v, s.shape, s.charge, s.flash, s.light, s.tile], o);
       o += SPRITE_FLOATS_PER_VERTEX;
     }
   }

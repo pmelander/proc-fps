@@ -51,12 +51,11 @@ npm run ci             # typecheck + tests + generator health + build
 
 ## Status
 
-M1–M3 are in place: map format, WebGL2 renderer with sector lighting and palette quantization, grid movement with free look, replays, CI, and the level generator (mission graph → grid layout → room templates, with auto doors, key doors, and secrets), and combat: grid-bound enemies that path, wake on sight and gunfire, and telegraph their attacks; free-aim hitscan; dodgeable projectiles; health. `/browse.html` previews seeds.
+M1–M4 are in place: map format, WebGL2 renderer with sector lighting and palette quantization, grid movement with free look, replays, CI, and the level generator (mission graph → grid layout → room templates, with auto doors, key doors, and secrets), and combat: grid-bound enemies that path, wake on sight and gunfire, and telegraph their attacks; free-aim hitscan; dodgeable projectiles; health. Textures, enemy sprites, sound and music are all generated: themed texture atlases, SDF-modelled 8-direction sprites, a jsfxr-style synth and a seeded music generator. `/browse.html` previews seeds, `/sprites.html` shows the enemy sprite sheet.
 
 Next:
 - Portal culling using `LevelRenderer.sectorRanges`.
 - Enable back-face culling and emit double-sided quads where needed.
-- M4: procedural content (textures, enemy sprites, sound).
 - M5: progression and balance (enemy budget by depth, health along the critical path).
 - A WebGPU backend behind `RenderBackend` when compute is needed.
 

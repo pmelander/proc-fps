@@ -1,6 +1,6 @@
-import { DoorKind, HEADING_DX, HEADING_DY, PLAYER_EYE_HEIGHT, STEP_TICKS, TICK_DT, type MapData } from '@proc-fps/core';
+import { DoorKind, HEADING_DX, HEADING_DY, PLAYER_EYE_HEIGHT, STEP_TICKS, TICK_DT, isEnemyThing, type MapData } from '@proc-fps/core';
 import { GENERATOR_VERSION, generate, validateGenerated } from '@proc-fps/gen';
-import { HIDDEN_OFFSET, LevelRenderer, SpriteShape, WebGL2Backend, type Sprite } from '@proc-fps/render';
+import { HIDDEN_OFFSET, LevelRenderer, SpriteShape, WebGL2Backend, spriteTile, type Sprite } from '@proc-fps/render';
 import {
   ENEMY_DEFS,
   PLAYER_MAX_HEALTH,
@@ -19,6 +19,8 @@ import {
 import test01 from '@proc-fps/core/maps/test01.json';
 import test02 from '@proc-fps/core/maps/test02.json';
 import test03 from '@proc-fps/core/maps/test03.json';
+import { AudioEngine } from './audio/engine.js';
+import type { SoundId } from './audio/sounds.js';
 import { drawAutomap } from './automap.js';
 import { InputSampler } from './input.js';
 import { KEY_COLORS, KEY_NAMES } from './keys.js';
@@ -105,10 +107,29 @@ const SHAPE: Record<number, number> = {
   41: SpriteShape.Boss,
 };
 const PROJECTILE_SIZE = 14;
+/** Events that play a sound with no position (the player's own). */
+const SOUND_OF: Partial<Record<string, SoundId>> = {
+  shot: 'shot', hurt: 'hurt', death: 'death', locked: 'locked', key: 'key', health: 'health', secret: 'secret', exit: 'exit',
+};
 const FLASH_SECONDS = 0.12;
 
+const SPRITE_WIDTH = 2.6; // × enemy radius
+const OCTANT = Math.PI / 4;
+
+/**
+ * Which way an enemy faces, for picking its sprite direction (render-side only): at the player
+ * once it has noticed them, along its step while walking, its spawn facing otherwise.
+ */
+function facing(e: EnemyState, spawnAngle: number, player: { x: number; y: number }): number {
+  if (e.mode === 'alert' || e.mode === 'chase' || e.mode === 'windup' || e.mode === 'pain') {
+    if (e.stepTick === 0 || e.mode === 'windup') return Math.atan2(player.y - e.y, player.x - e.x);
+  }
+  if (e.stepTick > 0) return Math.atan2(e.cy - e.fromCy, e.cx - e.fromCx);
+  return spawnAngle;
+}
+
 /** Enemies, corpses and projectiles as sprites, enemies interpolated between the last two ticks. */
-function buildSprites(world: World, state: SimState, prevEnemies: readonly EnemyState[], t: number): Sprite[] {
+function buildSprites(world: World, state: SimState, prevEnemies: readonly EnemyState[], t: number, cam: { x: number; y: number }, spawnAngles: readonly number[]): Sprite[] {
   const light = (x: number, y: number) => {
     const [cx, cy] = world.grid.cellOf(x, y);
     return (world.map.sectors[world.grid.sectorAt(cx, cy)]?.light ?? 160) / 255;
@@ -119,17 +140,19 @@ function buildSprites(world: World, state: SimState, prevEnemies: readonly Enemy
     const x = lerp(was.x, e.x, t);
     const y = lerp(was.y, e.y, t);
     const z = lerp(was.z, e.z, t);
-    if (e.mode === 'dead') {
-      return { x, y, z, width: def.radius * 3, height: def.radius * 0.9, shape: SpriteShape.Corpse, charge: 0, flash: 0, light: light(x, y) };
-    }
+    const shape = SHAPE[e.type] ?? SpriteShape.Grunt;
+    // View direction: the camera's bearing from the enemy, relative to where it faces, in octants.
+    const rel = Math.atan2(cam.y - y, cam.x - x) - facing(e, spawnAngles[i] ?? 0, state.player);
+    const direction = (((Math.round(rel / OCTANT) % 8) + 8) % 8);
+    const frame = e.mode === 'dead' ? 3 : e.mode === 'windup' ? 2 : e.stepTick > 0 ? Math.floor((2 * e.stepTick) / def.stepTicks) % 2 : 0;
     const charge = e.mode === 'windup' ? 1 - e.timer / def.windup : 0;
     return {
-      x, y, z, width: def.radius * 2.6, height: def.height, shape: SHAPE[e.type] ?? SpriteShape.Grunt,
-      charge, flash: e.mode === 'pain' ? 1 : 0, light: light(x, y),
+      x, y, z, width: def.radius * SPRITE_WIDTH, height: def.height, shape,
+      charge, flash: e.mode === 'pain' ? 1 : 0, light: light(x, y), tile: spriteTile(shape, direction, frame),
     };
   });
   for (const q of state.projectiles) {
-    sprites.push({ x: q.x, y: q.y, z: q.z - PROJECTILE_SIZE / 2, width: PROJECTILE_SIZE, height: PROJECTILE_SIZE, shape: SpriteShape.Projectile, charge: 0, flash: 0, light: 1 });
+    sprites.push({ x: q.x, y: q.y, z: q.z - PROJECTILE_SIZE / 2, width: PROJECTILE_SIZE, height: PROJECTILE_SIZE, shape: SpriteShape.Projectile, charge: 0, flash: 0, light: 1, tile: -1 });
   }
   return sprites;
 }
@@ -158,13 +181,30 @@ function main(): void {
   let prev: PlayerState = clonePlayer(state.player);
   let prevEnemies: EnemyState[] = state.enemies.map((e) => ({ ...e }));
   const recorder = new ReplayRecorder(map);
+  const audio = new AudioEngine(map.meta.seed ?? map.meta.name);
+  // Door sounds come from the door's cell.
+  const doorCells: { x: number; y: number }[] = [];
+  world.doorAt.forEach((d, i) => {
+    if (d < 0 || doorCells[d]) return;
+    const [x, y] = world.grid.center(i % world.grid.width, Math.floor(i / world.grid.width));
+    doorCells[d] = { x, y };
+  });
 
   const backend = WebGL2Backend.create(canvas);
   const renderer = new LevelRenderer(backend);
   renderer.setMap(map);
+  // Sprite quads are radius × SPRITE_WIDTH wide and height tall; the baked models match.
+  renderer.bakeSprites(Object.keys(SHAPE).map((type) => {
+    const def = ENEMY_DEFS[Number(type) as keyof typeof ENEMY_DEFS];
+    return (def.radius * SPRITE_WIDTH) / def.height;
+  }));
+  const spawnAngles = map.things.filter((t) => isEnemyThing(t.type)).map((t) => (t.angle * Math.PI) / 180);
 
   const input = new InputSampler(canvas);
-  start.addEventListener('click', () => void canvas.requestPointerLock());
+  start.addEventListener('click', () => {
+    audio.unlock(); // browsers allow audio only after a gesture
+    void canvas.requestPointerLock();
+  });
   document.addEventListener('pointerlockchange', () => (start.hidden = input.locked));
 
   addEventListener('keydown', (e) => {
@@ -174,6 +214,8 @@ function main(): void {
       else location.reload();
     }
     if (e.code === 'Tab') automap.hidden = false;
+    if (e.code === 'KeyM') audio.toggleMusic();
+    if (e.code === 'KeyN') audio.toggleSound();
     if (e.code === 'F2') newLevel();
     if (e.code === 'F8') downloadJSON(`replay-${map.meta.seed ?? map.meta.name}-${state.tick}.json`, recorder.finish());
   });
@@ -207,8 +249,24 @@ function main(): void {
       prevEnemies = state.enemies.map((e) => ({ ...e }));
       const f = input.sample();
       if (input.locked) recorder.record(f);
+      const wasStepping = state.player.stepTick;
       stepSim(world, state, f);
+      const listener = { x: state.player.x, y: state.player.y, yaw: state.player.angle };
+      const enemyAt = (i: number) => state.enemies[i]!;
+      if (state.player.stepTick === 1 && wasStepping !== 1) audio.play('step');
       for (const e of state.events) {
+        const sound = SOUND_OF[e.type];
+        if (sound) audio.play(sound);
+        if (e.type === 'door') audio.play('door', doorCells[e.door], listener);
+        if (e.type === 'hit' || e.type === 'kill') audio.play(e.type, enemyAt(e.enemy), listener);
+        if (e.type === 'windup' || e.type === 'attack') {
+          const enemy = enemyAt(e.enemy);
+          const kind = ENEMY_DEFS[enemy.type].attack;
+          const id: SoundId = e.type === 'windup'
+            ? kind === 'melee' ? 'windupMelee' : kind === 'hitscan' ? 'windupHitscan' : 'windup'
+            : kind === 'melee' ? 'melee' : kind === 'hitscan' ? 'snipe' : 'launch';
+          audio.play(id, enemy, listener);
+        }
         if (e.type === 'key') [notice, noticeUntil] = [`Picked up the ${KEY_NAMES[e.key]} key`, now + NOTICE_SECONDS];
         if (e.type === 'locked') [notice, noticeUntil] = [`Needs the ${KEY_NAMES[e.key]} key`, now + NOTICE_SECONDS];
         if (e.type === 'secret') [notice, noticeUntil] = ['You found a secret!', now + NOTICE_SECONDS];
@@ -218,6 +276,8 @@ function main(): void {
       }
       acc -= TICK_DT;
     }
+    // Music: the combat layer follows how many enemies are after the player.
+    audio.setIntensity(state.enemies.filter((e) => e.mode === 'chase' || e.mode === 'windup').length / 2);
     world.doors.forEach((_, i) => (renderer.movers[i] = doorOffset(world, state, i)));
     world.pickups.forEach((_, i) => (renderer.movers[world.doors.length + i] = state.taken[i] ? HIDDEN_OFFSET : 0));
 
@@ -230,7 +290,7 @@ function main(): void {
       yaw: lerpAngle(prev.angle, p.angle, t),
       pitch: lerp(prev.pitch, p.pitch, t),
     };
-    renderer.render(view, now, buildSprites(world, state, prevEnemies, t));
+    renderer.render(view, now, buildSprites(world, state, prevEnemies, t, view, spawnAngles));
 
     health.textContent = String(p.health);
     health.classList.toggle('low', p.health <= PLAYER_MAX_HEALTH / 4);
@@ -259,7 +319,7 @@ function main(): void {
     if (!automap.hidden) drawAutomap(automap, map, view, world, state);
     const held = KEY_NAMES.filter((_, k) => state.keys & (1 << k));
     hud.textContent =
-      `${map.meta.seed ? `seed ${map.meta.seed}  gen ${GENERATOR_VERSION}` : `map ${map.meta.name}`}\n` +
+      `${map.meta.seed ? `seed ${map.meta.seed}  gen ${GENERATOR_VERSION}` : `map ${map.meta.name}`}  ${map.meta.theme ?? ''}\n` +
       `${fps.toFixed(0)} fps  tick ${state.tick}  sector ${p.sector}\n` +
       `cell ${p.cx}, ${p.cy}  z ${p.z.toFixed(0)}` +
       (held.length ? `\nkeys: ${held.join(' ')}` : '') +

@@ -9,6 +9,7 @@ import {
   MapBuilder,
   Rng,
   SPECIAL_SECRET_AREA,
+  THEME_NAMES,
   ThingType,
   emitCellPlan,
   keyThing,
@@ -23,7 +24,7 @@ import { designRoom, type RoomDesign } from './rooms.js';
  * Bump on ANY change that alters output for an existing seed.
  * seed + GENERATOR_VERSION must always reproduce the same map.
  */
-export const GENERATOR_VERSION = '0.7.0';
+export const GENERATOR_VERSION = '0.8.0';
 
 /** Layout attempts per mission, and missions tried, before giving up on a seed. */
 const LAYOUT_TRIES = 8;
@@ -255,5 +256,7 @@ function emit(seed: string, mission: Mission, layout: Layout, rng: Rng): { map: 
   const b = new MapBuilder();
   emitCellPlan(b, plan, C);
   for (const [type, x, y, angle] of things) b.thing(type, (x + 0.5) * C, (y + 0.5) * C, angle);
-  return { map: b.build({ name: `gen-${seed}`, seed, generatorVersion: GENERATOR_VERSION, theme: 'base' }), designs };
+  // The theme picks the texture set's colours; its own stream, so it never shifts other choices.
+  const style = rng.fork('style').pick(THEME_NAMES);
+  return { map: b.build({ name: `gen-${seed}`, seed, generatorVersion: GENERATOR_VERSION, theme: style }), designs };
 }

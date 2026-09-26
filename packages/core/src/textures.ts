@@ -19,3 +19,7 @@ export const BaseTex = {
   /** Health pickup marker. */
   Health: 18,
 } as const;
+
+/** Visual themes: each picks the colours of the baked texture set (render/src/themes.ts). */
+export const THEME_NAMES = ['base', 'tech', 'hell', 'crypt'] as const;
+export type ThemeName = (typeof THEME_NAMES)[number];

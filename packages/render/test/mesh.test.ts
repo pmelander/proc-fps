@@ -56,7 +56,7 @@ describe('door panels', () => {
 describe('sprites', () => {
   it('build two camera-facing triangles per sprite', async () => {
     const { SPRITE_FLOATS_PER_VERTEX, buildSpriteVertices } = await import('../src/sprites.js');
-    const v = buildSpriteVertices([{ x: 100, y: 200, z: 0, width: 40, height: 72, shape: 0, charge: 0, flash: 0, light: 1 }], 0);
+    const v = buildSpriteVertices([{ x: 100, y: 200, z: 0, width: 40, height: 72, shape: 0, charge: 0, flash: 0, light: 1, tile: 0 }], 0);
     expect(v.length).toBe(6 * SPRITE_FLOATS_PER_VERTEX);
     // Facing east (yaw 0) the quad spans map y ± 20 (world z ∓ 20) and 0–72 in height.
     const zs = new Set<number>();
@@ -67,5 +67,29 @@ describe('sprites', () => {
     }
     expect([...zs].sort((a, b) => a - b)).toEqual([-220, -180]);
     expect([...ys].sort((a, b) => a - b)).toEqual([0, 72]);
+  });
+});
+
+describe('sprite atlas and themes', () => {
+  it('maps shape, direction and frame to distinct tiles in a 32-column atlas', async () => {
+    const { spriteTile } = await import('../src/sprites.js');
+    const tiles = new Set<number>();
+    for (let s = 0; s < 5; s++) for (let d = 0; d < 8; d++) for (let f = 0; f < 4; f++) tiles.add(spriteTile(s, d, f));
+    expect(tiles.size).toBe(160);
+    expect(Math.max(...tiles)).toBe(159);
+    expect(spriteTile(1, 0, 0)).toBe(32); // row 1 starts after 8 directions × 4 frames
+  });
+
+  it('gives every theme all its colours, with seeded variation', async () => {
+    const { THEME_NAMES } = await import('@proc-fps/core');
+    const { themeUniforms } = await import('../src/themes.js');
+    for (const name of THEME_NAMES) {
+      const u = themeUniforms(name, 'seed');
+      expect(Object.keys(u)).toContain('uStone');
+      expect(Object.keys(u)).toContain('uSlime');
+      expect((u.uStone as Float32Array).length).toBe(3);
+    }
+    expect(themeUniforms('base', 'a')).toEqual(themeUniforms('base', 'a'));
+    expect(themeUniforms('base', 'a')).not.toEqual(themeUniforms('base', 'b'));
   });
 });

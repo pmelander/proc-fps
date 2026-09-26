@@ -1,8 +1,26 @@
-import { mat4Mul, mat4Perspective, viewFromMapCamera, type MapData } from '@proc-fps/core';
+import { THEME_NAMES, mat4Mul, mat4Perspective, viewFromMapCamera, type MapData, type ThemeName } from '@proc-fps/core';
 import type { BufferHandle, PipelineHandle, RenderBackend, RenderTargetHandle, TextureHandle } from './backend.js';
 import { LEVEL_LAYOUT, MAX_MOVERS, buildLevelMesh, type SectorRange } from './mesh.js';
 import { PALETTE_SIZE, paletteRGBA } from './palette.js';
-import { LEVEL_FS, LEVEL_VS, POST_FS, POST_VS, SPRITE_FS, SPRITE_VS } from './shaders.js';
+import {
+  ATLAS_COLS,
+  ATLAS_FS,
+  ATLAS_ROWS,
+  ATLAS_TILE,
+  LEVEL_FS,
+  LEVEL_VS,
+  POST_FS,
+  POST_VS,
+  SPRITE_BAKE_FS,
+  BLIT_FS,
+  SPRITE_DIRECTIONS,
+  SPRITE_FRAMES,
+  SPRITE_FS,
+  SPRITE_ROWS,
+  SPRITE_TILE,
+  SPRITE_VS,
+} from './shaders.js';
+import { themeUniforms } from './themes.js';
 import { SPRITE_LAYOUT, buildSpriteVertices, type Sprite } from './sprites.js';
 
 export interface Camera {
@@ -36,6 +54,12 @@ export class LevelRenderer {
   private readonly opts: RendererOptions;
   private readonly levelPipeline: PipelineHandle;
   private readonly spritePipeline: PipelineHandle;
+  private readonly atlasPipeline: PipelineHandle;
+  /** The level's textures, baked in setMap. */
+  private readonly atlas: RenderTargetHandle;
+  /** Enemy sprites, baked by bakeSprites. */
+  private readonly spriteAtlas: RenderTargetHandle;
+  private readonly spriteBakePipeline: PipelineHandle;
   private readonly spriteBuffer: BufferHandle;
   private readonly postPipeline: PipelineHandle;
   private readonly palette: TextureHandle;
@@ -66,6 +90,24 @@ export class LevelRenderer {
       cullBack: false,
     });
     this.spriteBuffer = backend.createVertexBuffer(new Float32Array(0));
+    this.atlasPipeline = backend.createPipeline({
+      label: 'atlas-bake',
+      shader: { glsl: { vertex: POST_VS, fragment: ATLAS_FS } },
+      layout: null,
+      depthTest: false,
+      depthWrite: false,
+      cullBack: false,
+    });
+    this.atlas = backend.createRenderTarget(ATLAS_TILE * ATLAS_COLS, ATLAS_TILE * ATLAS_ROWS, 'nearest');
+    this.spriteBakePipeline = backend.createPipeline({
+      label: 'sprite-bake',
+      shader: { glsl: { vertex: POST_VS, fragment: SPRITE_BAKE_FS } },
+      layout: null,
+      depthTest: false,
+      depthWrite: false,
+      cullBack: false,
+    });
+    this.spriteAtlas = backend.createRenderTarget(SPRITE_TILE * SPRITE_DIRECTIONS * SPRITE_FRAMES, SPRITE_TILE * SPRITE_ROWS, 'nearest');
     this.postPipeline = backend.createPipeline({
       label: 'palette-post',
       shader: { glsl: { vertex: POST_VS, fragment: POST_FS } },
@@ -85,6 +127,41 @@ export class LevelRenderer {
     this.ib = this.backend.createIndexBuffer(mesh.indices);
     this.indexCount = mesh.indices.length;
     this.sectorRanges = mesh.sectors;
+    this.bakeAtlas(map);
+  }
+
+  /**
+   * Bakes the enemy sprite atlas: every shape from 8 directions in 4 frames. `aspects` is each
+   * shape's quad width / height, so the models fill the quads the game draws.
+   */
+  bakeSprites(aspects: readonly number[]): void {
+    this.backend.beginPass({ target: this.spriteAtlas, clearColor: [0, 0, 0, 0] });
+    this.backend.draw({ pipeline: this.spriteBakePipeline, first: 0, count: 3, uniforms: { uAspect: { floats: new Float32Array(aspects) } } });
+    this.backend.endPass();
+  }
+
+  /** Dev view: draws the baked sprite atlas to the canvas (eyes tinted red). */
+  showSpriteAtlas(): void {
+    const blit = this.blitPipeline ??= this.backend.createPipeline({
+      label: 'blit',
+      shader: { glsl: { vertex: POST_VS, fragment: BLIT_FS } },
+      layout: null,
+      depthTest: false,
+      depthWrite: false,
+      cullBack: false,
+    });
+    this.backend.beginPass({ target: null, clearColor: [0, 0, 0, 1] });
+    this.backend.draw({ pipeline: blit, first: 0, count: 3, textures: { uTex: this.spriteAtlas.color } });
+    this.backend.endPass();
+  }
+  private blitPipeline: PipelineHandle | undefined;
+
+  /** Bakes the level's texture set from its theme and seed, once. */
+  private bakeAtlas(map: MapData): void {
+    const theme = (THEME_NAMES as readonly string[]).includes(map.meta.theme ?? '') ? (map.meta.theme as ThemeName) : 'base';
+    this.backend.beginPass({ target: this.atlas, clearColor: [0, 0, 0, 0] });
+    this.backend.draw({ pipeline: this.atlasPipeline, first: 0, count: 3, uniforms: themeUniforms(theme, map.meta.seed ?? map.meta.name) });
+    this.backend.endPass();
   }
 
   /** Call after the canvas size changes. */
@@ -118,6 +195,7 @@ export class LevelRenderer {
           uTime: time,
           uMover: { floats: this.movers },
         },
+        textures: { uAtlas: this.atlas.color },
       });
     }
     if (sprites.length) {
@@ -132,6 +210,7 @@ export class LevelRenderer {
           uEye: new Float32Array([cam.x, cam.eyeZ, -cam.y]),
           uTime: time,
         },
+        textures: { uSpriteAtlas: this.spriteAtlas.color },
       });
     }
     be.endPass();
