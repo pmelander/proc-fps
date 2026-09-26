@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>proc-fps</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <canvas id="view"></canvas>
+    <canvas id="automap" hidden></canvas>
+    <pre id="hud"></pre>
+    <div id="compass"><span id="compass-arrow">▲</span><b id="compass-letter">E</b></div>
+    <div id="start">
+      <p class="title">Click to play</p>
+      <p>WASD steps one square, mouse looks freely. The arrow at the top shows which way W goes.</p>
+      <p>Tab shows the map, F2 makes a new level, F8 saves a replay.</p>
+    </div>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

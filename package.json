@@ -1,0 +1,23 @@
+{
+  "name": "proc-fps",
+  "private": true,
+  "type": "module",
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "dev": "npm run dev -w @proc-fps/app",
+    "build": "npm run build -w @proc-fps/app",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "maps:build": "tsx packages/core/scripts/build-test-maps.ts",
+    "gen:stats": "tsx packages/gen/scripts/stats.ts",
+    "ci": "npm run typecheck && npm run test && npm run gen:stats -- --seeds 2000 && npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.23.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.0.0",
+    "vitest": "^5.0.0"
+  }
+}

@@ -1,0 +1,23 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - name: Generator health (2000 seeds)
+        run: npm run gen:stats -- --seeds 2000
+      - name: Test maps are up to date
+        run: npm run maps:build && git diff --exit-code packages/core/maps
+      - run: npm run build

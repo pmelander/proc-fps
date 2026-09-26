@@ -1,0 +1,15 @@
+{
+  "name": "@proc-fps/sim",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@proc-fps/core": "*"
+  },
+  "devDependencies": {
+    "@proc-fps/gen": "*"
+  }
+}

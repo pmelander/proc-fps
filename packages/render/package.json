@@ -1,0 +1,16 @@
+{
+  "name": "@proc-fps/render",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@proc-fps/core": "*",
+    "earcut": "^3.0.0"
+  },
+  "devDependencies": {
+    "@proc-fps/gen": "*"
+  }
+}
