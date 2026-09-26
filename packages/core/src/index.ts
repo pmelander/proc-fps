@@ -10,3 +10,4 @@ export * from './textures.js';
 export * from './grid.js';
 export * from './cells.js';
 export * from './enemies.js';
+export * from './bestiary.js';

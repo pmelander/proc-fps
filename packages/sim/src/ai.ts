@@ -1,4 +1,4 @@
-import { ALERT_TICKS, CELL_SIZE, CellGrid, DoorKind, ENEMY_DEFS, HEADING_DX, HEADING_DY, MAX_STEP, NOISE_CELLS, SIGHT_CELLS, dcos, dsin, type EnemyDef, type Heading } from '@proc-fps/core';
+import { ALERT_TICKS, CELL_SIZE, CellGrid, DoorKind, HEADING_DX, HEADING_DY, MAX_STEP, NOISE_CELLS, SIGHT_CELLS, dcos, dsin, type EnemyDef, type Heading } from '@proc-fps/core';
 import { hurtPlayer } from './combat.js';
 import { lineOfSight } from './raycast.js';
 import { DOOR_OPEN_TICKS, type EnemyState, type SimState } from './state.js';
@@ -23,7 +23,7 @@ export function stepEnemies(world: World, state: SimState): void {
 
   state.enemies.forEach((e, i) => {
     if (e.mode === 'dead') return;
-    const def = ENEMY_DEFS[e.type];
+    const def = world.enemyDefs[e.type];
     if (e.cooldown > 0) e.cooldown--;
     if (e.stepTick > 0 && ++e.stepTick > def.stepTicks) e.stepTick = 0;
     updatePose(world, e, def);

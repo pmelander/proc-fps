@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { CELL_SIZE as C, CellPlan, DoorKind, EnemyType, MapBuilder, STEP_TICKS, ThingType, dropsKeyFlags, emitCellPlan, type MapData } from '@proc-fps/core';
+import { CELL_SIZE as C, CellPlan, DoorKind, EnemyType, MapBuilder, STEP_TICKS, ThingType, dropsKeyFlags, emitCellPlan, enemyDefsFor, type MapData } from '@proc-fps/core';
+import { generate } from '@proc-fps/gen';
 import {
   DOOR_OPEN_TICKS,
   EMPTY_INPUT,
@@ -205,5 +206,17 @@ describe('bosses drop keys', () => {
     expect(state.keys).toBe(0);
     step({ move: 1 }, STEP_TICKS * 4);
     expect(state.keys).toBe(1);
+  });
+});
+
+describe('per-level enemies', () => {
+  it('a generated level uses its seeded stats; a hand-built map the baseline', () => {
+    const map = generate('bestiary-7', { level: 3 });
+    const world = createWorld(map);
+    expect(world.enemyDefs).toEqual(enemyDefsFor('bestiary-7'));
+    expect(world.enemyDefs).not.toEqual(ENEMY_DEFS);
+    const state = createSimState(world);
+    for (const e of state.enemies) expect(e.hp).toBe(world.enemyDefs[e.type].hp);
+    expect(createWorld(arena({ w: 3, h: 3 })).enemyDefs).toBe(ENEMY_DEFS);
   });
 });

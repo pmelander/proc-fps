@@ -1,5 +1,8 @@
 import {
   CellGrid,
+  enemyDefsFor,
+  type EnemyDef,
+  type EnemyType,
   DoorKind,
   LIFT_SPEED,
   SectorLocator,
@@ -72,6 +75,8 @@ export interface World {
   readonly exit: readonly [number, number] | null;
   /** Number of secrets (ids 0 … secrets - 1). */
   readonly secrets: number;
+  /** This level's enemy stats: seeded variants on generated maps, the baseline otherwise. */
+  readonly enemyDefs: Readonly<Record<EnemyType, EnemyDef>>;
 }
 
 export function createWorld(map: MapData): World {
@@ -110,7 +115,7 @@ export function createWorld(map: MapData): World {
   });
   const exitThing = map.things.find((t) => t.type === ThingType.Exit);
   const exit = exitThing ? grid.cellOf(exitThing.x, exitThing.y) : null;
-  return { map, locator: new SectorLocator(map), grid, doors, doorAt, lifts, liftAt, pickups, exit, secrets: secretCount(map) };
+  return { map, locator: new SectorLocator(map), grid, doors, doorAt, lifts, liftAt, pickups, exit, secrets: secretCount(map), enemyDefs: enemyDefsFor(map.meta.seed) };
 }
 
 /** True for things that are floor pickups (keys and health; carried keys come from enemies). */

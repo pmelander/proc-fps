@@ -1,5 +1,4 @@
 import {
-  ENEMY_DEFS,
   FIRE_COOLDOWN,
   MELEE_COOLDOWN,
   MELEE_DAMAGE,
@@ -57,7 +56,7 @@ export function playerFire(world: World, state: SimState, trigger: boolean): voi
   if (close >= 0) {
     p.fireCooldown = MELEE_COOLDOWN;
     state.events.push({ type: 'melee', enemy: close });
-    damage(state, new Map([[close, MELEE_DAMAGE]]));
+    damage(world, state, new Map([[close, MELEE_DAMAGE]]));
     return;
   }
 
@@ -76,7 +75,7 @@ export function playerFire(world: World, state: SimState, trigger: boolean): voi
     const target = pelletTarget(world, state, ox, oy, oz, dx, dy, dz);
     if (target >= 0) hits.set(target, (hits.get(target) ?? 0) + PLAYER_DAMAGE);
   }
-  damage(state, hits);
+  damage(world, state, hits);
 }
 
 /** The enemy a ray hits before any wall, or -1. Rays test each enemy's upright cylinder (side only). */
@@ -87,7 +86,7 @@ function pelletTarget(world: World, state: SimState, ox: number, oy: number, oz:
   if (a <= 1e-9) return -1;
   state.enemies.forEach((e, i) => {
     if (e.mode === 'dead') return;
-    const def = ENEMY_DEFS[e.type];
+    const def = world.enemyDefs[e.type];
     const fx = ox - e.x;
     const fy = oy - e.y;
     const b = 2 * (dx * fx + dy * fy);
@@ -106,10 +105,10 @@ function pelletTarget(world: World, state: SimState, ox: number, oy: number, oz:
 }
 
 /** Applies a shot's (or strike's) damage per enemy: one hit event each, kills, flinches, wake-ups. */
-function damage(state: SimState, hits: ReadonlyMap<number, number>): void {
+function damage(world: World, state: SimState, hits: ReadonlyMap<number, number>): void {
   for (const [i, amount] of hits) {
     const e = state.enemies[i]!;
-    const def = ENEMY_DEFS[e.type];
+    const def = world.enemyDefs[e.type];
     e.hp -= amount;
     state.events.push({ type: 'hit', enemy: i });
     if (e.hp <= 0) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BaseTex, DoorKind, doorKindOf, doorSectors, type MapData } from '@proc-fps/core';
+import { BaseTex, DoorKind, ThingType, doorKindOf, doorSectors, type MapData } from '@proc-fps/core';
 import { generate } from '@proc-fps/gen';
 import test01 from '@proc-fps/core/maps/test01.json';
 import test02 from '@proc-fps/core/maps/test02.json';
@@ -50,6 +50,36 @@ describe('door panels', () => {
     expect(panelTextures(doorOf(DoorKind.Auto))).toEqual([BaseTex.Door]);
     expect(panelTextures(doorOf(DoorKind.Key))).toEqual([BaseTex.DoorKey]);
     expect(panelTextures(doorOf(DoorKind.Secret))).toEqual([BaseTex.Stone]);
+  });
+
+  it('textures a panel top to bottom: the bottom edge keeps its v, the top slides', () => {
+    // Every panel vertex of the auto door: [v, slide]. Bottom edges start at the door's floor v
+    // and never slide; top edges start there too and uncover the texture as the panel drops.
+    const id = doorOf(DoorKind.Auto);
+    const floorV = map.sectors[doorSectors(map)[id]!]!.floor / 64;
+    const verts: [number, number, number][] = [];
+    for (let v = 0; v < mesh.vertices.length; v += LEVEL_FLOATS_PER_VERTEX) {
+      if (mesh.vertices[v + 7] === id + 1 && mesh.vertices[v + 6] === BaseTex.Door) verts.push([mesh.vertices[v + 4]!, mesh.vertices[v + 8]!, mesh.vertices[v + 9]!]);
+    }
+    expect(verts.length).toBeGreaterThan(0);
+    for (const [v] of verts) expect(v).toBeCloseTo(floorV);
+    expect(verts.some(([, move, slide]) => move === 1 && slide === 0)).toBe(true); // bottom
+    expect(verts.some(([, move, slide]) => move === 0 && slide === 1)).toBe(true); // top
+  });
+});
+
+describe('exit pad', () => {
+  it('lays a glowing pad over the exit cell', () => {
+    for (const m of [test01 as MapData, generate('pad')]) {
+      const mesh = buildLevelMesh(m);
+      const exit = m.things.find((t) => t.type === ThingType.Exit)!;
+      const pad: number[][] = [];
+      for (let v = 0; v < mesh.vertices.length; v += LEVEL_FLOATS_PER_VERTEX) {
+        if (mesh.vertices[v + 6] === BaseTex.Exit) pad.push([mesh.vertices[v]!, mesh.vertices[v + 1]!, -mesh.vertices[v + 2]!]);
+      }
+      expect(pad).toHaveLength(4);
+      for (const [x, , y] of pad) expect(Math.max(Math.abs(x! - exit.x), Math.abs(y! - exit.y))).toBeLessThan(64);
+    }
   });
 });
 

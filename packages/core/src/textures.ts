@@ -24,6 +24,8 @@ export const BaseTex = {
   Grate: 21,
   /** The walls of a door cell: a steel jamb with a light strip. */
   DoorFrame: 22,
+  /** The exit pad the renderer lays over the exit's cell: a glowing ring in the theme's light. */
+  Exit: 23,
 } as const;
 
 /** Visual themes: each picks the colours of the baked texture set (render/src/themes.ts). */

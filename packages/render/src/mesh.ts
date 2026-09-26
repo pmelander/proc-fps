@@ -2,6 +2,10 @@ import earcut from 'earcut';
 import { BaseTex, DoorKind, SectorLocator, ThingType, doorKindOf, doorSectors, isLift, sectorPolygons, type MapData, type Side } from '@proc-fps/core';
 import type { VertexLayout } from './backend.js';
 
+/** The exit pad: nearly a cell wide, a hair above the floor (clear of depth fighting). */
+const EXIT_PAD_SIZE = 112;
+const EXIT_PAD_LIFT = 1;
+
 /** pos(3) uv(2) light(1) tex(1) mover(1) move(1) slide(1) */
 export const LEVEL_FLOATS_PER_VERTEX = 10;
 export const LEVEL_LAYOUT: VertexLayout = {
@@ -215,6 +219,19 @@ export function buildLevelMesh(map: MapData): LevelMesh {
     const bot = at(0, 0, -r * 1.4);
     const ring = [at(r, 0, 0), at(0, r, 0), at(-r, 0, 0), at(0, -r, 0)];
     for (let k = 0; k < 4; k++) perSector[s]!.i.push(top, ring[k]!, ring[(k + 1) % 4]!, bot, ring[(k + 1) % 4]!, ring[k]!);
+  }
+
+  // The exit pad: a glowing plate just above the floor of the exit's cell, so the way out shows
+  // from across the room.
+  for (const t of map.things) {
+    if (t.type !== ThingType.Exit) continue;
+    const s = locator.locate(t.x, t.y);
+    if (s < 0) continue;
+    const z = map.sectors[s]!.floor + EXIT_PAD_LIFT;
+    const r = EXIT_PAD_SIZE / 2;
+    const at = (dx: number, dy: number) => pushVertex(s, t.x + dx, z, t.y + dy, dx > 0 ? 1.999 : 0, dy > 0 ? 1.999 : 0, BaseTex.Exit);
+    const q = [at(-r, -r), at(r, -r), at(r, r), at(-r, r)];
+    perSector[s]!.i.push(q[0]!, q[1]!, q[2]!, q[0]!, q[2]!, q[3]!);
   }
 
   // Concatenate buckets, rebasing indices.

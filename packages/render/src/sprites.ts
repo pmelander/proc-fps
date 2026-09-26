@@ -39,6 +39,8 @@ export const SpriteShape = {
   Key: 10,
   Gib: 14,
   Blood: 15,
+  /** A shimmering column of light over the exit, screen-door transparent. */
+  ExitBeacon: 16,
 } as const;
 
 export interface Sprite {

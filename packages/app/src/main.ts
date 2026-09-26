@@ -1,8 +1,7 @@
-import { DoorKind, HEADING_DX, HEADING_DY, PLAYER_EYE_HEIGHT, STEP_TICKS, TICK_DT, isEnemyThing, type MapData } from '@proc-fps/core';
+import { CELL_SIZE, DoorKind, HEADING_DX, HEADING_DY, PLAYER_EYE_HEIGHT, STEP_TICKS, TICK_DT, isEnemyThing, type MapData } from '@proc-fps/core';
 import { GENERATOR_VERSION, generate, validateGenerated } from '@proc-fps/gen';
-import { HIDDEN_OFFSET, LevelRenderer, SpriteShape, THEME_COLORS, WebGL2Backend, spriteTile, type Sprite } from '@proc-fps/render';
+import { BASELINE_LOOKS, HIDDEN_OFFSET, LevelRenderer, SpriteShape, THEME_COLORS, WebGL2Backend, enemyLooks, spriteTile, type Sprite } from '@proc-fps/render';
 import {
-  ENEMY_DEFS,
   PLAYER_MAX_HEALTH,
   ReplayRecorder,
   clonePlayer,
@@ -34,6 +33,10 @@ import { KEY_COLORS, KEY_NAMES } from './keys.js';
 
 const TEST_MAPS: Record<string, MapData> = { test01: test01 as MapData, test02: test02 as MapData, test03: test03 as MapData, test04: test04 as MapData, test05: test05 as MapData, test06: test06 as MapData };
 const NOTICE_SECONDS = 2.5;
+/** The exit hums every so often while the player is within range (map units), under a beacon of light. */
+const EXIT_HUM_TICKS = 96;
+const EXIT_HUM_RANGE = 10 * CELL_SIZE;
+const EXIT_BEACON_HEIGHT = 160;
 /** Dev: run the sim without the pointer lock (the in-app preview cannot take it). */
 const AUTOPLAY = new URLSearchParams(location.search).has('autoplay');
 /** Dev: hold the trigger (with autoplay, to see the gun and gore without input). */
@@ -191,7 +194,7 @@ function buildSprites(
     return (world.map.sectors[world.grid.sectorAt(cx, cy)]?.light ?? 160) / 255;
   };
   const sprites: Sprite[] = state.enemies.map((e, i) => {
-    const def = ENEMY_DEFS[e.type];
+    const def = world.enemyDefs[e.type];
     const was = prevEnemies[i] ?? e;
     let x = lerp(was.x, e.x, t);
     let y = lerp(was.y, e.y, t);
@@ -222,6 +225,11 @@ function buildSprites(
     const bob = 6 * Math.sin(performance.now() / 300 + i);
     sprites.push({ x: kx, y: ky, z: world.grid.floorAt(at[0], at[1]) + 18 + bob, width: 28, height: 28, shape: SpriteShape.Key + k.key, charge: 0, flash: 0, light: 1, tile: -1 });
   });
+  // The exit's beacon, until the level is won.
+  if (world.exit && !state.won) {
+    const [ex, ey] = world.grid.center(world.exit[0], world.exit[1]);
+    sprites.push({ x: ex, y: ey, z: world.grid.floorAt(world.exit[0], world.exit[1]), width: 80, height: EXIT_BEACON_HEIGHT, shape: SpriteShape.ExitBeacon, charge: 0, flash: 0, light: 1, tile: -1 });
+  }
   for (const q of state.projectiles) {
     sprites.push({ x: q.x, y: q.y, z: q.z - PROJECTILE_SIZE / 2, width: PROJECTILE_SIZE, height: PROJECTILE_SIZE, shape: SpriteShape.Projectile, charge: 0, flash: 0, light: 1, tile: -1 });
   }
@@ -260,6 +268,8 @@ function main(): void {
   let prevEnemies: EnemyState[] = state.enemies.map((e) => ({ ...e }));
   const recorder = new ReplayRecorder(map);
   const audio = new AudioEngine(map.meta.seed ?? map.meta.name);
+  // The exit hums from its cell.
+  const exitAt = world.exit ? (([x, y]) => ({ x, y }))(world.grid.center(world.exit[0], world.exit[1])) : null;
   // Door sounds come from the door's cell.
   const doorCells: { x: number; y: number }[] = [];
   world.doorAt.forEach((d, i) => {
@@ -271,11 +281,16 @@ function main(): void {
   const backend = WebGL2Backend.create(canvas);
   const renderer = new LevelRenderer(backend);
   renderer.setMap(map);
-  // Sprite quads are radius × SPRITE_WIDTH wide and height tall; the baked models match.
-  renderer.bakeSprites(Object.keys(SHAPE).map((type) => {
-    const def = ENEMY_DEFS[Number(type) as keyof typeof ENEMY_DEFS];
-    return (def.radius * SPRITE_WIDTH) / def.height;
-  }));
+  // Sprite quads are radius × SPRITE_WIDTH wide and height tall; the baked models match. Each
+  // generated level breeds its own mutants, coloured to stand out from its theme.
+  const themeName = (map.meta.theme && map.meta.theme in THEME_COLORS ? map.meta.theme : 'base') as keyof typeof THEME_COLORS;
+  renderer.bakeSprites(
+    Object.keys(SHAPE).map((type) => {
+      const def = world.enemyDefs[Number(type) as keyof typeof world.enemyDefs];
+      return (def.radius * SPRITE_WIDTH) / def.height;
+    }),
+    map.meta.seed ? enemyLooks(map.meta.seed, themeName) : BASELINE_LOOKS,
+  );
   const spawnAngles = map.things.filter((t) => isEnemyThing(t.type)).map((t) => (t.angle * Math.PI) / 180);
 
   const input = new InputSampler(canvas);
@@ -334,6 +349,9 @@ function main(): void {
       const wasStepping = state.player.stepTick;
       stepSim(world, state, f);
       const listener = { x: state.player.x, y: state.player.y, yaw: state.player.angle };
+      if (exitAt && !state.won && state.tick % EXIT_HUM_TICKS === 0 && Math.hypot(exitAt.x - listener.x, exitAt.y - listener.y) < EXIT_HUM_RANGE) {
+        audio.play('exitHum', exitAt, listener);
+      }
       const enemyAt = (i: number) => state.enemies[i]!;
       if (state.player.stepTick === 1 && wasStepping !== 1) audio.play('step');
       for (const e of state.events) {
@@ -342,7 +360,7 @@ function main(): void {
         if (e.type === 'door') audio.play('door', doorCells[e.door], listener);
         if (e.type === 'hit' || e.type === 'kill' || e.type === 'melee') {
           const enemy = enemyAt(e.enemy);
-          const def = ENEMY_DEFS[enemy.type];
+          const def = world.enemyDefs[enemy.type];
           const mid = enemy.z + def.height * 0.6;
           if (e.type === 'kill') {
             // Spectacular: burst into gibs thrown along the blow, and throw the corpse after them.
@@ -365,7 +383,7 @@ function main(): void {
         }
         if (e.type === 'windup' || e.type === 'attack') {
           const enemy = enemyAt(e.enemy);
-          const kind = ENEMY_DEFS[enemy.type].attack;
+          const kind = world.enemyDefs[enemy.type].attack;
           const id: SoundId = e.type === 'windup'
             ? kind === 'melee' ? 'windupMelee' : kind === 'hitscan' ? 'windupHitscan' : 'windup'
             : kind === 'melee' ? 'melee' : kind === 'hitscan' ? 'snipe' : 'launch';

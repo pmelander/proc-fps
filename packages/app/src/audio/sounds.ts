@@ -8,7 +8,7 @@ import { mix, synth, type Voice } from './synth.js';
  */
 export type SoundId =
   | 'shot' | 'hit' | 'kill' | 'hurt' | 'death'
-  | 'door' | 'locked' | 'key' | 'health' | 'secret' | 'exit' | 'step'
+  | 'door' | 'locked' | 'key' | 'health' | 'secret' | 'exit' | 'exitHum' | 'step'
   | 'windup' | 'windupMelee' | 'windupHitscan'
   | 'launch' | 'melee' | 'snipe'
   | 'charge' | 'punch' | 'gib';
@@ -52,6 +52,11 @@ const RECIPES: Record<SoundId, Recipe> = {
   health: [{ wave: 'triangle', freq: 440, freqEnd: 880, attack: 0, sustain: 0.1, release: 0.12, volume: 0.35 }],
   secret: [{ wave: 'sine', freq: 523, freqEnd: 523, attack: 0, sustain: 0.45, release: 0.3, volume: 0.35, arpeggio: [1, 1.26, 1.5, 2, 2.52], arpeggioTime: 0.09 }],
   exit: [{ wave: 'square', freq: 392, freqEnd: 392, attack: 0, sustain: 0.5, release: 0.4, volume: 0.28, duty: 0.4, arpeggio: [1, 1.26, 1.5, 2], arpeggioTime: 0.12 }],
+  // The exit pad's low throb, repeated while you are near it: find the way out by ear.
+  exitHum: [
+    { wave: 'sine', freq: 110, freqEnd: 110, attack: 0.35, sustain: 0.5, release: 0.45, volume: 0.3, vibrato: { depth: 0.012, rate: 5 } },
+    { wave: 'triangle', freq: 330, freqEnd: 330, attack: 0.35, sustain: 0.5, release: 0.45, volume: 0.07, vibrato: { depth: 0.01, rate: 7 } },
+  ],
   step: [{ wave: 'noise', freq: 400, freqEnd: 200, attack: 0, sustain: 0.005, release: 0.04, volume: 0.1, lowpass: 800 }],
   windup: [{ wave: 'saw', freq: 90, freqEnd: 260, attack: 0.05, sustain: 0.25, release: 0.05, volume: 0.22, lowpass: 1500 }],
   windupMelee: [

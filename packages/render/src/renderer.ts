@@ -21,6 +21,7 @@ import {
   SPRITE_VS,
 } from './shaders.js';
 import { themeUniforms } from './themes.js';
+import { BASELINE_LOOKS, lookUniforms, type EnemyLook } from './bestiary.js';
 import { SPRITE_LAYOUT, buildSpriteVertices, type Sprite } from './sprites.js';
 
 export interface Camera {
@@ -133,12 +134,13 @@ export class LevelRenderer {
   }
 
   /**
-   * Bakes the enemy sprite atlas: every shape from 8 directions in 4 frames. `aspects` is each
-   * shape's quad width / height, so the models fill the quads the game draws.
+   * Bakes the enemy sprite atlas: every shape from 8 directions in 4 frames, bred as `looks` says
+   * (see enemyLooks; once per level). `aspects` is each shape's quad width / height, so the models
+   * fill the quads the game draws.
    */
-  bakeSprites(aspects: readonly number[]): void {
+  bakeSprites(aspects: readonly number[], looks: readonly EnemyLook[] = BASELINE_LOOKS): void {
     this.backend.beginPass({ target: this.spriteAtlas, clearColor: [0, 0, 0, 0] });
-    this.backend.draw({ pipeline: this.spriteBakePipeline, first: 0, count: 3, uniforms: { uAspect: { floats: new Float32Array(aspects) } } });
+    this.backend.draw({ pipeline: this.spriteBakePipeline, first: 0, count: 3, uniforms: lookUniforms(looks, aspects) });
     this.backend.endPass();
   }
 

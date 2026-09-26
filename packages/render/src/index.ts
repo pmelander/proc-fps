@@ -5,3 +5,4 @@ export * from './palette.js';
 export * from './renderer.js';
 export * from './sprites.js';
 export * from './themes.js';
+export * from './bestiary.js';

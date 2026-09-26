@@ -1,4 +1,4 @@
-import { DEG_TO_RAD, ENEMY_DEFS, PLAYER_MAX_HEALTH, ThingType, isEnemyThing, type EnemyType, type Heading } from '@proc-fps/core';
+import { DEG_TO_RAD, PLAYER_MAX_HEALTH, ThingType, isEnemyThing, type EnemyType, type Heading } from '@proc-fps/core';
 import type { World } from './world.js';
 
 /** No buffered step. */
@@ -163,7 +163,7 @@ export function createSimState(world: World): SimState {
     return [{
       type: t.type, cx: ex, cy: ey, fromCx: ex, fromCy: ey, level: 0, fromLevel: 0, stepTick: 0,
       x: px, y: py, z: world.grid.floorAt(ex, ey),
-      hp: ENEMY_DEFS[t.type].hp, mode: 'idle', timer: 0, cooldown: 0,
+      hp: world.enemyDefs[t.type].hp, mode: 'idle', timer: 0, cooldown: 0,
     }];
   });
   return {

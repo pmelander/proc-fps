@@ -78,20 +78,25 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 **Working:**
 - Map format and validation, including trap detection: every cell reachable from the start must still be able to reach the exit.
 - The grid-aligned test map, which covers a platform, drop, stairs, and a void pillar.
-- The v0.14 generator (catwalk rooms and bridges between storeys; hordes of fragile enemies; the mini boss and boss carry the keys onward; some levels span two storeys joined by lifts; each level also gets a theme, and `generate(seed, { level })` scales its population): a mission graph (M2 slice 1) embedded on the grid (slice 2) as rooms sized by type, joined by corridors, with loops routed by pathfinding. Rooms use templates (slice 3): hall (pillar rows), platform (or an unclimbable plinth), pit, stairs to a dais, and arena (boss and mini boss); start, exit, and loot rooms stay plain. Floors are flat (one storey) and hazard stripes mark only corridor ends. Connections get doors (slice 4) as the mission says, auto or key, with keys placed on base floor in their rooms. Up to 2 secret rooms per level (slice 5) hang off ordinary rooms behind secret doors.
+- The v0.14 generator (catwalk rooms and bridges between storeys; hordes of fragile enemies; the mini boss and boss carry the keys onward; some levels span two storeys joined by lifts; each level also gets a theme, and `generate(seed, { level })` scales its population): a mission graph (M2 slice 1) embedded on the grid (slice 2) as rooms sized by type, joined by corridors, with loops routed by pathfinding. Rooms use templates (slice 3): hall (pillar rows), platform (or an unclimbable plinth), pit, stairs to a dais, and arena (boss and mini boss); start, exit, and loot rooms stay plain. Floors are flat within each storey and hazard stripes mark only corridor ends. Connections get doors (slice 4) as the mission says, auto or key, with keys placed on base floor in their rooms. Up to 2 secret rooms per level (slice 5) hang off ordinary rooms behind secret doors.
 - The WebGL2 renderer, which uses per-sector light with distance falloff in 16 bands and renders at 240p before a 64-colour palette post pass with Bayer dithering.
 - Placeholder procedural patterns per texture id, with floor and ceiling tiles aligned to cells.
 - Grid movement, replays (F8 downloads one), the automap (hold Tab; rotates with the look direction, drawn at 240p with filled floors), and the HUD compass showing where W goes.
 
 **Verified:**
 - The typecheck is clean.
-- 79 tests pass.
+- 90 tests pass.
 - 2000 seeds produce 0 validation failures (about 12 ms per map including validation).
 - The production build succeeds (about 45 kB JS).
 - Headless Chromium (SwiftShader) renders correctly.
 
 **Not yet verified:** real mouse and keyboard play. Pointer lock can't run headless.
 
+- Procedural enemies (M11):
+  - Stats: `enemyDefsFor(seed)` (core/bestiary.ts) varies each role per generated level. A speed trait trades pace for hit points; grunts spit one bolt, twin softer bolts, or one quick bolt after a longer wind-up; brutes hit harder or softer; snipers vary damage and wind-up; the mini boss and boss fire wider softer volleys or tighter harder ones. Every variant keeps the tuning rules: slower than the player, projectiles at least `MIN_PROJECTILE_CELL_TICKS` per cell, hitscan wind-ups of at least `MIN_HITSCAN_WINDUP`, and ordinary enemies at most `MAX_FODDER_HP` (one close blast). The sim reads them from `world.enemyDefs`; hand-built maps (no seed) keep the baseline `ENEMY_DEFS`, so their tests and replays are unchanged.
+  - Looks: `enemyLooks(seed, theme)` (render/bestiary.ts) breeds each of the five silhouettes: hunch, bulk, limb heft, head and jaw size, 0–2 horn pairs, back spikes, 1–4 eyes, a second pair of arms, a tail, and a mottled, banded, spotted or pale-bellied skin. `SPRITE_BAKE_FS` takes them as `uPlan` and the atlas is baked per level.
+  - Contrast: role hues keep out of bands around the theme's saturated colours (its lights, slime, hazard paint, tinted stone) and apart from each other, so a crypt never breeds green mutants and a brute never passes for a grunt. `/sprites.html?seed=<s>&theme=<t>` shows a level's set with stats and theme swatches.
+  - The exit: a glowing pad (`BaseTex.Exit`, lit whatever the sector light), a dithered beacon of light above it, and a hum within ten cells.
 - Play-test polish (M10):
   - Lifts stop after each trip: standing on one sends it once, and it goes again only after you step off and back on (`LiftState.armed`).
   - Blast doors: auto and key doors are ribbed steel with a middle band (hazard chevrons, or the key's colour with a key emblem), bolts and glowing status lights, set in a new door-frame texture (a steel jamb with a light strip) on the door cell's walls. Door panels now carry the texture vertically too: the panel's bottom edge keeps its v and the texture rides up with it (before, both edges slid together, so a panel sampled a single texel row).
@@ -126,7 +131,7 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
   - Tools: `gen:stats -- --level n`; the seed browser has a level field.
 - Procedural content (M4):
   - Textures: every texture id is baked once per level into an atlas (`ATLAS_FS`, one full-screen pass, tileable noise) in the colours of the level's theme (`base`, `tech`, `hell`, `crypt`; `render/src/themes.ts`) with seeded variation. `LEVEL_FS` samples it texel-exact; atlas alpha marks glowing texels (tech strips, pickups), which pulse; slime or lava flows by scrolling.
-  - Enemy sprites: small 3D signed-distance models ray-marched once into a sprite atlas (`SPRITE_BAKE_FS`): 5 shapes × 8 directions × 4 frames (walk, walk, attack, dead). The app picks the direction from the enemy's facing (at the player once alert, along its step while walking) and the frame from its state. Eyes are marked in the atlas and glow through the wind-up. `/sprites.html` shows the whole sheet.
+  - Enemy sprites: small 3D signed-distance models ray-marched once into a sprite atlas (`SPRITE_BAKE_FS`): 5 shapes × 8 directions × 4 frames (walk, walk, attack, dead), baked per level from its body plans (M11). The app picks the direction from the enemy's facing (at the player once alert, along its step while walking) and the frame from its state. Eyes are marked in the atlas and glow through the wind-up. `/sprites.html` shows the whole sheet.
   - Sound: a jsfxr-style synth (`app/src/audio/synth.ts`, pure and deterministic) renders a seeded sound set (`sounds.ts`): shots, hits, deaths, doors, pickups, secrets, the exit, footsteps, and a wind-up sound per attack kind (the sniper's charge whine lasts its wind-up). Enemy and door sounds are panned and attenuated by position. Music (`music.ts`) is composed from the seed (mode, tempo, four-chord progression, 16-step bass, drum and arpeggio patterns) and plays in two layers; the combat layer fades in with the number of enemies chasing the player. M toggles music, N sound.
 - Combat (M3), all in the deterministic sim, so replays cover it:
   - Player: 100 health, a free-aim hitscan weapon (hold the mouse button; `FIRE_COOLDOWN` 16 ticks, 20 damage) traced through the grid with the level's own floors, ceilings and doors (`castRay`), death and the exit ending the level.
@@ -163,12 +168,13 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
   - ✅ Slice 6: tooling: `/browse.html` shows thumbnails and stats for pages of seeds (click to play); `gen:stats` reports distributions through `levelStats`.
 - **M3 — combat:** ✅ complete (generator v0.7.0). Grid-bound enemies with their own step timers and distance-field pathing, wake-up by sight, noise and damage, the idle/alert/chase/windup/pain/dead state machine, free-aim hitscan, dodgeable projectiles (grid collision, since all walls are on the grid), rare telegraphed hitscan snipers, player health, death and the exit. Balance (enemy budget by graph depth, health along the critical path) stays in M5; some levels currently have no health at all.
 - **M4 — procedural content:** ✅ complete (generator v0.8.0). Theme-coloured textures baked to an atlas on the GPU; SDF-modelled 8-direction, 4-frame enemy sprites baked to a sprite atlas; a seeded jsfxr-style sound set with positional playback; a seeded two-layer music generator that follows combat. Still open: per-theme quantization palettes (all themes share the 64-colour palette), and baked sprites for projectiles and pickups.
-- **M6 — hazards and storeys:** ✅ complete (generator v0.10.0). Damaging floors, lifts, and two-storey levels.
-- **M10 — play-test polish:** ✅ complete (generator v0.14.0). Lifts stop after each trip, blast doors, a filled automap, and held keys on the HUD.
-- **M9 — weapon redesign and bridges:** ✅ complete (generator v0.13.0). A futuristic energy scattergun seen correctly over the barrel, and catwalks carrying corridors between storeys across lower rooms.
-- **M8 — catwalks and double-height rooms:** ✅ complete (generator v0.12.0, map format 1). Slabs, level-aware grid, sim and rendering, and catwalk rooms.
-- **M7 — combat feel:** ✅ complete (generator v0.11.0). A heavy shotgun with automatic melee, infinite ammo, hordes of fragile enemies, spectacular deaths, bosses dropping keys, key sprites, mutant enemies, a lift tile.
 - **M5 — progression and balance:** ✅ complete (generator v0.9.0). Runs of levels with rising difficulty, enemy budgets by level and graph depth, health and ammo along the way, ammo, level stats, and pause. Beyond the roadmap: the Backlog below.
+- **M6 — hazards and storeys:** ✅ complete (generator v0.10.0). Damaging floors, lifts, and two-storey levels.
+- **M7 — combat feel:** ✅ complete (generator v0.11.0). A heavy shotgun with automatic melee, infinite ammo, hordes of fragile enemies, spectacular deaths, bosses dropping keys, key sprites, mutant enemies, a lift tile.
+- **M8 — catwalks and double-height rooms:** ✅ complete (generator v0.12.0, map format 1). Slabs, level-aware grid, sim and rendering, and catwalk rooms.
+- **M9 — weapon redesign and bridges:** ✅ complete (generator v0.13.0). A futuristic energy scattergun seen correctly over the barrel, and catwalks carrying corridors between storeys across lower rooms.
+- **M10 — play-test polish:** ✅ complete (generator v0.14.0). Lifts stop after each trip, blast doors, a filled automap, and held keys on the HUD.
+- **M11 — procedural enemies:** ✅ complete. Every generated level breeds its own mutants: seeded stat variants per role (core `enemyDefsFor`) and seeded body plans and skins that stand out from the theme (render `enemyLooks`). The exit gets a glowing pad, a light beacon and a hum.
 
 ## Doors (decided)
 
@@ -182,7 +188,7 @@ Doors live **in cells**: a door is a one-cell sector whose ceiling drops to its 
 
 A third type, a use door that opened with E but needed no key, was tried in slice 4 and dropped: it added a chore without a decision.
 
-The mission graph therefore places keys to guard optional loot and the boss, rather than scattering locks along the critical path. Doors stay open once opened. When the player faces a closed key door, the HUD shows an E in the upper right if they hold the key, and the missing key otherwise. Lifts are still undecided.
+The mission graph therefore places keys to guard optional loot and the boss, rather than scattering locks along the critical path. Doors stay open once opened. When the player faces a closed key door, the HUD shows an E in the upper right if they hold the key, and the missing key otherwise. Lifts join storeys: step on and one carries you up or down once, then waits until you step off and back on.
 
 In the map format a door is a one-cell sector with its kind in `Sector.special` (`DoorKind.Auto` or `DoorKind.Key`) and a key door's key id in `tag`; keys are things `KEY_THING_BASE + id`. Doors are stored open and start closed in the sim, so a map's geometry is always the open level.
 
@@ -196,6 +202,5 @@ In the map format a door is a one-cell sector with its kind in `Sector.special` 
 
 Ideas noted during play-testing, not yet scheduled. Each line points at whatever already exists for it.
 
-- **Procedural enemies.** Enemies generated from the seed rather than five fixed models: body plans assembled from SDF parts (limb count and length, hunch, heads, horns, jaws, eye count), palettes that follow the level's theme, and stat variants within each role (fodder, bruiser, sniper, mini boss, boss): speed, hit points, attack pattern. Keeps the sprite-atlas bake; the atlas becomes per level.
-- **Procedural enemies stand out from the theme.** Enemy palettes must avoid the current theme's colours: enemies in theme-coloured skins are hard to spot (a green grunt in the crypt theme already is). Pick enemy hues from the complement of the theme, or at least a clear lightness and hue distance from its walls and floors.
-- **A more visible exit tile.** The exit cell is hard to pick out in the 3D view. Give it its own floor texture (a glowing pad or chevrons in the theme's light colour, like the lift deck), a light column or ceiling light above it, and maybe a hum from the audio engine as you approach.
+- Empty: M11 took procedural enemies, their contrast with the theme, and the exit.
+
