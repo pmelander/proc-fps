@@ -1,31 +1,35 @@
 /**
- * The shotgun view model: pixel art drawn procedurally into a small canvas and shown large and
- * pixelated at the bottom of the screen. It kicks on every shot, pumps between shots, swings for
- * melee strikes and bobs with the player's steps. Render-only: the sim never sees it.
+ * The view model: a futuristic energy scattergun, pixel art drawn procedurally into a small
+ * canvas and shown large and pixelated. It is held to the right and seen from above and behind,
+ * so the top and side of the shroud recede towards the crosshair (never a view into the muzzle).
+ * Coils and an energy cell glow in the level theme's light colour; each shot flares them white-hot,
+ * then a charge sweeps back up the coils through the cooldown. It kicks, swings for melee strikes
+ * and bobs with the player's steps. Render-only: the sim never sees it.
  */
 const W = 160;
 const H = 110;
-const PUMP_START = 0.2;
-const PUMP_END = 0.5;
-
-const STEEL = '#2c2f36';
-const STEEL_LIGHT = '#59606c';
-const STEEL_DARK = '#15171b';
-const WOOD = '#5a3418';
-const WOOD_LIGHT = '#8a5530';
-const GLOVE = '#3a2a1e';
+/** Seconds for the coils to recharge after a shot (the sim's 36-tick cooldown). */
+const RECHARGE = 0.6;
 
 type Pt = readonly [number, number];
+type Rgb = readonly [number, number, number];
+
+// The shroud as a tapered box: centre line from near (bottom right, off-canvas) to the tip.
+const NEAR: Pt = [122, 124];
+const TIP: Pt = [46, 22];
+const NEAR_W = 74;
+const TIP_W = 16;
+const NEAR_H = 30;
+const TIP_H = 7;
 
 export class Weapon {
   private readonly ctx: CanvasRenderingContext2D;
   private kick = 0;
   private swing = 0;
   private shotAt = -10;
-  private drawnPump = -1;
-  private drawnFlash = false;
+  private drawnKey = '';
 
-  constructor(private readonly canvas: HTMLCanvasElement) {
+  constructor(private readonly canvas: HTMLCanvasElement, private readonly glow: Rgb) {
     canvas.width = W;
     canvas.height = H;
     this.ctx = canvas.getContext('2d')!;
@@ -45,23 +49,27 @@ export class Weapon {
     this.kick *= Math.exp(-dt * 11);
     this.swing *= Math.exp(-dt * 8);
     const since = now - this.shotAt;
-    const pump = since > PUMP_START && since < PUMP_END ? Math.sin((Math.PI * (since - PUMP_START)) / (PUMP_END - PUMP_START)) : 0;
     const flash = since < 0.06;
-    const pumpPx = Math.round(pump * 12);
-    if (pumpPx !== this.drawnPump || flash !== this.drawnFlash) {
-      this.draw(pumpPx, flash);
-      this.drawnPump = pumpPx;
-      this.drawnFlash = flash;
+    // 0 just after a shot, 1 when fully charged; quantised so the canvas redraws only on change.
+    const charge = Math.round(Math.min(1, Math.max(0, since / RECHARGE)) * 12) / 12;
+    const heat = Math.round(Math.max(0, 1 - since / 0.25) * 8) / 8;
+    const pulse = Math.round((0.5 + 0.5 * Math.sin(now * 5)) * 4) / 4;
+    const key = `${charge}|${heat}|${flash}|${pulse}`;
+    if (key !== this.drawnKey) {
+      this.draw(charge, heat, flash, pulse);
+      this.drawnKey = key;
     }
     const sway = Math.sin(bob * Math.PI);
-    const x = -30 - this.swing * 22 + sway * 2;
-    const y = this.kick * 16 + this.swing * 8 + sway * 3;
-    this.canvas.style.transform = `translate(${x}%, ${y}%) rotate(${-this.kick * 7 - this.swing * 38}deg)`;
+    const x = -25 - this.swing * 18 + sway * 2;
+    const y = this.kick * 14 + this.swing * 10 + sway * 3;
+    this.canvas.style.transform = `translate(${x}%, ${y}%) rotate(${-this.kick * 5 - this.swing * 34}deg)`;
   }
 
-  private draw(pump: number, flash: boolean): void {
+  private draw(charge: number, heat: number, flash: boolean, pulse: number): void {
     const c = this.ctx;
     c.clearRect(0, 0, W, H);
+    const rgb = (k: Rgb, a = 1) => `rgb(${k.map((v) => Math.round(Math.min(1, v) * 255)).join(' ')} / ${a})`;
+    const mixc = (a: Rgb, b: Rgb, t: number): Rgb => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
     const poly = (color: string, pts: readonly Pt[]) => {
       c.fillStyle = color;
       c.beginPath();
@@ -69,49 +77,79 @@ export class Weapon {
       c.closePath();
       c.fill();
     };
+    // Points on the shroud at t (0 = near, 1 = tip): its two top edges (side ±1, across the axis),
+    // and `drop` of its thickness straight down the screen for the visible side face.
+    const len = Math.hypot(TIP[0] - NEAR[0], TIP[1] - NEAR[1]);
+    const px = -(TIP[1] - NEAR[1]) / len;
+    const py = (TIP[0] - NEAR[0]) / len;
+    const at = (t: number, side: -1 | 1, drop = 0): Pt => {
+      const cx = NEAR[0] + (TIP[0] - NEAR[0]) * t;
+      const cy = NEAR[1] + (TIP[1] - NEAR[1]) * t;
+      const w = (NEAR_W + (TIP_W - NEAR_W) * t) / 2;
+      const h = NEAR_H + (TIP_H - NEAR_H) * t;
+      return [cx + side * w * px, cy + side * w * py + drop * h];
+    };
+    const LOW = -1 as const; // the lower top edge on screen: the side face hangs from it
+    const band = (t0: number, t1: number, color: string, faces: 'top' | 'side' | 'both' = 'both') => {
+      if (faces !== 'side') poly(color, [at(t0, -1), at(t0, 1), at(t1, 1), at(t1, -1)]);
+      if (faces !== 'top') poly(color, [at(t0, LOW), at(t0, LOW, 1), at(t1, LOW, 1), at(t1, LOW)]);
+    };
+
+    const glowNow = mixc(this.glow, [1, 1, 1], heat * 0.85);
     if (flash) {
-      // Muzzle flash: a ragged star at the barrel tip.
+      // Muzzle flare beyond the tip: a ragged burst in the glow colour, white at the core.
+      const [tx, ty] = at(1.06, -1);
       const pts: Pt[] = [];
-      for (let i = 0; i < 16; i++) {
-        const r = i % 2 ? 9 : 22 + (i % 4) * 3;
-        const a = (i / 16) * Math.PI * 2;
-        pts.push([98 + Math.cos(a) * r, 24 + Math.sin(a) * r * 0.7]);
+      for (let i = 0; i < 18; i++) {
+        const r = i % 2 ? 8 : 20 + (i % 3) * 5;
+        const a = (i / 18) * Math.PI * 2;
+        pts.push([tx + 4 + Math.cos(a) * r, ty - 2 + Math.sin(a) * r * 0.75]);
       }
-      poly('#ff9a30', pts);
-      poly('#fff4b0', pts.map(([x, y]) => [98 + (x - 98) * 0.55, 24 + (y - 24) * 0.55]));
+      poly(rgb(mixc(this.glow, [1, 0.9, 0.6], 0.4)), pts);
+      poly(rgb([1, 1, 0.9]), pts.map(([x, y]) => [tx + 4 + (x - tx - 4) * 0.5, ty - 2 + (y - ty + 2) * 0.5]));
     }
-    // A fat magazine tube under a fat barrel, narrowing into the distance.
-    poly(STEEL_DARK, [[102, 110], [132, 110], [114, 40], [104, 40]]);
-    poly(STEEL, [[68, 110], [116, 110], [106, 26], [90, 26]]);
-    poly(STEEL_LIGHT, [[71, 110], [79, 110], [93, 26], [90, 26]]);
-    poly(STEEL_DARK, [[108, 110], [116, 110], [106, 26], [104, 26]]);
-    c.fillStyle = STEEL_DARK;
-    c.beginPath();
-    c.ellipse(98, 26, 8, 3.2, 0, 0, Math.PI * 2);
-    c.fill();
-    c.fillStyle = '#000';
-    c.beginPath();
-    c.ellipse(98, 26, 4.5, 1.8, 0, 0, Math.PI * 2);
-    c.fill();
-    // Pump (wooden forend), sliding back when racked.
-    const py = 58 + pump;
-    poly(WOOD, [[62, py + 30], [136, py + 30], [124, py], [74, py]]);
-    poly(WOOD_LIGHT, [[64, py + 30], [74, py + 30], [80, py], [75, py]]);
-    for (let g = 0; g < 5; g++) {
-      const y = py + 6 + g * 5;
-      poly('#3e220e', [[70 + g * 1.2, y], [128 - g * 1.2, y], [128 - g * 1.2, y + 2], [70 + g * 1.2, y + 2]]);
+
+    // Side face (darker), then the top face (lit plating).
+    poly('#16181d', [at(0, LOW), at(0, LOW, 1), at(1, LOW, 1), at(1, LOW)]);
+    poly('#3a3f4a', [at(0, -1), at(0, 1), at(1, 1), at(1, -1)]);
+    // A raised spine along the top and panel seams across it.
+    const spine = (t: number, s: number): Pt => {
+      const [lx, ly] = at(t, -1);
+      const [rx, ry] = at(t, 1);
+      return [lx + (rx - lx) * s, ly + (ry - ly) * s];
+    };
+    poly('#525a68', [spine(0, 0.38), spine(0, 0.62), spine(1, 0.6), spine(1, 0.4)]);
+    poly('#6b7585', [spine(0, 0.38), spine(0, 0.44), spine(1, 0.43), spine(1, 0.4)]);
+    for (const t of [0.12, 0.3, 0.5, 0.68, 0.86]) band(t, t + 0.012, '#23262d', 'top');
+    // Vent slats near the grip.
+    for (let i = 0; i < 5; i++) {
+      const t = 0.14 + i * 0.03;
+      poly('#101216', [spine(t, 0.1), spine(t, 0.3), spine(t + 0.015, 0.3), spine(t + 0.015, 0.1)]);
+      poly('#101216', [spine(t, 0.7), spine(t, 0.9), spine(t + 0.015, 0.9), spine(t + 0.015, 0.7)]);
     }
-    // Receiver and the gloved hand on it.
-    poly(STEEL_DARK, [[54, 110], [146, 110], [134, 84], [66, 84]]);
-    poly(STEEL, [[58, 108], [142, 108], [131, 88], [69, 88]]);
-    poly(STEEL_LIGHT, [[60, 108], [66, 108], [72, 88], [70, 88]]);
-    c.fillStyle = GLOVE;
+    // Coils: three glowing rings. After a shot they flare, then the charge sweeps from the grip
+    // up to the tip as they refill.
+    [0.46, 0.6, 0.74].forEach((t, i) => {
+      const lit = charge >= (i + 1) / 3 ? 1 : 0.18;
+      const bright = Math.max(heat, lit * (0.75 + 0.25 * pulse));
+      band(t, t + 0.035, rgb(mixc([0.06, 0.07, 0.08], glowNow, bright)));
+    });
+    // Energy cell on the side, filling with the charge.
+    const cell0 = 0.18;
+    const cell1 = 0.36;
+    poly('#0b0c0f', [at(cell0, LOW, 0.25), at(cell0, LOW, 0.8), at(cell1, LOW, 0.8), at(cell1, LOW, 0.25)]);
+    const fill = cell0 + (cell1 - cell0) * charge;
+    poly(rgb(mixc([0.1, 0.1, 0.1], glowNow, 0.6 + 0.4 * pulse)), [at(cell0, LOW, 0.35), at(cell0, LOW, 0.7), at(fill, LOW, 0.7), at(fill, LOW, 0.35)]);
+    // The emitter at the tip, seen from above: a glowing slot, not a bore.
+    poly(rgb(mixc(this.glow, [1, 1, 1], heat)), [spine(0.97, 0.25), spine(0.97, 0.75), spine(1, 0.72), spine(1, 0.28)]);
+    // The gloved hand on the grip.
+    c.fillStyle = '#2e2620';
     c.beginPath();
-    c.ellipse(66, 102, 22, 13, -0.35, 0, Math.PI * 2);
+    c.ellipse(112, 104, 24, 12, -0.55, 0, Math.PI * 2);
     c.fill();
-    c.fillStyle = '#4c3828';
+    c.fillStyle = '#3f342b';
     c.beginPath();
-    c.ellipse(60, 98, 10, 5, -0.35, 0, Math.PI * 2);
+    c.ellipse(104, 100, 11, 5, -0.55, 0, Math.PI * 2);
     c.fill();
   }
 }

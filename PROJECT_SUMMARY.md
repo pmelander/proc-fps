@@ -27,7 +27,7 @@ This file summarises the decisions made so far, the current state of the code, a
 | Package | Contents |
 |---|---|
 | `core` | `map.ts` (format v1: slabs, `hashMap`), `cells.ts` (`CellPlan`: cells → sectors with automatic T-junction splits), `rng.ts` (sfc32 + named forks), `dmath.ts` (deterministic trig), `math.ts` (render-side mat4), `geometry.ts` (sector loops, `SectorLocator`), `builder.ts` (`MapBuilder`, `rect`), `grid.ts` (`CellGrid`, `validateGridAlignment`), `validate.ts`, `constants.ts`, `textures.ts`. `maps/test01.json` is built by `scripts/build-test-maps.ts`. |
-| `gen` | `generate.ts` (v0.12.0: mission → layout → room templates → cell plan → sectors), `mission.ts` (mission graph), `layout.ts` (grid embedding), `rooms.ts` (room templates), `population.ts` (enemies, health and ammo by level and depth), `validate.ts` (structural + grid + reachability + traps), `scripts/stats.ts` (headless health check). |
+| `gen` | `generate.ts` (v0.13.0: mission → layout → room templates → cell plan → sectors), `mission.ts` (mission graph), `layout.ts` (grid embedding), `rooms.ts` (room templates), `population.ts` (enemies, health and ammo by level and depth), `validate.ts` (structural + grid + reachability + traps), `scripts/stats.ts` (headless health check). |
 | `sim` | `input.ts` (`InputFrame`, quantization), `world.ts`, `state.ts`, `player.ts` (grid movement), `sim.ts`, `replay.ts`. |
 | `render` | `backend.ts` (interface), `webgl2.ts`, `mesh.ts` (map → per-sector mesh), `palette.ts` (64 colours), `shaders.ts`, `renderer.ts` (`LevelRenderer`). |
 | `app` | `main.ts` (loop, interpolation, HUD, compass), `input.ts` (DOM → `InputFrame`), `automap.ts`. |
@@ -36,7 +36,7 @@ Commands:
 
 ```
 npm install
-npm run dev              # ?seed=anything  or  ?map=test01 / test02 (doors, keys, secret) / test03 (combat) / test04 (lift, hazard) / test05 (catwalk);  /browse.html = seed browser;  /sprites.html = enemy sprite sheet
+npm run dev              # ?seed=anything  or  ?map=test01 / test02 (doors, keys, secret) / test03 (combat) / test04 (lift, hazard) / test05 (catwalk) / test06 (bridge);  /browse.html = seed browser;  /sprites.html = enemy sprite sheet
 npm run ci               # typecheck + tests + gen:stats (2000 seeds) + build
 npm run maps:build       # regenerate test map JSON (CI fails if it drifted)
 npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions (rooms, doors, secrets, templates, attempts, gen time)
@@ -78,20 +78,23 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 **Working:**
 - Map format and validation, including trap detection: every cell reachable from the start must still be able to reach the exit.
 - The grid-aligned test map, which covers a platform, drop, stairs, and a void pillar.
-- The v0.12 generator (catwalk rooms; hordes of fragile enemies; the mini boss and boss carry the keys onward; some levels span two storeys joined by lifts; each level also gets a theme, and `generate(seed, { level })` scales its population): a mission graph (M2 slice 1) embedded on the grid (slice 2) as rooms sized by type, joined by corridors, with loops routed by pathfinding. Rooms use templates (slice 3): hall (pillar rows), platform (or an unclimbable plinth), pit, stairs to a dais, and arena (boss and mini boss); start, exit, and loot rooms stay plain. Floors are flat (one storey) and hazard stripes mark only corridor ends. Connections get doors (slice 4) as the mission says, auto or key, with keys placed on base floor in their rooms. Up to 2 secret rooms per level (slice 5) hang off ordinary rooms behind secret doors.
+- The v0.13 generator (catwalk rooms and bridges between storeys; hordes of fragile enemies; the mini boss and boss carry the keys onward; some levels span two storeys joined by lifts; each level also gets a theme, and `generate(seed, { level })` scales its population): a mission graph (M2 slice 1) embedded on the grid (slice 2) as rooms sized by type, joined by corridors, with loops routed by pathfinding. Rooms use templates (slice 3): hall (pillar rows), platform (or an unclimbable plinth), pit, stairs to a dais, and arena (boss and mini boss); start, exit, and loot rooms stay plain. Floors are flat (one storey) and hazard stripes mark only corridor ends. Connections get doors (slice 4) as the mission says, auto or key, with keys placed on base floor in their rooms. Up to 2 secret rooms per level (slice 5) hang off ordinary rooms behind secret doors.
 - The WebGL2 renderer, which uses per-sector light with distance falloff in 16 bands and renders at 240p before a 64-colour palette post pass with Bayer dithering.
 - Placeholder procedural patterns per texture id, with floor and ceiling tiles aligned to cells.
 - Grid movement, replays (F8 downloads one), the automap (hold Tab; rotates with the look direction, drawn at 240p in the palette), and the HUD compass showing where W goes.
 
 **Verified:**
 - The typecheck is clean.
-- 77 tests pass.
+- 79 tests pass.
 - 2000 seeds produce 0 validation failures (about 12 ms per map including validation).
 - The production build succeeds (about 45 kB JS).
 - Headless Chromium (SwiftShader) renders correctly.
 
 **Not yet verified:** real mouse and keyboard play. Pointer lock can't run headless.
 
+- Weapon redesign and bridges (M9):
+  - The view model is a futuristic energy scattergun held to the right and seen from above and behind: the top and side of its shroud recede towards the crosshair (no view into the muzzle). Plating, vents, an energy cell and three coils glow in the theme's light colour; a shot flares them white-hot and a charge sweeps back up the coils through the cooldown. The shot gained an energy zap; a rising charge whine replaced the pump.
+  - Bridges between storeys: half the corridors between storeys (into an ordinary room deep enough) arrive at the upper floor and run on into the lower room as a catwalk, ending in a lift down to its floor. Storeys genuinely overlap there, and the room below stays usable under the catwalk. `?map=test06` is a bridge.
 - Catwalks and double-height rooms (M8):
   - Map format 1: a sector may carry a `slab` (bottom, top, textures): a horizontal block inside it. Its cells then have two walkable levels: the floor (under the slab, with the slab's underside as ceiling) and the slab's top.
   - `CellGrid` is level-aware: `levels`, `span`, `walkable/floorAt(…, level)`, and `stepTarget` (the level a step lands on: highest reachable floor, so movers walk onto a catwalk rather than drop through it). `reachStates` searches (cell, level) states; reachability and trap checks use it.
@@ -156,6 +159,7 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 - **M3 — combat:** ✅ complete (generator v0.7.0). Grid-bound enemies with their own step timers and distance-field pathing, wake-up by sight, noise and damage, the idle/alert/chase/windup/pain/dead state machine, free-aim hitscan, dodgeable projectiles (grid collision, since all walls are on the grid), rare telegraphed hitscan snipers, player health, death and the exit. Balance (enemy budget by graph depth, health along the critical path) stays in M5; some levels currently have no health at all.
 - **M4 — procedural content:** ✅ complete (generator v0.8.0). Theme-coloured textures baked to an atlas on the GPU; SDF-modelled 8-direction, 4-frame enemy sprites baked to a sprite atlas; a seeded jsfxr-style sound set with positional playback; a seeded two-layer music generator that follows combat. Still open: per-theme quantization palettes (all themes share the 64-colour palette), and baked sprites for projectiles and pickups.
 - **M6 — hazards and storeys:** ✅ complete (generator v0.10.0). Damaging floors, lifts, and two-storey levels.
+- **M9 — weapon redesign and bridges:** ✅ complete (generator v0.13.0). A futuristic energy scattergun seen correctly over the barrel, and catwalks carrying corridors between storeys across lower rooms.
 - **M8 — catwalks and double-height rooms:** ✅ complete (generator v0.12.0, map format 1). Slabs, level-aware grid, sim and rendering, and catwalk rooms.
 - **M7 — combat feel:** ✅ complete (generator v0.11.0). A heavy shotgun with automatic melee, infinite ammo, hordes of fragile enemies, spectacular deaths, bosses dropping keys, key sprites, mutant enemies, a lift tile.
 - **M5 — progression and balance:** ✅ complete (generator v0.9.0). Runs of levels with rising difficulty, enemy budgets by level and graph depth, health and ammo along the way, ammo, level stats, and pause. Beyond the roadmap: the Backlog below.
@@ -186,6 +190,4 @@ In the map format a door is a one-cell sector with its kind in `Sector.special` 
 
 Ideas noted during play-testing, not yet scheduled. Each line points at whatever already exists for it.
 
-- **Catwalks between storeys.** M8 catwalks live inside one room (a bridge over a pit). Next: catwalks that carry an upper-storey route across a lower room, as an alternative to lifts, so storeys genuinely overlap. The slab machinery supports it; the layout would need corridors that pass through a room at catwalk height.
 - **Procedural enemies.** Enemies generated from the seed rather than five fixed models: body plans assembled from SDF parts (limb count and length, hunch, heads, horns, jaws, eye count), palettes that follow the level's theme, and stat variants within each role (fodder, bruiser, sniper, mini boss, boss): speed, hit points, attack pattern. Keeps the sprite-atlas bake; the atlas becomes per level.
-- **Weapon redesign: futuristic, correct perspective.** The shotgun view model is drawn as if you could see into the muzzle, which you cannot when looking down the gun from behind: show the top and side of the barrel receding towards the crosshair, Doom-style (held slightly right, seen from above and behind). And make weapons futuristic rather than a wood-and-steel pump shotgun: energy cells, glowing coils, vents, an emissive charge that flares on each shot (and ties into the muzzle-flash light).

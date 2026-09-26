@@ -273,3 +273,35 @@ describe('catwalks (test05)', async () => {
     expect(dropped.player.z).toBe(-96);
   });
 });
+
+describe('bridges between storeys (test06)', async () => {
+  const { LIFT_WAIT } = await import('@proc-fps/core');
+  const m = (await import('@proc-fps/core/maps/test06.json')).default as MapData;
+  const tap = (f: Partial<InputFrame>, wait = STEP_TICKS) => [...hold(f, 1), ...idle(wait)];
+  const forward = tap({ move: 1 });
+  const turn = (a: number) => hold({ turn: a }, 1);
+  const travel = createWorld(m).lifts[0]!.travel;
+  const toLift = [...forward, ...forward, ...forward]; // (3, 2), the lift, at the bottom
+
+  it('rides the lift up and walks the catwalk over the lower room into the upper storey', () => {
+    const up = [...toLift, ...idle(LIFT_WAIT + travel + 2)];
+    const onBridge = run(m, [...up, ...forward, ...forward]); // (5, 2)
+    expect(cell(onBridge)).toEqual([5, 2]);
+    expect(onBridge.player.level).toBe(1);
+    expect(onBridge.player.z).toBe(192);
+    const arrived = run(m, [...up, ...forward, ...forward, ...forward, ...forward, ...forward]);
+    expect(cell(arrived)).toEqual([8, 2]);
+    expect(arrived.player.z).toBe(192);
+  });
+
+  it('leaves the room below usable under the catwalk', () => {
+    // North to (2, 3), east to (4, 3), then south under the catwalk into (4, 2).
+    const under = run(m, [
+      ...forward, ...forward, ...turn(Math.PI / 2), ...forward, ...turn(-Math.PI / 2), ...forward, ...forward,
+      ...turn(-Math.PI / 2), ...forward,
+    ]);
+    expect(cell(under)).toEqual([4, 2]);
+    expect(under.player.level).toBe(0);
+    expect(under.player.z).toBe(0);
+  });
+});

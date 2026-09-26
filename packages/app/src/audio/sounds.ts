@@ -11,18 +11,20 @@ export type SoundId =
   | 'door' | 'locked' | 'key' | 'health' | 'secret' | 'exit' | 'step'
   | 'windup' | 'windupMelee' | 'windupHitscan'
   | 'launch' | 'melee' | 'snipe'
-  | 'pump' | 'punch' | 'gib';
+  | 'charge' | 'punch' | 'gib';
 
 type Recipe = Voice[];
 
 const RECIPES: Record<SoundId, Recipe> = {
-  // A shotgun: a hard crack, a wide noise blast and a sub-bass thump.
+  // An energy scattergun: a zap, a hard crack, a wide noise blast and a sub-bass thump.
   shot: [
+    { wave: 'square', freq: 1800, freqEnd: 140, attack: 0, sustain: 0.01, release: 0.12, volume: 0.3, duty: 0.3 },
     { wave: 'noise', freq: 4000, freqEnd: 900, attack: 0, sustain: 0.01, release: 0.05, volume: 0.6 },
     { wave: 'noise', freq: 1600, freqEnd: 120, attack: 0.002, sustain: 0.05, release: 0.35, volume: 0.75, lowpass: 2600 },
     { wave: 'sine', freq: 95, freqEnd: 32, attack: 0, sustain: 0.04, release: 0.25, volume: 0.9 },
   ],
-  pump: [{ wave: 'noise', freq: 2400, freqEnd: 1400, attack: 0, sustain: 0.03, release: 0.04, volume: 0.35, lowpass: 5000, arpeggio: [1, 0.6], arpeggioTime: 0.12 }],
+  // The coils recharging: a rising whine through the cooldown.
+  charge: [{ wave: 'sine', freq: 260, freqEnd: 1100, attack: 0.05, sustain: 0.3, release: 0.12, volume: 0.18, vibrato: { depth: 0.03, rate: 24 } }],
   punch: [
     { wave: 'sine', freq: 140, freqEnd: 45, attack: 0, sustain: 0.02, release: 0.12, volume: 0.8 },
     { wave: 'noise', freq: 900, freqEnd: 200, attack: 0, sustain: 0.01, release: 0.08, volume: 0.4 },

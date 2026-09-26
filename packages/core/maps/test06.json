@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "meta": {"name":"test06","theme":"base"},
+  "vertices": [
+    {"x":0,"y":0},
+    {"x":768,"y":0},
+    {"x":768,"y":256},
+    {"x":512,"y":256},
+    {"x":384,"y":256},
+    {"x":384,"y":384},
+    {"x":512,"y":384},
+    {"x":768,"y":384},
+    {"x":768,"y":640},
+    {"x":0,"y":640},
+    {"x":1024,"y":256},
+    {"x":1024,"y":384},
+    {"x":1024,"y":128},
+    {"x":1408,"y":128},
+    {"x":1408,"y":512},
+    {"x":1024,"y":512}
+  ],
+  "linedefs": [
+    {"v1":0,"v2":1,"front":{"sector":0,"upper":1,"middle":1,"lower":1},"flags":0,"tag":0},
+    {"v1":1,"v2":2,"front":{"sector":0,"upper":1,"middle":1,"lower":1},"flags":0,"tag":0},
+    {"v1":2,"v2":3,"front":{"sector":0,"upper":1,"middle":0,"lower":1},"flags":0,"tag":0,"back":{"sector":2,"upper":1,"middle":0,"lower":1}},
+    {"v1":3,"v2":4,"front":{"sector":0,"upper":1,"middle":0,"lower":1},"flags":0,"tag":0,"back":{"sector":1,"upper":2,"middle":0,"lower":2}},
+    {"v1":4,"v2":5,"front":{"sector":0,"upper":1,"middle":0,"lower":1},"flags":0,"tag":0,"back":{"sector":1,"upper":2,"middle":0,"lower":2}},
+    {"v1":5,"v2":6,"front":{"sector":0,"upper":1,"middle":0,"lower":1},"flags":0,"tag":0,"back":{"sector":1,"upper":2,"middle":0,"lower":2}},
+    {"v1":6,"v2":7,"front":{"sector":0,"upper":1,"middle":0,"lower":1},"flags":0,"tag":0,"back":{"sector":2,"upper":1,"middle":0,"lower":1}},
+    {"v1":7,"v2":8,"front":{"sector":0,"upper":1,"middle":1,"lower":1},"flags":0,"tag":0},
+    {"v1":8,"v2":9,"front":{"sector":0,"upper":1,"middle":1,"lower":1},"flags":0,"tag":0},
+    {"v1":9,"v2":0,"front":{"sector":0,"upper":1,"middle":1,"lower":1},"flags":0,"tag":0},
+    {"v1":3,"v2":6,"front":{"sector":1,"upper":2,"middle":0,"lower":2},"flags":0,"tag":0,"back":{"sector":2,"upper":1,"middle":0,"lower":1}},
+    {"v1":2,"v2":7,"front":{"sector":2,"upper":1,"middle":0,"lower":1},"flags":0,"tag":0,"back":{"sector":3,"upper":2,"middle":0,"lower":2}},
+    {"v1":2,"v2":10,"front":{"sector":3,"upper":2,"middle":2,"lower":2},"flags":0,"tag":0},
+    {"v1":10,"v2":11,"front":{"sector":3,"upper":2,"middle":0,"lower":2},"flags":0,"tag":0,"back":{"sector":4,"upper":2,"middle":0,"lower":2}},
+    {"v1":11,"v2":7,"front":{"sector":3,"upper":2,"middle":2,"lower":2},"flags":0,"tag":0},
+    {"v1":12,"v2":13,"front":{"sector":4,"upper":2,"middle":2,"lower":2},"flags":0,"tag":0},
+    {"v1":13,"v2":14,"front":{"sector":4,"upper":2,"middle":2,"lower":2},"flags":0,"tag":0},
+    {"v1":14,"v2":15,"front":{"sector":4,"upper":2,"middle":2,"lower":2},"flags":0,"tag":0},
+    {"v1":15,"v2":11,"front":{"sector":4,"upper":2,"middle":2,"lower":2},"flags":0,"tag":0},
+    {"v1":10,"v2":12,"front":{"sector":4,"upper":2,"middle":2,"lower":2},"flags":0,"tag":0}
+  ],
+  "sectors": [
+    {"floor":0,"ceil":320,"light":176,"floorTex":4,"ceilTex":5,"tag":0,"special":0},
+    {"floor":0,"ceil":320,"light":176,"floorTex":20,"ceilTex":5,"tag":192,"special":8},
+    {"floor":0,"ceil":320,"light":176,"floorTex":4,"ceilTex":5,"tag":0,"special":0,"slab":{"bottom":176,"top":192,"topTex":21,"bottomTex":2,"sideTex":2}},
+    {"floor":192,"ceil":320,"light":160,"floorTex":6,"ceilTex":5,"tag":0,"special":0},
+    {"floor":192,"ceil":384,"light":208,"floorTex":3,"ceilTex":5,"tag":0,"special":0}
+  ],
+  "things": [
+    {"type":1,"x":64,"y":320,"angle":0,"flags":0},
+    {"type":2,"x":1344,"y":320,"angle":0,"flags":0}
+  ]
+}

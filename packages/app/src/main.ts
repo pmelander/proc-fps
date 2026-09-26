@@ -1,6 +1,6 @@
 import { DoorKind, HEADING_DX, HEADING_DY, PLAYER_EYE_HEIGHT, STEP_TICKS, TICK_DT, isEnemyThing, type MapData } from '@proc-fps/core';
 import { GENERATOR_VERSION, generate, validateGenerated } from '@proc-fps/gen';
-import { HIDDEN_OFFSET, LevelRenderer, SpriteShape, WebGL2Backend, spriteTile, type Sprite } from '@proc-fps/render';
+import { HIDDEN_OFFSET, LevelRenderer, SpriteShape, THEME_COLORS, WebGL2Backend, spriteTile, type Sprite } from '@proc-fps/render';
 import {
   ENEMY_DEFS,
   PLAYER_MAX_HEALTH,
@@ -23,6 +23,7 @@ import test02 from '@proc-fps/core/maps/test02.json';
 import test03 from '@proc-fps/core/maps/test03.json';
 import test04 from '@proc-fps/core/maps/test04.json';
 import test05 from '@proc-fps/core/maps/test05.json';
+import test06 from '@proc-fps/core/maps/test06.json';
 import { AudioEngine } from './audio/engine.js';
 import type { SoundId } from './audio/sounds.js';
 import { drawAutomap } from './automap.js';
@@ -31,7 +32,7 @@ import { Weapon } from './weapon.js';
 import { InputSampler } from './input.js';
 import { KEY_COLORS, KEY_NAMES } from './keys.js';
 
-const TEST_MAPS: Record<string, MapData> = { test01: test01 as MapData, test02: test02 as MapData, test03: test03 as MapData, test04: test04 as MapData, test05: test05 as MapData };
+const TEST_MAPS: Record<string, MapData> = { test01: test01 as MapData, test02: test02 as MapData, test03: test03 as MapData, test04: test04 as MapData, test05: test05 as MapData, test06: test06 as MapData };
 const NOTICE_SECONDS = 2.5;
 /** Dev: run the sim without the pointer lock (the in-app preview cannot take it). */
 const AUTOPLAY = new URLSearchParams(location.search).has('autoplay');
@@ -236,7 +237,6 @@ function main(): void {
   const compassLetter = document.getElementById('compass-letter') as HTMLElement;
   const prompt = document.getElementById('prompt') as HTMLDivElement;
   const health = document.getElementById('health') as HTMLDivElement;
-  const weapon = new Weapon(document.getElementById('gun') as HTMLCanvasElement);
   const gore = new Gore();
   const throws: Throws = new Map();
   let joltUntil = 0;
@@ -249,6 +249,9 @@ function main(): void {
 
   const here = where();
   const map = loadMap(here);
+  // The weapon's coils glow in the theme's light colour.
+  const theme = THEME_COLORS[(map.meta.theme ?? 'base') as keyof typeof THEME_COLORS] ?? THEME_COLORS.base;
+  const weapon = new Weapon(document.getElementById('gun') as HTMLCanvasElement, theme.techLight);
   const world = createWorld(map);
   const state = createSimState(world);
   let prev: PlayerState = clonePlayer(state.player);
@@ -374,7 +377,7 @@ function main(): void {
           weapon.fire(now);
           renderer.flash = 1;
           joltUntil = now + JOLT_SECONDS;
-          window.setTimeout(() => audio.play('pump'), 220);
+          window.setTimeout(() => audio.play('charge'), 90);
         }
         if (e.type === 'hurt') {
           hurtUntil = now + FLASH_SECONDS * 2;

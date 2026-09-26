@@ -167,7 +167,34 @@ export function buildTest05(): MapData {
   return b.build({ name: 'test05', theme: 'base' });
 }
 
-const maps: Record<string, () => MapData> = { test01: buildTest01, test02: buildTest02, test03: buildTest03, test04: buildTest04, test05: buildTest05 };
+/**
+ * test06: a bridge between storeys (cells; y grows north). Lower room L (0–5, 0–4) at floor 0,
+ * ceiling 320; upper room U (8–10, 1–3) at 192. The corridor (6–7, 2) runs at 192 into L as a
+ * catwalk over (5, 2) and (4, 2), ending in a lift at (3, 2) from 0 up to 192. Start (0, 2)
+ * facing east; exit (10, 2).
+ */
+export function buildTest06(): MapData {
+  const plan = new CellPlan();
+  const lower = plan.spec({ floor: 0, ceil: 320, light: 176, floorTex: T.FloorTile, ceilTex: T.Ceiling, wallTex: T.Stone });
+  const catwalk = plan.spec({
+    floor: 0, ceil: 320, light: 176, floorTex: T.FloorTile, ceilTex: T.Ceiling, wallTex: T.Stone,
+    slab: { bottom: 176, top: 192, topTex: T.Grate, bottomTex: T.Metal, sideTex: T.Metal },
+  });
+  const upper = plan.spec({ floor: 192, ceil: 384, light: 208, floorTex: T.Tech, ceilTex: T.Ceiling, wallTex: T.Metal });
+  const corridor = plan.spec({ floor: 192, ceil: 320, light: 160, floorTex: T.Trim, ceilTex: T.Ceiling, wallTex: T.Metal });
+  for (let y = 0; y < 5; y++) for (let x = 0; x < 6; x++) plan.set(x, y, y === 2 && (x === 4 || x === 5) ? catwalk : lower);
+  plan.set(3, 2, plan.spec({ floor: 0, ceil: 320, light: 176, floorTex: T.Lift, ceilTex: T.Ceiling, wallTex: T.Metal, special: SPECIAL_LIFT, tag: 192 }));
+  plan.set(6, 2, corridor);
+  plan.set(7, 2, corridor);
+  for (let y = 1; y < 4; y++) for (let x = 8; x < 11; x++) plan.set(x, y, upper);
+  const b = new MapBuilder();
+  emitCellPlan(b, plan, CELL_SIZE);
+  b.thing(ThingType.PlayerStart, 0.5 * CELL_SIZE, 2.5 * CELL_SIZE, 0);
+  b.thing(ThingType.Exit, 10.5 * CELL_SIZE, 2.5 * CELL_SIZE, 0);
+  return b.build({ name: 'test06', theme: 'base' });
+}
+
+const maps: Record<string, () => MapData> = { test01: buildTest01, test02: buildTest02, test03: buildTest03, test04: buildTest04, test05: buildTest05, test06: buildTest06 };
 
 for (const [name, fn] of Object.entries(maps)) {
   const map = fn();

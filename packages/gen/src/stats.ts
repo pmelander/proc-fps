@@ -19,6 +19,8 @@ export interface LevelStats {
   enemies: number;
   health: number;
   lifts: number;
+  /** Slab sectors: catwalks in catwalk rooms and bridges between storeys. */
+  catwalks: number;
   /** Layout attempts used, 1 = first try. */
   attempts: number;
 }
@@ -65,6 +67,7 @@ export function levelStats(g: Generated): LevelStats {
     enemies: map.things.filter((t) => isEnemyThing(t.type)).length,
     health: map.things.filter((t) => t.type === ThingType.Health).length,
     lifts: map.sectors.filter(isLift).length,
+    catwalks: map.sectors.filter((s) => s.slab).length,
     attempts: g.attempts,
   };
 }

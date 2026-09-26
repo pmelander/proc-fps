@@ -20,13 +20,13 @@ import {
 import { embedMission, type CellRect, type Layout, type LayoutFailure } from './layout.js';
 import { generateMission, type DoorKind as MissionDoor, type Mission, type RoomKind } from './mission.js';
 import { graphDepth, populate } from './population.js';
-import { designRoom, type RoomDesign } from './rooms.js';
+import { designRoom, plainDesign, type RoomDesign } from './rooms.js';
 
 /**
  * Bump on ANY change that alters output for an existing seed.
  * seed + GENERATOR_VERSION must always reproduce the same map.
  */
-export const GENERATOR_VERSION = '0.12.0';
+export const GENERATOR_VERSION = '0.13.0';
 
 /** Layout attempts per mission, and missions tried, before giving up on a seed. */
 const LAYOUT_TRIES = 8;
@@ -36,6 +36,19 @@ const STOREY_FLOOR = 0;
 const STOREY_HEIGHT = 192;
 /** Chance a level has two storeys: level 1, then later levels. */
 const TWO_STOREY_CHANCE = [0.4, 0.6] as const;
+/** Chance a corridor between storeys becomes a bridge: a catwalk into the lower room ending in a lift. */
+const BRIDGE_CHANCE = 0.5;
+/** A bridge's catwalk runs at most this many cells into the room before its lift. */
+const BRIDGE_MAX = 4;
+const CATWALK_THICKNESS = 16;
+
+/** A catwalk carrying an upper-storey corridor into a lower room, down to its floor by a lift. */
+interface Bridge {
+  room: number;
+  catwalk: [number, number][];
+  lift: [number, number];
+  high: number;
+}
 const CORRIDOR_HEIGHT = 128;
 /** Ceiling clearance above a room's highest walkable floor. */
 const ROOM_HEADROOM = 96;
@@ -133,6 +146,34 @@ function emit(seed: string, mission: Mission, layout: Layout, rng: Rng, level: n
     }
   }
 
+  // Bridges: some corridors between storeys arrive at the upper floor and run on into the lower
+  // room as a catwalk, ending in a lift down to its floor. Storeys then truly overlap: the room
+  // below stays usable under the catwalk. One per room, in ordinary rooms deep enough for it.
+  const bridgeRng = rng.fork('bridges');
+  const bridges = new Map<number, Bridge>(); // by corridor index
+  const bridgeRoom = new Map<number, Bridge>(); // by room
+  layout.corridors.forEach((c, ci) => {
+    const e = mission.edges[c.edge]!;
+    if (floorOf(e.a) === floorOf(e.b) || !bridgeRng.chance(BRIDGE_CHANCE)) return;
+    const lower = floorOf(e.a) < floorOf(e.b) ? e.a : e.b;
+    if (mission.nodes[lower]!.kind !== 'room' || bridgeRoom.has(lower)) return;
+    const r = layout.rooms[lower]!;
+    const [dx, dy] = c.cells[lower === e.a ? 0 : c.cells.length - 1]!;
+    const h = [0, 1, 2, 3].find((k) => inRoom(r, dx + HEADING_DX[k as 0]!, dy + HEADING_DY[k as 0]!));
+    if (h === undefined) return;
+    const run: [number, number][] = [];
+    for (let k = 1; inRoom(r, dx + HEADING_DX[h as 0]! * k, dy + HEADING_DY[h as 0]! * k); k++) run.push([dx + HEADING_DX[h as 0]! * k, dy + HEADING_DY[h as 0]! * k]);
+    const n = Math.min(run.length - 1, BRIDGE_MAX + 1);
+    if (n < 3) return;
+    const lift = run[n - 1]!;
+    // The lift must not sit next to another doorway.
+    const nearDoorway = doorways[lower]!.some(([x, y]) => Math.abs(x - lift[0]) + Math.abs(y - lift[1]) <= 1);
+    if (nearDoorway) return;
+    const bridge = { room: lower, catwalk: run.slice(0, n - 1), lift, high: Math.max(floorOf(e.a), floorOf(e.b)) };
+    bridges.set(ci, bridge);
+    bridgeRoom.set(lower, bridge);
+  });
+
   const wallSet: TextureId[] = [T.Stone, T.Metal, T.Tech];
   /** [type, x, y, angle, flags] in cells. */
   const things: [number, number, number, number, number?][] = [];
@@ -144,8 +185,11 @@ function emit(seed: string, mission: Mission, layout: Layout, rng: Rng, level: n
     const r = layout.rooms[id]!;
     const w = r.x1 - r.x0;
     const h = r.y1 - r.y0;
-    const design = designRoom(node.kind, w, h, rooms);
-    const minHeight = Math.max(node.kind === 'boss' ? 224 : node.kind === 'miniboss' ? 192 : 128, design.maxRise + ROOM_HEADROOM);
+    const bridge = bridgeRoom.get(id);
+    const design = bridge ? plainDesign(w, h) : designRoom(node.kind, w, h, rooms);
+    // A bridge room is tall enough for its catwalk at the upper floor, with headroom above.
+    const bridgeHeight = bridge ? bridge.high - floorOf(id) + CORRIDOR_HEIGHT : 0;
+    const minHeight = Math.max(node.kind === 'boss' ? 224 : node.kind === 'miniboss' ? 192 : 128, design.maxRise + ROOM_HEADROOM, bridgeHeight);
     const ceil = floorOf(id) + Math.round(deco.range(minHeight, Math.max(minHeight, 288)) / 8) * 8;
     const light = node.kind === 'loot' ? 232 : Math.round(deco.range(96, 232) / 8) * 8;
     const floorTex = theme.pick([T.FloorTile, T.Slime, T.Tech]);
@@ -197,18 +241,37 @@ function emit(seed: string, mission: Mission, layout: Layout, rng: Rng, level: n
     return design;
   });
 
-  // Population: enemies and health, balanced by level and depth (population.ts).
+  // Bridge catwalks and lifts over the room cells (the room kept its spec for the ceiling height).
+  for (const bridge of bridges.values()) {
+    const room = layout.rooms[bridge.room]!;
+    const floor = floorOf(bridge.room);
+    const roomSpec = plan.specs[plan.get(room.x0, room.y0)!]!;
+    const catwalk = plan.spec({
+      ...roomSpec,
+      slab: { bottom: bridge.high - CATWALK_THICKNESS, top: bridge.high, topTex: T.Grate, bottomTex: T.Metal, sideTex: T.Metal },
+    });
+    for (const [x, y] of bridge.catwalk) plan.set(x, y, catwalk);
+    plan.set(bridge.lift[0], bridge.lift[1], plan.spec({
+      floor, ceil: roomSpec.ceil, light: 176, floorTex: T.Lift, ceilTex: T.Ceiling, wallTex: T.Metal, special: SPECIAL_LIFT, tag: bridge.high,
+    }));
+  }
+
+  // Population: enemies and health, balanced by level and depth (population.ts). Nothing on a
+  // bridge's catwalk or lift.
   const occupied = new Set(things.map(([, x, y]) => `${x},${y}`));
+  for (const bridge of bridges.values()) for (const [x, y] of [...bridge.catwalk, bridge.lift]) occupied.add(`${x},${y}`);
   const nearDoor = new Set<string>();
   doorways.forEach((list) => list.forEach(([x, y, h]) => nearDoor.add(`${x - HEADING_DX[h as 0]},${y - HEADING_DY[h as 0]}`)));
   things.push(...populate({ mission, layout, designs, occupied, nearDoor, rng: rng.fork('population'), level }));
 
-  for (const c of layout.corridors) {
+  layout.corridors.forEach((c, ci) => {
     const edge = mission.edges[c.edge]!;
     const secret = secretId.get(edge.a) ?? secretId.get(edge.b);
-    // A corridor between storeys runs at the lower floor and ends in a lift up to the upper room.
-    const low = Math.min(floorOf(edge.a), floorOf(edge.b));
+    // A corridor between storeys runs at the lower floor and ends in a lift up to the upper room;
+    // a bridge corridor runs at the upper floor instead (its lift is inside the lower room).
+    const bridged = bridges.has(ci);
     const high = Math.max(floorOf(edge.a), floorOf(edge.b));
+    const low = bridged ? high : Math.min(floorOf(edge.a), floorOf(edge.b));
     const spec = (floorTex: TextureId) =>
       plan.spec({ floor: low, ceil: low + CORRIDOR_HEIGHT, light: 144, floorTex, ceilTex: T.Ceiling, wallTex: T.Metal, ...secretArea(secret) });
     // Hazard stripes mark only a corridor's two ends, so at most 2 striped tiles ever touch.
@@ -226,9 +289,9 @@ function emit(seed: string, mission: Mission, layout: Layout, rng: Rng, level: n
     // secret door goes at the other end, flush with the room it hides from. On a corridor between
     // storeys (only ever an ordinary one) it goes at the lower end, if the lift leaves room.
     const kind = DOOR_KIND[edge.door];
-    if (kind === DoorKind.None || (high > low && c.cells.length < 2)) continue;
+    if (kind === DoorKind.None || (high > low && c.cells.length < 2)) return;
     const atA =
-      high > low
+      high > low || bridged
         ? !upperIsA
         : kind === DoorKind.Secret
           ? secretId.has(edge.b)
@@ -244,7 +307,7 @@ function emit(seed: string, mission: Mission, layout: Layout, rng: Rng, level: n
       special: kind | (secret === undefined ? 0 : SPECIAL_SECRET_AREA),
       tag: secret ?? edge.key ?? 0,
     }));
-  }
+  });
 
   const b = new MapBuilder();
   emitCellPlan(b, plan, C);

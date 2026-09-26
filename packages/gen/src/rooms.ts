@@ -51,6 +51,11 @@ const ROOM_WEIGHTS: readonly (readonly [RoomTemplate, number])[] = [
   ['catwalk', 3],
 ];
 
+/** An empty room: base floor everywhere (bridge rooms, where a catwalk and a lift take the space). */
+export function plainDesign(w: number, h: number): RoomDesign {
+  return { template: 'plain', regions: [BASE], cells: new Int8Array(w * h), maxRise: 0 };
+}
+
 export function designRoom(kind: RoomKind, w: number, h: number, rng: Rng): RoomDesign {
   const iw = w - 2;
   const ih = h - 2;
