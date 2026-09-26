@@ -10,6 +10,7 @@ import {
   createWorld,
   doorAtCell,
   doorOffset,
+  liftHeight,
   stepSim,
   type EnemyState,
   type PlayerState,
@@ -19,13 +20,14 @@ import {
 import test01 from '@proc-fps/core/maps/test01.json';
 import test02 from '@proc-fps/core/maps/test02.json';
 import test03 from '@proc-fps/core/maps/test03.json';
+import test04 from '@proc-fps/core/maps/test04.json';
 import { AudioEngine } from './audio/engine.js';
 import type { SoundId } from './audio/sounds.js';
 import { drawAutomap } from './automap.js';
 import { InputSampler } from './input.js';
 import { KEY_COLORS, KEY_NAMES } from './keys.js';
 
-const TEST_MAPS: Record<string, MapData> = { test01: test01 as MapData, test02: test02 as MapData, test03: test03 as MapData };
+const TEST_MAPS: Record<string, MapData> = { test01: test01 as MapData, test02: test02 as MapData, test03: test03 as MapData, test04: test04 as MapData };
 const NOTICE_SECONDS = 2.5;
 /** Dev: run the sim without the pointer lock (the in-app preview cannot take it). */
 const AUTOPLAY = new URLSearchParams(location.search).has('autoplay');
@@ -319,7 +321,9 @@ function main(): void {
     // Music: the combat layer follows how many enemies are after the player.
     audio.setIntensity(state.enemies.filter((e) => e.mode === 'chase' || e.mode === 'windup').length / 2);
     world.doors.forEach((_, i) => (renderer.movers[i] = doorOffset(world, state, i)));
-    world.pickups.forEach((_, i) => (renderer.movers[world.doors.length + i] = state.taken[i] ? HIDDEN_OFFSET : 0));
+    world.lifts.forEach((lift, i) => (renderer.movers[world.doors.length + i] = -(liftHeight(world, state, i) - lift.bottom)));
+    const pickupMover = world.doors.length + world.lifts.length;
+    world.pickups.forEach((_, i) => (renderer.movers[pickupMover + i] = state.taken[i] ? HIDDEN_OFFSET : 0));
 
     const t = acc / TICK_DT;
     const p = state.player;

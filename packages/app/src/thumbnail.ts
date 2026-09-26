@@ -1,4 +1,4 @@
-import { BaseTex, DoorKind, ThingType, doorKindOf, isEnemyThing, keyOfThing, sectorPolygons, secretOf, type MapData, type Sector } from '@proc-fps/core';
+import { BaseTex, DoorKind, ThingType, doorKindOf, isDamaging, isEnemyThing, isLift, keyOfThing, sectorPolygons, secretOf, type MapData, type Sector } from '@proc-fps/core';
 import { KEY_COLORS } from './keys.js';
 
 const PAD = 6;
@@ -106,6 +106,8 @@ function sectorColor(s: Sector): string {
   if (door === DoorKind.Auto) return '#9a9a9a';
   if (door === DoorKind.Key) return KEY_COLORS[s.tag] ?? '#ffffff';
   if (door === DoorKind.Secret) return SECRET;
+  if (isLift(s)) return '#40d8e0';
+  if (isDamaging(s)) return '#ff7a20';
   // Brighter when higher: platforms and stairs pop, pits sink.
   const l = Math.max(18, Math.min(92, 48 + s.floor * 0.7));
   if (secretOf(s) >= 0) return `rgb(${l * 0.8} ${l * 0.45} ${l * 1.1})`;

@@ -1,5 +1,6 @@
 import { ENEMY_DEFS, FIRE_COOLDOWN, PLAYER_DAMAGE, PLAYER_EYE_HEIGHT, PLAYER_HEIGHT, PLAYER_RADIUS, WEAPON_RANGE, dcos, dsin } from '@proc-fps/core';
 import { alert, makeNoise } from './ai.js';
+import { floorNow } from './lifts.js';
 import { castRay, cellOpen } from './raycast.js';
 import type { SimState } from './state.js';
 import type { World } from './world.js';
@@ -100,7 +101,7 @@ export function stepProjectiles(world: World, state: SimState): void {
     const [cx, cy] = g.cellOf(q.x, q.y);
     if (!cellOpen(world, state, cx, cy)) return false;
     const sec = world.map.sectors[g.sectorAt(cx, cy)]!;
-    if (q.z < sec.floor || q.z > sec.ceil) return false;
+    if (q.z < floorNow(world, state, cx, cy) || q.z > sec.ceil) return false;
     return ++q.ttl <= PROJECTILE_TTL;
   });
 }

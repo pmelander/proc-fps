@@ -1,5 +1,5 @@
 import earcut from 'earcut';
-import { BaseTex, DoorKind, SectorLocator, ThingType, doorKindOf, doorSectors, keyOfThing, sectorPolygons, type MapData, type Side } from '@proc-fps/core';
+import { BaseTex, DoorKind, SectorLocator, ThingType, doorKindOf, doorSectors, isLift, keyOfThing, sectorPolygons, type MapData, type Side } from '@proc-fps/core';
 import type { VertexLayout } from './backend.js';
 
 /** pos(3) uv(2) light(1) tex(1) mover(1) move(1) slide(1) */
@@ -21,8 +21,9 @@ export const TEX_SCALE = 1 / 64;
 
 /**
  * Movers: geometry the static mesh shifts down by a per-frame offset (a uniform array).
- * Mover ids are door ids first, then pickups (keys and health) in thing order. A door's offset is
- * how far its ceiling sits below the open height; a taken pickup's offset sinks its marker out of view.
+ * Mover ids are door ids first, then lifts (sector order), then pickups (keys, health, ammo) in
+ * thing order. A door's offset is how far its ceiling sits below the open height; a lift's is
+ * minus how far its floor has risen; a taken pickup's sinks its marker out of view.
  */
 export const MAX_MOVERS = 128;
 /** Offset that hides a taken pickup: far below the floor and past the far plane. */
@@ -52,8 +53,9 @@ export interface LevelMesh {
    * contiguous so portal culling can draw only visible sectors.
    */
   sectors: SectorRange[];
-  /** Mover counts: doors, then pickups. */
+  /** Mover counts: doors, then lifts, then pickups. */
   doors: number;
+  lifts: number;
   pickups: number;
 }
 
@@ -64,6 +66,9 @@ export function buildLevelMesh(map: MapData): LevelMesh {
   const doors = doorSectors(map);
   if (doors.length > MAX_MOVERS) throw new Error(`${doors.length} doors exceed MAX_MOVERS`);
   const doorOf = new Map(doors.map((s, i) => [s, i]));
+  const lifts = map.sectors.flatMap((s, i) => (isLift(s) ? [i] : []));
+  if (doors.length + lifts.length > MAX_MOVERS) throw new Error('doors and lifts exceed MAX_MOVERS');
+  const liftMotion = new Map(lifts.map((s, i): [number, Motion] => [s, { mover: doors.length + i, move: 1, slide: 0 }]));
   /** Panel texture seen from `from`: a secret door wears that side's own wall texture. */
   const doorTex = (s: number, from: Side) => {
     const sec = map.sectors[s]!;
@@ -100,7 +105,8 @@ export function buildLevelMesh(map: MapData): LevelMesh {
       const tris = earcut(flat, holeStarts.length ? holeStarts : undefined, 2);
       const door = doorOf.get(s);
       const planes: [number, number, Motion][] = [
-        [sec.floor, sec.floorTex, STILL],
+        // A lift's floor is its moving platform.
+        [sec.floor, sec.floorTex, liftMotion.get(s) ?? STILL],
         // A door's ceiling is the moving slab.
         [sec.ceil, sec.ceilTex, door === undefined ? STILL : { mover: door, move: 1, slide: 0 }],
       ];
@@ -134,13 +140,27 @@ export function buildLevelMesh(map: MapData): LevelMesh {
     const b = map.vertices[ld.v2]!;
     const F = map.sectors[ld.front.sector]!;
     if (!ld.back) {
-      // Inside a door cell the walls' tops follow the lowering ceiling.
+      // Inside a door cell the walls' tops follow the lowering ceiling; in a lift shaft the
+      // walls' bottoms follow the platform.
       const door = doorOf.get(ld.front.sector);
       const top = door === undefined ? STILL : { mover: door, move: 1, slide: 0 };
-      quad(ld.front.sector, a.x, a.y, b.x, b.y, F.floor, F.ceil, ld.front.middle || ld.front.lower, STILL, top);
+      quad(ld.front.sector, a.x, a.y, b.x, b.y, F.floor, F.ceil, ld.front.middle || ld.front.lower, liftMotion.get(ld.front.sector) ?? STILL, top);
       continue;
     }
     const B = map.sectors[ld.back.sector]!;
+    // Lift edge (a lift next to a floor that is not a lift): the platform side grows up from a
+    // lower neighbour; a higher neighbour's edge, seen from the lift, shrinks as it rises.
+    const liftSide = liftMotion.has(ld.front.sector) !== liftMotion.has(ld.back.sector) ? (liftMotion.has(ld.front.sector) ? ld.front : ld.back) : undefined;
+    let liftEdge = false;
+    if (liftSide) {
+      const other = liftSide === ld.front ? ld.back : ld.front;
+      const L = map.sectors[liftSide.sector]!;
+      const N = map.sectors[other.sector]!;
+      const motion = liftMotion.get(liftSide.sector)!;
+      if (N.floor > L.floor) quad(liftSide.sector, a.x, a.y, b.x, b.y, L.floor, N.floor, other.lower, motion, STILL);
+      else quad(other.sector, a.x, a.y, b.x, b.y, N.floor, L.floor, liftSide.lower, STILL, motion, true);
+      liftEdge = true;
+    }
     // Door panel, seen from the neighbour: hangs from the door's open ceiling and slides down to its floor.
     for (const [doorSide, other] of [
       [ld.front, ld.back],
@@ -153,7 +173,7 @@ export function buildLevelMesh(map: MapData): LevelMesh {
       const top = { mover: door, move: 0, slide: 1 };
       quad(other.sector, a.x, a.y, b.x, b.y, D.ceil, D.ceil, doorTex(doorSide.sector, other), bottom, top, true);
     }
-    if (F.floor !== B.floor) {
+    if (F.floor !== B.floor && !liftEdge) {
       const side: Side = F.floor < B.floor ? ld.front : ld.back;
       quad(side.sector, a.x, a.y, b.x, b.y, Math.min(F.floor, B.floor), Math.max(F.floor, B.floor), side.lower);
     }
@@ -171,7 +191,7 @@ export function buildLevelMesh(map: MapData): LevelMesh {
     const key = keyOfThing(t.type);
     if (key < 0 && t.type !== ThingType.Health && t.type !== ThingType.Ammo) continue;
     const s = locator.locate(t.x, t.y);
-    const m = { mover: doors.length + pickups++, move: 1, slide: 0 };
+    const m = { mover: doors.length + lifts.length + pickups++, move: 1, slide: 0 };
     if (s < 0 || m.mover >= MAX_MOVERS) continue;
     const z = map.sectors[s]!.floor + KEY_MARKER_HEIGHT;
     const r = KEY_MARKER_SIZE;
@@ -200,5 +220,5 @@ export function buildLevelMesh(map: MapData): LevelMesh {
     vo += b.v.length;
     io += b.i.length;
   }
-  return { vertices, indices, sectors, doors: doors.length, pickups };
+  return { vertices, indices, sectors, doors: doors.length, lifts: lifts.length, pickups };
 }

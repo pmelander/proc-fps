@@ -1,8 +1,22 @@
-import { AMMO_PICKUP, DoorKind, HEADING_DX, HEADING_DY, HEALTH_PICKUP, MAX_AMMO, PLAYER_MAX_HEALTH, STEP_TICKS } from '@proc-fps/core';
+import {
+  AMMO_PICKUP,
+  DoorKind,
+  HAZARD_DAMAGE,
+  HAZARD_TICKS,
+  HEADING_DX,
+  HEADING_DY,
+  HEALTH_PICKUP,
+  MAX_AMMO,
+  MAX_STEP,
+  PLAYER_MAX_HEALTH,
+  STEP_TICKS,
+  isDamaging,
+} from '@proc-fps/core';
 import { stepEnemies } from './ai.js';
-import { playerFire, stepProjectiles } from './combat.js';
+import { hurtPlayer, playerFire, stepProjectiles } from './combat.js';
 import { quantizeInput, type InputFrame } from './input.js';
-import { stepPlayer, type DoorGate } from './player.js';
+import { callLift, floorNow, liftAtCell, liftMoving, stepLifts } from './lifts.js';
+import { stepPlayer, type MoveGate } from './player.js';
 import { DOOR_OPEN_TICKS, type SimState } from './state.js';
 import { doorAtCell, type World } from './world.js';
 
@@ -41,24 +55,38 @@ export function stepSim(world: World, state: SimState, input: InputFrame): void 
 
   const enemyIn = (cx: number, cy: number) =>
     state.enemies.some((e) => e.mode !== 'dead' && ((e.cx === cx && e.cy === cy) || (e.stepTick > 0 && e.fromCx === cx && e.fromCy === cy)));
-  const gate: DoorGate = {
-    blocked: (cx, cy) => {
-      if (enemyIn(cx, cy)) return true;
-      const door = doorAtCell(world, cx, cy);
-      return door >= 0 && state.doors[door]! < DOOR_OPEN_TICKS;
-    },
-    bump: (cx, cy, fresh) => {
-      const door = doorAtCell(world, cx, cy);
-      if (door < 0) return false; // an enemy is in the way
-      const info = world.doors[door]!;
-      if (info.kind === DoorKind.Auto) {
-        open(door);
-        return true;
+  const gate: MoveGate = {
+    floorAt: (cx, cy) => floorNow(world, state, cx, cy),
+    isLift: (cx, cy) => liftAtCell(world, cx, cy) >= 0,
+    tryStep: (cx, cy, h, fresh) => {
+      if (!world.grid.canStep(cx, cy, h)) return 'no';
+      const nx = cx + HEADING_DX[h];
+      const ny = cy + HEADING_DY[h];
+      if (enemyIn(nx, ny)) return 'no';
+      const door = doorAtCell(world, nx, ny);
+      if (door >= 0 && state.doors[door]! < DOOR_OPEN_TICKS) {
+        const info = world.doors[door]!;
+        if (info.kind === DoorKind.Auto) {
+          open(door);
+          return 'wait';
+        }
+        if (fresh && info.kind === DoorKind.Key && !(state.keys & (1 << info.key)) && state.doors[door] === 0) {
+          state.events.push({ type: 'locked', door, key: info.key });
+        }
+        return state.doors[door]! > 0 ? 'wait' : 'no'; // a key or secret door opening: wait; closed, it is a wall
       }
-      if (fresh && info.kind === DoorKind.Key && !(state.keys & (1 << info.key)) && state.doors[door] === 0) {
-        state.events.push({ type: 'locked', door, key: info.key });
+      // Lifts: never step on or off one that is moving; walking into one that is not level calls it.
+      const from = liftAtCell(world, cx, cy);
+      const to = liftAtCell(world, nx, ny);
+      if (from >= 0 && liftMoving(world, state, from)) return 'no';
+      if (to >= 0 && liftMoving(world, state, to)) return 'wait';
+      const here = floorNow(world, state, cx, cy);
+      const there = floorNow(world, state, nx, ny);
+      if (to >= 0 && Math.abs(there - here) > MAX_STEP) {
+        callLift(world, state, to, here);
+        return 'wait';
       }
-      return state.doors[door]! > 0; // a key or secret door already opening: wait for it too; closed, it is a wall
+      return there - here > MAX_STEP ? 'no' : 'go';
     },
   };
   stepPlayer(world, p, q, gate);
@@ -66,6 +94,7 @@ export function stepSim(world: World, state: SimState, input: InputFrame): void 
   state.doors.forEach((d, i) => {
     if (d > 0 && d < DOOR_OPEN_TICKS) state.doors[i] = d + 1;
   });
+  stepLifts(world, state);
 
   // Pickups in the cell the player is standing in (by position, so mid-step counts). Health and
   // ammo stay on the floor while the player is full.
@@ -88,6 +117,14 @@ export function stepSim(world: World, state: SimState, input: InputFrame): void 
     }
     state.taken[i] = true;
   });
+
+  // Damaging floors: standing on one hurts every HAZARD_TICKS (the first tick on it counts).
+  const sector = world.map.sectors[world.grid.sectorAt(cx, cy)];
+  if (sector && isDamaging(sector) && p.onGround && p.z <= sector.floor) {
+    if (p.hazardTicks++ % HAZARD_TICKS === 0) hurtPlayer(state, HAZARD_DAMAGE);
+  } else {
+    p.hazardTicks = 0;
+  }
 
   playerFire(world, state, q.fire);
   stepEnemies(world, state);

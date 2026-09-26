@@ -1,4 +1,4 @@
-import { BaseTex as T, type Rng, type TextureId } from '@proc-fps/core';
+import { BaseTex as T, SPECIAL_DAMAGE, type Rng, type TextureId } from '@proc-fps/core';
 import type { RoomKind } from './mission.js';
 
 /**
@@ -18,6 +18,8 @@ export interface RoomRegion {
   rise: number;
   /** Omitted = the room's own textures. */
   floorTex?: TextureId;
+  /** Sector special bits (e.g. SPECIAL_DAMAGE for a hazard pit). */
+  special?: number;
   wallTex?: TextureId;
   lightDelta: number;
 }
@@ -32,6 +34,7 @@ export interface RoomDesign {
 }
 
 const SOLID = -1;
+const HAZARD_PIT_CHANCE = 0.5;
 const STEP = 16;
 const BASE: RoomRegion = { rise: 0, lightDelta: 0 };
 
@@ -88,9 +91,12 @@ export function designRoom(kind: RoomKind, w: number, h: number, rng: Rng): Room
       const y0 = rng.int(0, ih - ph);
       const plinth = template === 'platform' && pw * ph <= 2 && rng.chance(0.3);
       const rise = template === 'pit' ? -24 : plinth ? 48 : rng.pick([STEP, 24]);
+      // Half the pits are hazards (slime or lava in the theme's colour), glowing a little. They
+      // stay climbable and the ring around them is safe, so the route never needs to cross one.
+      const hazard = template === 'pit' && rng.chance(HAZARD_PIT_CHANCE);
       regions.push(
         template === 'pit'
-          ? { rise, floorTex: T.Slime, wallTex: T.Trim, lightDelta: -16 }
+          ? { rise, floorTex: T.Slime, wallTex: T.Trim, lightDelta: hazard ? 24 : -16, ...(hazard ? { special: SPECIAL_DAMAGE } : {}) }
           : { rise, floorTex: T.Tech, wallTex: T.Trim, lightDelta: 32 },
       );
       if (!plinth) maxRise = Math.max(maxRise, rise);

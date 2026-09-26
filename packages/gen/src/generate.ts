@@ -8,6 +8,7 @@ import {
   HEADING_DY,
   MapBuilder,
   Rng,
+  SPECIAL_LIFT,
   SPECIAL_SECRET_AREA,
   THEME_NAMES,
   ThingType,
@@ -18,20 +19,23 @@ import {
 } from '@proc-fps/core';
 import { embedMission, type CellRect, type Layout, type LayoutFailure } from './layout.js';
 import { generateMission, type DoorKind as MissionDoor, type Mission, type RoomKind } from './mission.js';
-import { populate } from './population.js';
+import { graphDepth, populate } from './population.js';
 import { designRoom, type RoomDesign } from './rooms.js';
 
 /**
  * Bump on ANY change that alters output for an existing seed.
  * seed + GENERATOR_VERSION must always reproduce the same map.
  */
-export const GENERATOR_VERSION = '0.9.0';
+export const GENERATOR_VERSION = '0.10.0';
 
 /** Layout attempts per mission, and missions tried, before giving up on a seed. */
 const LAYOUT_TRIES = 8;
 const MISSION_TRIES = 8;
-/** One storey for now (flat floor plans); storeys joined by elevators come later. */
+/** Floor plans are flat per storey; storeys are STOREY_HEIGHT apart, joined by lifts. */
 const STOREY_FLOOR = 0;
+const STOREY_HEIGHT = 192;
+/** Chance a level has two storeys: level 1, then later levels. */
+const TWO_STOREY_CHANCE = [0.4, 0.6] as const;
 const CORRIDOR_HEIGHT = 128;
 /** Ceiling clearance above a room's highest walkable floor. */
 const ROOM_HEADROOM = 96;
@@ -83,6 +87,26 @@ export function generateDetailed(seed: string, options: GenerateOptions = {}): G
   throw new Error(`seed ${seed}: no layout after ${attempts} attempts`);
 }
 
+/**
+ * Storey per mission node: some levels split by depth along the graph, so the deeper part sits a
+ * storey up. Key and secret connections never change storey (the boss room and exit share the
+ * gate room's, loot and secret rooms their host's), so a lift only ever replaces an ordinary
+ * connection.
+ */
+function assignStoreys(mission: Mission, rng: Rng, level: number): number[] {
+  const storeys = mission.nodes.map(() => 0);
+  if (!rng.chance(TWO_STOREY_CHANCE[level >= 2 ? 1 : 0])) return storeys;
+  const depth = graphDepth(mission);
+  const exit = mission.nodes.find((n) => n.kind === 'exit')!.id;
+  const threshold = Math.max(1, Math.round(depth[exit]! * rng.range(0.4, 0.65)));
+  mission.nodes.forEach((_, id) => (storeys[id] = depth[id]! >= threshold ? 1 : 0));
+  // Key and secret doors guard their b side (gate → boss, host → loot, host → secret); the exit hangs off the boss.
+  for (const e of mission.edges) if (e.door === 'key' || e.door === 'secret') storeys[e.b] = storeys[e.a]!;
+  const boss = mission.nodes.find((n) => n.kind === 'boss')!.id;
+  storeys[exit] = storeys[boss]!;
+  return storeys;
+}
+
 const DOOR_KIND: Record<MissionDoor, DoorKind> = { open: DoorKind.None, auto: DoorKind.Auto, key: DoorKind.Key, secret: DoorKind.Secret };
 /** Rooms a door belongs next to: it guards them. */
 const GUARDED: readonly RoomKind[] = ['miniboss', 'boss', 'loot'];
@@ -92,6 +116,8 @@ function emit(seed: string, mission: Mission, layout: Layout, rng: Rng, level: n
   const deco = rng.fork('deco');
   const theme = rng.fork('theme');
   const rooms = rng.fork('rooms');
+  const storeys = assignStoreys(mission, rng.fork('storeys'), level);
+  const floorOf = (id: number) => STOREY_FLOOR + storeys[id]! * STOREY_HEIGHT;
   const plan = new CellPlan();
   const inRoom = (r: CellRect, x: number, y: number) => x >= r.x0 && x < r.x1 && y >= r.y0 && y < r.y1;
   const roomAt = (x: number, y: number) => layout.rooms.findIndex((r) => inRoom(r, x, y));
@@ -119,19 +145,20 @@ function emit(seed: string, mission: Mission, layout: Layout, rng: Rng, level: n
     const h = r.y1 - r.y0;
     const design = designRoom(node.kind, w, h, rooms);
     const minHeight = Math.max(node.kind === 'boss' ? 224 : node.kind === 'miniboss' ? 192 : 128, design.maxRise + ROOM_HEADROOM);
-    const ceil = STOREY_FLOOR + Math.round(deco.range(minHeight, Math.max(minHeight, 288)) / 8) * 8;
+    const ceil = floorOf(id) + Math.round(deco.range(minHeight, Math.max(minHeight, 288)) / 8) * 8;
     const light = node.kind === 'loot' ? 232 : Math.round(deco.range(96, 232) / 8) * 8;
     const floorTex = theme.pick([T.FloorTile, T.Slime, T.Tech]);
     const wallTex = theme.pick(wallSet);
     const specs = design.regions.map((reg) =>
       plan.spec({
-        floor: STOREY_FLOOR + reg.rise,
+        floor: floorOf(id) + reg.rise,
         ceil,
         light: Math.max(0, Math.min(255, light + reg.lightDelta)),
         floorTex: reg.floorTex ?? floorTex,
         ceilTex: T.Ceiling,
         wallTex: reg.wallTex ?? wallTex,
         ...secretArea(secretId.get(id)),
+        special: (reg.special ?? 0) | (secretId.has(id) ? SPECIAL_SECRET_AREA : 0),
       }),
     );
     for (let y = 0; y < h; y++) {
@@ -175,25 +202,37 @@ function emit(seed: string, mission: Mission, layout: Layout, rng: Rng, level: n
   for (const c of layout.corridors) {
     const edge = mission.edges[c.edge]!;
     const secret = secretId.get(edge.a) ?? secretId.get(edge.b);
+    // A corridor between storeys runs at the lower floor and ends in a lift up to the upper room.
+    const low = Math.min(floorOf(edge.a), floorOf(edge.b));
+    const high = Math.max(floorOf(edge.a), floorOf(edge.b));
     const spec = (floorTex: TextureId) =>
-      plan.spec({ floor: STOREY_FLOOR, ceil: STOREY_FLOOR + CORRIDOR_HEIGHT, light: 144, floorTex, ceilTex: T.Ceiling, wallTex: T.Metal, ...secretArea(secret) });
+      plan.spec({ floor: low, ceil: low + CORRIDOR_HEIGHT, light: 144, floorTex, ceilTex: T.Ceiling, wallTex: T.Metal, ...secretArea(secret) });
     // Hazard stripes mark only a corridor's two ends, so at most 2 striped tiles ever touch.
     const ends = spec(T.Trim);
     const middle = spec(T.Tech);
     c.cells.forEach(([x, y], k) => plan.set(x, y, k === 0 || k === c.cells.length - 1 ? ends : middle));
 
+    const upperIsA = floorOf(edge.a) > floorOf(edge.b);
+    if (high > low) {
+      const [lx, ly] = c.cells[upperIsA ? 0 : c.cells.length - 1]!;
+      plan.set(lx, ly, plan.spec({ floor: low, ceil: high + CORRIDOR_HEIGHT, light: 176, floorTex: T.Trim, ceilTex: T.Ceiling, wallTex: T.Metal, special: SPECIAL_LIFT, tag: high }));
+    }
+
     // The door goes in the corridor cell next to the room it guards (the b end otherwise). A
-    // secret door goes at the other end, flush with the room it hides from.
+    // secret door goes at the other end, flush with the room it hides from. On a corridor between
+    // storeys (only ever an ordinary one) it goes at the lower end, if the lift leaves room.
     const kind = DOOR_KIND[edge.door];
-    if (kind === DoorKind.None) continue;
+    if (kind === DoorKind.None || (high > low && c.cells.length < 2)) continue;
     const atA =
-      kind === DoorKind.Secret
-        ? secretId.has(edge.b)
-        : GUARDED.includes(mission.nodes[edge.a]!.kind) && !GUARDED.includes(mission.nodes[edge.b]!.kind);
+      high > low
+        ? !upperIsA
+        : kind === DoorKind.Secret
+          ? secretId.has(edge.b)
+          : GUARDED.includes(mission.nodes[edge.a]!.kind) && !GUARDED.includes(mission.nodes[edge.b]!.kind);
     const [dx, dy] = c.cells[atA ? 0 : c.cells.length - 1]!;
     plan.set(dx, dy, plan.spec({
-      floor: STOREY_FLOOR,
-      ceil: STOREY_FLOOR + CORRIDOR_HEIGHT,
+      floor: low,
+      ceil: low + CORRIDOR_HEIGHT,
       light: 144,
       floorTex: T.Trim,
       ceilTex: T.Ceiling,

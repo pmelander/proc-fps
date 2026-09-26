@@ -27,7 +27,7 @@ This file summarises the decisions made so far, the current state of the code, a
 | Package | Contents |
 |---|---|
 | `core` | `map.ts` (format v0, `hashMap`), `cells.ts` (`CellPlan`: cells → sectors with automatic T-junction splits), `rng.ts` (sfc32 + named forks), `dmath.ts` (deterministic trig), `math.ts` (render-side mat4), `geometry.ts` (sector loops, `SectorLocator`), `builder.ts` (`MapBuilder`, `rect`), `grid.ts` (`CellGrid`, `validateGridAlignment`), `validate.ts`, `constants.ts`, `textures.ts`. `maps/test01.json` is built by `scripts/build-test-maps.ts`. |
-| `gen` | `generate.ts` (v0.9.0: mission → layout → room templates → cell plan → sectors), `mission.ts` (mission graph), `layout.ts` (grid embedding), `rooms.ts` (room templates), `population.ts` (enemies, health and ammo by level and depth), `validate.ts` (structural + grid + reachability + traps), `scripts/stats.ts` (headless health check). |
+| `gen` | `generate.ts` (v0.10.0: mission → layout → room templates → cell plan → sectors), `mission.ts` (mission graph), `layout.ts` (grid embedding), `rooms.ts` (room templates), `population.ts` (enemies, health and ammo by level and depth), `validate.ts` (structural + grid + reachability + traps), `scripts/stats.ts` (headless health check). |
 | `sim` | `input.ts` (`InputFrame`, quantization), `world.ts`, `state.ts`, `player.ts` (grid movement), `sim.ts`, `replay.ts`. |
 | `render` | `backend.ts` (interface), `webgl2.ts`, `mesh.ts` (map → per-sector mesh), `palette.ts` (64 colours), `shaders.ts`, `renderer.ts` (`LevelRenderer`). |
 | `app` | `main.ts` (loop, interpolation, HUD, compass), `input.ts` (DOM → `InputFrame`), `automap.ts`. |
@@ -36,7 +36,7 @@ Commands:
 
 ```
 npm install
-npm run dev              # ?seed=anything  or  ?map=test01 / test02 (doors, keys, secret) / test03 (combat);  /browse.html = seed browser;  /sprites.html = enemy sprite sheet
+npm run dev              # ?seed=anything  or  ?map=test01 / test02 (doors, keys, secret) / test03 (combat) / test04 (lift, hazard);  /browse.html = seed browser;  /sprites.html = enemy sprite sheet
 npm run ci               # typecheck + tests + gen:stats (2000 seeds) + build
 npm run maps:build       # regenerate test map JSON (CI fails if it drifted)
 npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions (rooms, doors, secrets, templates, attempts, gen time)
@@ -78,20 +78,24 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 **Working:**
 - Map format and validation, including trap detection: every cell reachable from the start must still be able to reach the exit.
 - The grid-aligned test map, which covers a platform, drop, stairs, and a void pillar.
-- The v0.9 generator (each level also gets a theme, and `generate(seed, { level })` scales its population): a mission graph (M2 slice 1) embedded on the grid (slice 2) as rooms sized by type, joined by corridors, with loops routed by pathfinding. Rooms use templates (slice 3): hall (pillar rows), platform (or an unclimbable plinth), pit, stairs to a dais, and arena (boss and mini boss); start, exit, and loot rooms stay plain. Floors are flat (one storey) and hazard stripes mark only corridor ends. Connections get doors (slice 4) as the mission says, auto or key, with keys placed on base floor in their rooms. Up to 2 secret rooms per level (slice 5) hang off ordinary rooms behind secret doors.
+- The v0.10 generator (some levels span two storeys joined by lifts; each level also gets a theme, and `generate(seed, { level })` scales its population): a mission graph (M2 slice 1) embedded on the grid (slice 2) as rooms sized by type, joined by corridors, with loops routed by pathfinding. Rooms use templates (slice 3): hall (pillar rows), platform (or an unclimbable plinth), pit, stairs to a dais, and arena (boss and mini boss); start, exit, and loot rooms stay plain. Floors are flat (one storey) and hazard stripes mark only corridor ends. Connections get doors (slice 4) as the mission says, auto or key, with keys placed on base floor in their rooms. Up to 2 secret rooms per level (slice 5) hang off ordinary rooms behind secret doors.
 - The WebGL2 renderer, which uses per-sector light with distance falloff in 16 bands and renders at 240p before a 64-colour palette post pass with Bayer dithering.
 - Placeholder procedural patterns per texture id, with floor and ceiling tiles aligned to cells.
 - Grid movement, replays (F8 downloads one), the automap (hold Tab; rotates with the look direction, drawn at 240p in the palette), and the HUD compass showing where W goes.
 
 **Verified:**
 - The typecheck is clean.
-- 71 tests pass.
+- 74 tests pass.
 - 2000 seeds produce 0 validation failures (about 12 ms per map including validation).
 - The production build succeeds (about 45 kB JS).
 - Headless Chromium (SwiftShader) renders correctly.
 
 **Not yet verified:** real mouse and keyboard play. Pointer lock can't run headless.
 
+- Hazards and storeys (M6):
+  - Floor hazards: `SPECIAL_DAMAGE` sectors hurt the player (`HAZARD_DAMAGE` every `HAZARD_TICKS`, on landing first). Half the pits in pit rooms are slime or lava in the theme's colour; pits stay climbable and the room's outer ring is always safe, so the route never needs to cross one.
+  - Lifts: `SPECIAL_LIFT` one-cell sectors travel between their floor (bottom) and the height in `tag` (top). Standing still aboard for `LIFT_WAIT` ticks sends one to its other end at `LIFT_SPEED`; walking into one that is not level calls it (nobody climbs or drops onto a lift). The grid treats a lift as level with a neighbour at either end, so reachability and trap checks understand it; the sim adds the lift's real height through `MoveGate` (`tryStep`: go / wait / no, covering doors, lifts and enemies). Enemies do not ride lifts. Rendered as movers after doors: the platform, the shaft walls, and the edges to the floors at each end move with it.
+  - Storeys: 40% of level-1 levels (60% later) split by mission-graph depth, the deeper part a storey (192) up. Key and secret connections never change storey, so each crossing is an ordinary corridor at the lower floor ending in a lift (an auto door on it moves to the lower end). `?map=test04` has a lift and a hazard pit.
 - Progression and balance (M5):
   - Runs: `?run=<id>&level=<n>` plays level n of a run (seed `<id>-<n>`). The level only changes the population, so the same seed at a higher level is the same layout, harder. Finishing a level shows kills, secrets and time, and E moves to the next; dying retries the level. Every level starts fresh (100 health, 40 ammo), so replays need nothing but the map and the input log.
   - Balance (`gen/src/population.ts`): an enemy budget per ordinary room from its size, the level (`levelDifficulty`: +20% per level) and its depth along the mission graph (rooms near the exit get more, and more brutes); snipers only deep in a level or from level 2; bigger escorts for the mini boss (and, from level 3, the boss). Health: always one in the gate room before the boss, 1–2 in loot and secret rooms, sometimes elsewhere (more often deeper). Ammo: enough boxes to kill every enemy with a 1.5× margin, placed from the start outwards, plus one per loot and secret room.
@@ -137,6 +141,8 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
   - ✅ Slice 6: tooling: `/browse.html` shows thumbnails and stats for pages of seeds (click to play); `gen:stats` reports distributions through `levelStats`.
 - **M3 — combat:** ✅ complete (generator v0.7.0). Grid-bound enemies with their own step timers and distance-field pathing, wake-up by sight, noise and damage, the idle/alert/chase/windup/pain/dead state machine, free-aim hitscan, dodgeable projectiles (grid collision, since all walls are on the grid), rare telegraphed hitscan snipers, player health, death and the exit. Balance (enemy budget by graph depth, health along the critical path) stays in M5; some levels currently have no health at all.
 - **M4 — procedural content:** ✅ complete (generator v0.8.0). Theme-coloured textures baked to an atlas on the GPU; SDF-modelled 8-direction, 4-frame enemy sprites baked to a sprite atlas; a seeded jsfxr-style sound set with positional playback; a seeded two-layer music generator that follows combat. Still open: per-theme quantization palettes (all themes share the 64-colour palette), and baked sprites for projectiles and pickups.
+- **M6 — hazards and storeys:** ✅ complete (generator v0.10.0). Damaging floors, lifts, and two-storey levels.
+- **M7 — combat feel (next):** the play-test notes in the Backlog: a Doom-heavy gun, spectacular deaths, infinite ammo, hordes instead of bullet sponges, automatic melee, bosses dropping keys (exit behind a boss key), key models, scary mutant enemies that move slower and are easier to hit.
 - **M5 — progression and balance:** ✅ complete (generator v0.9.0). Runs of levels with rising difficulty, enemy budgets by level and graph depth, health and ammo along the way, ammo, level stats, and pause. Beyond the roadmap: the Backlog below.
 
 ## Doors (decided)
@@ -165,6 +171,11 @@ In the map format a door is a one-cell sector with its kind in `Sector.special` 
 
 Ideas noted during play-testing, not yet scheduled. Each line points at whatever already exists for it.
 
-- **Floor hazards.** Damage floors. `Sector.special` is already reserved for this, but nothing reads it. Depends on health. Validation must keep the critical path hazard-free, or at least survivable.
-- **Elevators and storeys.** Floor plans are flat per storey (done in M2 slice 2 for a single storey); elevators will join storeys. Lifts are the undecided half of the doors question. On the grid, a lift fits as a one-cell sector whose floor moves between two heights, the same moving-sector machinery as doors (M2 slice 4). Validation must treat a lift as a step in both directions only when it can be called from either end.
 - **Catwalks and double-height rooms.** A catwalk bridges a tall room on a second level, and the player can walk under it. The sector model allows one floor and one ceiling per point, but the renderer is true 3D with a depth buffer (unlike Doom's), so the limit is the map format and the grid, not rendering. Plan: *slabs* (3D-floor style) on cells with a top and an underside, which means a `MAP_FORMAT_VERSION` bump; `CellGrid` cells hold a stack of walkable levels; `canStep` moves level to level with the same step and headroom rules, with the level picked by the player's z; reachability and trap search run over (cell, level); the automap dims levels below. The generator then gives tall rooms catwalks joining upper doorways, so rooms can connect on two levels. Schedule after M2 slice 4 (doors), so the grid and movement rule change once. Fully stacked rooms with walls on both levels are a bigger, later step.
+- **A gun that feels Doom-heavy.** Play-test verdict: the gun is laughably small, a pea shooter. Doom-like guns are heavy and devastating. Ideas: a big weapon view model filling a third of the screen height (baked like the enemy sprites, in the palette); recoil kick and a screen jolt on each shot; a muzzle flash that lights the scene for a frame; a layered, bass-heavy boom instead of a pew; fewer, harder shots, e.g. a shotgun spread of pellets doing far more damage up close, with a slower pump; enemies knocked back or thrown when killed; a second heavier weapon to find.
+- **Infinite ammo.** Play-test verdict: ammo should be infinite. Removes the M5 ammo boxes, the HUD counter and the ammo-sufficiency check; the gun's rhythm then comes from its fire rate and weight alone.
+- **Spectacular deaths.** Enemies should die in spectacular fashion: burst into gibs and blood (particles in the sprite pass), get thrown by the killing shot, a death sound per enemy type, a lingering bloody corpse. Pairs with the Doom-heavy gun as one "combat feel" pass.
+- **Bosses drop keys.** The mini boss drops the key to the boss room; the boss drops the key to the exit room (the exit moves behind its own key door). Replaces the boss key lying in a dead end behind the mini boss. Keys should look like keys (a key model, not a diamond).
+- **Scary mutant enemies.** Enemies should look like scary mutants that fit the style (not smooth mannequins), and move slower. The skinny ones (snipers) are hard to hit: widen their hit cylinder or bulk them up.
+- **Hordes, not bullet sponges.** Difficulty should not be in killing any one enemy; it is the sheer number that grinds you down. Ordinary enemies die in one or two hits from the heavy gun; levels (and later levels especially) bring many more of them. Rebalance \`ENEMY_DEFS\` hit points and the population budget together with the gun.
+- **Automatic melee up close.** When an enemy is in the adjacent cell the player is facing, firing becomes a melee strike (a punch, a blade or a rifle butt), automatically.

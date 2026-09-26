@@ -1,6 +1,6 @@
 import { CELL_SIZE, MAX_STEP, PLAYER_HEIGHT } from './constants.js';
 import { SectorLocator } from './geometry.js';
-import { LineFlags, type MapData } from './map.js';
+import { LineFlags, isLift, liftFloorNear, type MapData } from './map.js';
 
 /**
  * Cardinal headings: 0 = east (+x), 1 = north (+y), 2 = west, 3 = south.
@@ -108,9 +108,12 @@ export class CellGrid {
     if (this.edgeBlocked(ax, ay, h)) return false;
     const from = this.map.sectors[this.sectorAt(ax, ay)]!;
     const to = this.map.sectors[this.sectorAt(bx, by)]!;
-    if (to.floor - from.floor > MAX_STEP) return false;
+    // A lift stands wherever it can be called: the end nearest the other cell's floor.
+    const fromFloor = isLift(from) && !isLift(to) ? liftFloorNear(from, to.floor) : from.floor;
+    const toFloor = isLift(to) && !isLift(from) ? liftFloorNear(to, fromFloor) : to.floor;
+    if (toFloor - fromFloor > MAX_STEP) return false;
     // Must fit through the opening while crossing the shared edge.
-    if (Math.min(from.ceil, to.ceil) - Math.max(from.floor, to.floor) < PLAYER_HEIGHT) return false;
+    if (Math.min(from.ceil, to.ceil) - Math.max(fromFloor, toFloor) < PLAYER_HEIGHT) return false;
     return true;
   }
 

@@ -1,10 +1,12 @@
 import {
   CellGrid,
   DoorKind,
+  LIFT_SPEED,
   SectorLocator,
   ThingType,
   doorKindOf,
   doorSectors,
+  isLift,
   keyOfThing,
   secretCount,
   type MapData,
@@ -26,6 +28,16 @@ export interface DoorInfo {
   travel: number;
 }
 
+export interface LiftInfo {
+  sector: number;
+  bottom: number;
+  top: number;
+  /** Ticks from one end to the other. */
+  travel: number;
+  /** Grid cell indices it covers. */
+  cells: number[];
+}
+
 /** Something picked up by walking over it. */
 export interface PickupInfo {
   kind: 'key' | 'health' | 'ammo';
@@ -45,6 +57,10 @@ export interface World {
   readonly doors: readonly DoorInfo[];
   /** Door id per grid cell, -1 = none. */
   readonly doorAt: Int32Array;
+  /** Lifts in sector order (lift id = index; the renderer's lift movers follow it). */
+  readonly lifts: readonly LiftInfo[];
+  /** Lift id per grid cell, -1 = none. */
+  readonly liftAt: Int32Array;
   /** Keys and health, in thing order (the renderer's pickup movers follow the same order). */
   readonly pickups: readonly PickupInfo[];
   /** Exit cell, if the map has one. */
@@ -69,9 +85,21 @@ export function createWorld(map: MapData): World {
     const [cx, cy] = grid.cellOf(t.x, t.y);
     return [{ kind: key >= 0 ? 'key' : t.type === ThingType.Health ? 'health' : 'ammo', key, cx, cy }];
   });
+  const lifts: LiftInfo[] = [];
+  const liftAt = new Int32Array(grid.width * grid.height).fill(-1);
+  map.sectors.forEach((s, sector) => {
+    if (!isLift(s)) return;
+    const cells: number[] = [];
+    grid.sector.forEach((cs, i) => {
+      if (cs !== sector) return;
+      cells.push(i);
+      liftAt[i] = lifts.length;
+    });
+    lifts.push({ sector, bottom: s.floor, top: s.tag, travel: Math.max(1, Math.ceil((s.tag - s.floor) / LIFT_SPEED)), cells });
+  });
   const exitThing = map.things.find((t) => t.type === ThingType.Exit);
   const exit = exitThing ? grid.cellOf(exitThing.x, exitThing.y) : null;
-  return { map, locator: new SectorLocator(map), grid, doors, doorAt, pickups, exit, secrets: secretCount(map) };
+  return { map, locator: new SectorLocator(map), grid, doors, doorAt, lifts, liftAt, pickups, exit, secrets: secretCount(map) };
 }
 
 /** True for pickups that render as markers: the mover order of the level mesh. */

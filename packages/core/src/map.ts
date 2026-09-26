@@ -61,7 +61,8 @@ export interface Sector {
   /**
    * Bitfield for sector specials. Bits 0–1: door kind (see DoorKind); a key door's key id
    * is the sector's `tag`. Bit 2: secret area (SPECIAL_SECRET_AREA), with the secret's id in
-   * `tag`. Other bits reserved (damage floors, flicker…).
+   * `tag`. Bit 3: lift (SPECIAL_LIFT). Bit 4: damaging floor (SPECIAL_DAMAGE). Other bits
+   * reserved (flicker…).
    */
   special: number;
 }
@@ -134,6 +135,20 @@ export const doorKindOf = (s: Sector): DoorKind => (s.special & SPECIAL_DOOR_MAS
 export const SPECIAL_SECRET_AREA = 1 << 2;
 /** Secret id of a sector, or -1. */
 export const secretOf = (s: Sector): number => (s.special & SPECIAL_SECRET_AREA ? s.tag : -1);
+/**
+ * Lifts: a one-cell sector whose floor travels between its stored floor (the bottom) and the
+ * height in its `tag` (the top). Maps store it at the bottom; the sim moves it. A lift joins
+ * storeys: the grid treats it as level with a neighbour at either end, because it can be called.
+ */
+export const SPECIAL_LIFT = 1 << 3;
+export const isLift = (s: Sector): boolean => (s.special & SPECIAL_LIFT) !== 0;
+/** The floor a lift at rest can stand at that is nearest to `height`. */
+export const liftFloorNear = (s: Sector, height: number): number => Math.max(s.floor, Math.min(s.tag, height));
+
+/** A floor that hurts whoever stands on it: slime or lava. */
+export const SPECIAL_DAMAGE = 1 << 4;
+export const isDamaging = (s: Sector): boolean => (s.special & SPECIAL_DAMAGE) !== 0;
+
 /** Number of secrets in a map (ids are 0 … n - 1). */
 export function secretCount(map: MapData): number {
   return map.sectors.reduce((n, s) => Math.max(n, secretOf(s) + 1), 0);

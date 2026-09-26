@@ -14,6 +14,12 @@ export const HEALTH_PICKUP = 25;
 export const START_AMMO = 40;
 export const MAX_AMMO = 200;
 export const AMMO_PICKUP = 20;
+/** Lifts: wait this long with the player aboard, then travel at LIFT_SPEED units per tick. */
+export const LIFT_WAIT = 20;
+export const LIFT_SPEED = 3;
+/** Standing on a damaging floor costs HAZARD_DAMAGE every HAZARD_TICKS. */
+export const HAZARD_DAMAGE = 5;
+export const HAZARD_TICKS = 30;
 /** Player weapon: free-aim hitscan along the view direction. */
 export const FIRE_COOLDOWN = 16;
 export const PLAYER_DAMAGE = 20;

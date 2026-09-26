@@ -11,6 +11,8 @@ import {
   DoorKind,
   EnemyType,
   MapBuilder,
+  SPECIAL_DAMAGE,
+  SPECIAL_LIFT,
   SPECIAL_SECRET_AREA,
   ThingType,
   emitCellPlan,
@@ -116,7 +118,28 @@ export function buildTest03(): MapData {
   return b.build({ name: 'test03', theme: 'base' });
 }
 
-const maps: Record<string, () => MapData> = { test01: buildTest01, test02: buildTest02, test03: buildTest03 };
+/**
+ * test04: storeys, a lift and a hazard pit (cells; y grows north).
+ *   Room A (0–3, 0–2) at floor 0, start (0, 1) facing east; a slime pit (1–2, 0) at -24 that hurts.
+ *   Corridor (4, 1) at 0 → lift (5, 1) from 0 up to 192 → room B (6–9, 0–2) at 192, exit (9, 1).
+ */
+export function buildTest04(): MapData {
+  const plan = new CellPlan();
+  const low = plan.spec({ floor: 0, ceil: 192, light: 176, floorTex: T.FloorTile, ceilTex: T.Ceiling, wallTex: T.Stone });
+  const pit = plan.spec({ floor: -24, ceil: 192, light: 200, floorTex: T.Slime, ceilTex: T.Ceiling, wallTex: T.Stone, special: SPECIAL_DAMAGE });
+  const high = plan.spec({ floor: 192, ceil: 384, light: 208, floorTex: T.Tech, ceilTex: T.Ceiling, wallTex: T.Metal });
+  for (let y = 0; y < 3; y++) for (let x = 0; x < 4; x++) plan.set(x, y, y === 0 && (x === 1 || x === 2) ? pit : low);
+  plan.set(4, 1, plan.spec({ floor: 0, ceil: 128, light: 144, floorTex: T.Trim, ceilTex: T.Ceiling, wallTex: T.Metal }));
+  plan.set(5, 1, plan.spec({ floor: 0, ceil: 320, light: 176, floorTex: T.Trim, ceilTex: T.Ceiling, wallTex: T.Metal, special: SPECIAL_LIFT, tag: 192 }));
+  for (let y = 0; y < 3; y++) for (let x = 6; x < 10; x++) plan.set(x, y, high);
+  const b = new MapBuilder();
+  emitCellPlan(b, plan, CELL_SIZE);
+  b.thing(ThingType.PlayerStart, 0.5 * CELL_SIZE, 1.5 * CELL_SIZE, 0);
+  b.thing(ThingType.Exit, 9.5 * CELL_SIZE, 1.5 * CELL_SIZE, 0);
+  return b.build({ name: 'test04', theme: 'base' });
+}
+
+const maps: Record<string, () => MapData> = { test01: buildTest01, test02: buildTest02, test03: buildTest03, test04: buildTest04 };
 
 for (const [name, fn] of Object.entries(maps)) {
   const map = fn();

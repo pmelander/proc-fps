@@ -44,6 +44,8 @@ export interface PlayerState {
   ammo: number;
   /** Ticks until the weapon can fire again. */
   fireCooldown: number;
+  /** Ticks spent on a damaging floor since it last hurt. */
+  hazardTicks: number;
 }
 
 export type EnemyMode = 'idle' | 'alert' | 'chase' | 'windup' | 'pain' | 'dead';
@@ -66,6 +68,15 @@ export interface EnemyState {
   timer: number;
   /** Ticks until the next attack may start. */
   cooldown: number;
+}
+
+export interface LiftState {
+  /** 0 = bottom … travel = top. */
+  pos: number;
+  /** End it is heading for or resting at: 0 bottom, 1 top. */
+  target: 0 | 1;
+  /** Ticks the player has stood still aboard. */
+  wait: number;
 }
 
 export interface Projectile {
@@ -98,6 +109,7 @@ export type SimEvent =
   /** An enemy started its wind-up (the telegraph) or attacked. */
   | { type: 'windup'; enemy: number }
   | { type: 'attack'; enemy: number }
+  | { type: 'lift'; lift: number }
   | { type: 'death' }
   | { type: 'exit' };
 
@@ -109,6 +121,7 @@ export interface SimState {
    * Doors stay open once opened.
    */
   doors: number[];
+  lifts: LiftState[];
   /** Bitmask of key ids held. */
   keys: number;
   /** Per `world.pickups`: already taken. */
@@ -170,8 +183,10 @@ export function createSimState(world: World): SimState {
       health: PLAYER_MAX_HEALTH,
       ammo: START_AMMO,
       fireCooldown: 0,
+      hazardTicks: 0,
     },
     doors: world.doors.map(() => 0),
+    lifts: world.lifts.map((): LiftState => ({ pos: 0, target: 0, wait: 0 })),
     keys: 0,
     taken: world.pickups.map(() => false),
     secrets: 0,

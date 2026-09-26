@@ -6,7 +6,7 @@ Movement is grid-based with free look: the mouse aims freely, and WASD steps one
 
 ```
 npm install
-npm run dev            # http://localhost:5173/  (a new run)  or  ?run=id&level=n, ?seed=anything, ?map=test01 / test02 / test03;  /browse.html = seed browser
+npm run dev            # http://localhost:5173/  (a new run)  or  ?run=id&level=n, ?seed=anything, ?map=test01 / test02 / test03 / test04;  /browse.html = seed browser
 npm run ci             # typecheck + tests + generator health + build
 ```
 
@@ -51,12 +51,12 @@ npm run ci             # typecheck + tests + generator health + build
 
 ## Status
 
-M1–M5 are in place: map format, WebGL2 renderer with sector lighting and palette quantization, grid movement with free look, replays, CI, and the level generator (mission graph → grid layout → room templates, with auto doors, key doors, and secrets), and combat: grid-bound enemies that path, wake on sight and gunfire, and telegraph their attacks; free-aim hitscan; dodgeable projectiles; health. Textures, enemy sprites, sound and music are all generated: themed texture atlases, SDF-modelled 8-direction sprites, a jsfxr-style synth and a seeded music generator. Runs are a sequence of levels that get harder, balanced for enemies, health and ammo (`?run=<id>&level=<n>`). `/browse.html` previews seeds, `/sprites.html` shows the enemy sprite sheet.
+M1–M6 are in place: map format, WebGL2 renderer with sector lighting and palette quantization, grid movement with free look, replays, CI, and the level generator (mission graph → grid layout → room templates, with auto doors, key doors, and secrets), and combat: grid-bound enemies that path, wake on sight and gunfire, and telegraph their attacks; free-aim hitscan; dodgeable projectiles; health. Textures, enemy sprites, sound and music are all generated: themed texture atlases, SDF-modelled 8-direction sprites, a jsfxr-style synth and a seeded music generator. Levels can span two storeys joined by lifts, with slime and lava pits. Runs are a sequence of levels that get harder, balanced for enemies, health and ammo (`?run=<id>&level=<n>`). `/browse.html` previews seeds, `/sprites.html` shows the enemy sprite sheet.
 
 Next:
 - Portal culling using `LevelRenderer.sectorRanges`.
 - Enable back-face culling and emit double-sided quads where needed.
-- The Backlog in PROJECT_SUMMARY.md: floor hazards, elevators and storeys, catwalks.
+- M7 combat feel, from play-testing: a heavy gun, spectacular deaths, infinite ammo, hordes (see the Backlog in PROJECT_SUMMARY.md).
 - A WebGPU backend behind `RenderBackend` when compute is needed.
 
 Press F8 in-game to download the current replay. Drop it into a sim test to pin a bug.

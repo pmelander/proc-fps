@@ -9,14 +9,17 @@ const HALF_PI = Math.PI / 2;
 const QUARTER_PI = Math.PI / 4;
 
 /** Door rules the player's movement consults; implemented by the sim over its door state. */
-export interface DoorGate {
-  /** A closed or still-opening door fills this cell. */
-  blocked(cx: number, cy: number): boolean;
+/** What the sim tells movement about the world as it is now: doors, lifts, enemies. */
+export interface MoveGate {
   /**
-   * The player walked into a blocked cell. Returns true when the door there is opening, so the
-   * step should wait for it. `fresh` = the key was pressed this tick (not merely held).
+   * Can a step from (cx, cy) in heading h start now? 'go'; 'wait' when a door or lift is on its
+   * way (the step goes ahead once it is ready); 'no'. `fresh` = the key was pressed this tick.
    */
-  bump(cx: number, cy: number, fresh: boolean): boolean;
+  tryStep(cx: number, cy: number, h: Heading, fresh: boolean): 'go' | 'wait' | 'no';
+  /** A cell's floor height right now (lifts move). */
+  floorAt(cx: number, cy: number): number;
+  /** Whoever stands on this cell rides it. */
+  isLift(cx: number, cy: number): boolean;
 }
 
 /**
@@ -27,7 +30,7 @@ export interface DoorGate {
  * - Holding a key repeats steps seamlessly.
  * - Walking into an auto door opens it; the step waits and goes ahead once it is open.
  */
-export function stepPlayer(world: World, p: PlayerState, input: InputFrame, gate: DoorGate): void {
+export function stepPlayer(world: World, p: PlayerState, input: InputFrame, gate: MoveGate): void {
   p.angle = wrapAngle(p.angle + input.turn);
   p.pitch = clamp(p.pitch + input.look, -MAX_PITCH, MAX_PITCH);
   updateHeading(p);
@@ -50,22 +53,19 @@ export function stepPlayer(world: World, p: PlayerState, input: InputFrame, gate
     const fresh = (movePressed || strafePressed) && intent !== NO_QUEUE;
     const dir = fresh ? intent : p.queued !== NO_QUEUE ? p.queued : intent;
     p.queued = NO_QUEUE;
-    if (dir !== NO_QUEUE && world.grid.canStep(p.cx, p.cy, dir as Heading)) {
-      const nx = p.cx + [1, 0, -1, 0][dir]!;
-      const ny = p.cy + [0, 1, 0, -1][dir]!;
-      if (!gate.blocked(nx, ny)) {
-        p.fromCx = p.cx;
-        p.fromCy = p.cy;
-        p.cx = nx;
-        p.cy = ny;
-        p.stepTick = 1;
-      } else if (gate.bump(nx, ny, fresh)) {
-        p.queued = dir;
-      }
+    const verdict = dir === NO_QUEUE ? 'no' : gate.tryStep(p.cx, p.cy, dir as Heading, fresh);
+    if (verdict === 'go') {
+      p.fromCx = p.cx;
+      p.fromCy = p.cy;
+      p.cx += [1, 0, -1, 0][dir]!;
+      p.cy += [0, 1, 0, -1][dir]!;
+      p.stepTick = 1;
+    } else if (verdict === 'wait') {
+      p.queued = dir;
     }
   }
 
-  updatePose(world, p);
+  updatePose(world, p, gate);
 }
 
 function updateHeading(p: PlayerState): void {
@@ -85,20 +85,21 @@ function smoothstep(t: number): number {
   return t * t * (3 - 2 * t);
 }
 
-function updatePose(world: World, p: PlayerState): void {
+function updatePose(world: World, p: PlayerState, gate: MoveGate): void {
   const g = world.grid;
   const [tx, ty] = g.center(p.cx, p.cy);
-  const toFloor = g.floorAt(p.cx, p.cy);
+  const toFloor = gate.floorAt(p.cx, p.cy);
 
   if (p.stepTick === 0) {
     p.x = tx;
     p.y = ty;
+    if (p.onGround && gate.isLift(p.cx, p.cy)) p.z = toFloor; // riding: stay on the platform
     fall(p, toFloor);
   } else {
     const t = p.stepTick / STEP_TICKS;
     const e = smoothstep(t);
     const [fx, fy] = g.center(p.fromCx, p.fromCy);
-    const fromFloor = g.floorAt(p.fromCx, p.fromCy);
+    const fromFloor = gate.floorAt(p.fromCx, p.fromCy);
     p.x = fx + (tx - fx) * e;
     p.y = fy + (ty - fy) * e;
     if (toFloor > fromFloor) {

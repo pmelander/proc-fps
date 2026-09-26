@@ -136,6 +136,7 @@ export function distanceField(world: World, state: SimState): Int32Array {
   const queue = [start];
   const shut = (x: number, y: number) => {
     const door = doorAtCell(world, x, y);
+    if (world.liftAt[x + y * g.width]! >= 0) return true; // enemies do not ride lifts
     return door >= 0 && world.doors[door]!.kind !== DoorKind.Auto && state.doors[door]! < DOOR_OPEN_TICKS;
   };
   for (let qi = 0; qi < queue.length; qi++) {

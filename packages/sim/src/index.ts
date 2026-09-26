@@ -19,3 +19,4 @@ export {
 export * from './combat.js';
 export * from './raycast.js';
 export { distanceField } from './ai.js';
+export * from './lifts.js';

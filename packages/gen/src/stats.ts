@@ -1,4 +1,4 @@
-import { DoorKind, ThingType, doorKindOf, doorSectors, isEnemyThing } from '@proc-fps/core';
+import { DoorKind, ThingType, doorKindOf, doorSectors, isEnemyThing, isLift } from '@proc-fps/core';
 import type { Generated } from './generate.js';
 import type { RoomTemplate } from './rooms.js';
 
@@ -19,6 +19,7 @@ export interface LevelStats {
   enemies: number;
   health: number;
   ammo: number;
+  lifts: number;
   /** Layout attempts used, 1 = first try. */
   attempts: number;
 }
@@ -65,6 +66,7 @@ export function levelStats(g: Generated): LevelStats {
     enemies: map.things.filter((t) => isEnemyThing(t.type)).length,
     health: map.things.filter((t) => t.type === ThingType.Health).length,
     ammo: map.things.filter((t) => t.type === ThingType.Ammo).length,
+    lifts: map.sectors.filter(isLift).length,
     attempts: g.attempts,
   };
 }

@@ -1,4 +1,5 @@
 import { DoorKind } from '@proc-fps/core';
+import { floorNow } from './lifts.js';
 import { DOOR_OPEN_TICKS, doorOffset, type SimState } from './state.js';
 import { doorAtCell, type World } from './world.js';
 
@@ -59,7 +60,7 @@ function cellSpan(world: World, state: SimState, cx: number, cy: number): [numbe
   const sec = world.map.sectors[world.grid.sectorAt(cx, cy)]!;
   const door = doorAtCell(world, cx, cy);
   const ceil = door >= 0 && world.doors[door]!.kind !== DoorKind.None ? sec.ceil - doorOffset(world, state, door) : sec.ceil;
-  return [sec.floor, ceil];
+  return [floorNow(world, state, cx, cy), ceil];
 }
 
 /**

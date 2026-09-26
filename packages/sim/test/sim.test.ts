@@ -200,3 +200,40 @@ describe('doors and keys (test02)', () => {
     expect(cell(withKey)).toEqual([6, 4]);
   });
 });
+
+describe('lifts and hazards (test04)', async () => {
+  const { HAZARD_DAMAGE, HAZARD_TICKS, LIFT_WAIT, PLAYER_MAX_HEALTH } = await import('@proc-fps/core');
+  const m = (await import('@proc-fps/core/maps/test04.json')).default as MapData;
+  const tap = (f: Partial<InputFrame>, wait = STEP_TICKS) => [...hold(f, 1), ...idle(wait)];
+  const forward = tap({ move: 1 });
+  const onLift = [...forward, ...forward, ...forward, ...forward, ...forward]; // (5, 1)
+
+  it('carries the player up after a pause, then lets them step off into the upper room', () => {
+    const world = createWorld(m);
+    const travel = world.lifts[0]!.travel;
+    const riding = run(m, [...onLift, ...idle(LIFT_WAIT + travel + 2)]);
+    expect(cell(riding)).toEqual([5, 1]);
+    expect(riding.player.z).toBe(192);
+    expect(cell(run(m, [...onLift, ...idle(LIFT_WAIT + travel + 2), ...forward]))).toEqual([6, 1]);
+    // Before it has risen, the upper room is out of reach.
+    expect(cell(run(m, [...onLift, ...forward]))).toEqual([5, 1]);
+  });
+
+  it('comes down when called from below, instead of being climbed', () => {
+    const world = createWorld(m);
+    const state = createSimState(world);
+    state.lifts[0] = { pos: world.lifts[0]!.travel, target: 1, wait: 0 }; // parked at the top
+    for (const f of [...forward, ...forward, ...forward, ...forward]) stepSim(world, state, f); // (4, 1)
+    expect(cell(state)).toEqual([4, 1]);
+    for (const f of tap({ move: 1 }, world.lifts[0]!.travel + STEP_TICKS + 4)) stepSim(world, state, f);
+    expect(cell(state)).toEqual([5, 1]);
+    expect(state.player.z).toBe(0);
+  });
+
+  it('hurts on a hazard floor every HAZARD_TICKS', () => {
+    // The step and the fall into the pit take about 20 ticks; then it hurts on landing and every HAZARD_TICKS.
+    const inPit = run(m, [...forward, ...tap({ strafe: 1 }, STEP_TICKS + HAZARD_TICKS * 2 + 10)]); // (1, 0)
+    expect(cell(inPit)).toEqual([1, 0]);
+    expect(inPit.player.health).toBe(PLAYER_MAX_HEALTH - HAZARD_DAMAGE * 3);
+  });
+});
