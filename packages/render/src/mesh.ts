@@ -1,5 +1,5 @@
 import earcut from 'earcut';
-import { BaseTex, DoorKind, SectorLocator, doorKindOf, doorSectors, keyOfThing, sectorPolygons, type MapData, type Side } from '@proc-fps/core';
+import { BaseTex, DoorKind, SectorLocator, ThingType, doorKindOf, doorSectors, keyOfThing, sectorPolygons, type MapData, type Side } from '@proc-fps/core';
 import type { VertexLayout } from './backend.js';
 
 /** pos(3) uv(2) light(1) tex(1) mover(1) move(1) slide(1) */
@@ -21,8 +21,8 @@ export const TEX_SCALE = 1 / 64;
 
 /**
  * Movers: geometry the static mesh shifts down by a per-frame offset (a uniform array).
- * Mover ids are door ids first, then key pickups in thing order. A door's offset is how far
- * its ceiling sits below the open height; a taken key's offset sinks its marker out of view.
+ * Mover ids are door ids first, then pickups (keys and health) in thing order. A door's offset is
+ * how far its ceiling sits below the open height; a taken pickup's offset sinks its marker out of view.
  */
 export const MAX_MOVERS = 64;
 /** Offset that hides a taken pickup: far below the floor and past the far plane. */
@@ -52,9 +52,9 @@ export interface LevelMesh {
    * contiguous so portal culling can draw only visible sectors.
    */
   sectors: SectorRange[];
-  /** Mover counts: doors, then key pickups. */
+  /** Mover counts: doors, then pickups. */
   doors: number;
-  keys: number;
+  pickups: number;
 }
 
 /** Pure function: map → GPU-ready geometry. Runs in Node for tests. */
@@ -164,18 +164,18 @@ export function buildLevelMesh(map: MapData): LevelMesh {
     // Middle textures on two-sided lines (grates, windows) need alpha: later.
   }
 
-  // Key pickups: a small diamond hovering over the floor, sunk out of view once taken.
+  // Pickups: a small diamond (a key) or box (health) hovering over the floor, sunk out of view once taken.
   const locator = new SectorLocator(map);
-  let keys = 0;
+  let pickups = 0;
   for (const t of map.things) {
     const key = keyOfThing(t.type);
-    if (key < 0) continue;
+    if (key < 0 && t.type !== ThingType.Health) continue;
     const s = locator.locate(t.x, t.y);
-    const m = { mover: doors.length + keys++, move: 1, slide: 0 };
+    const m = { mover: doors.length + pickups++, move: 1, slide: 0 };
     if (s < 0 || m.mover >= MAX_MOVERS) continue;
     const z = map.sectors[s]!.floor + KEY_MARKER_HEIGHT;
     const r = KEY_MARKER_SIZE;
-    const tex = BaseTex.Key + key;
+    const tex = key >= 0 ? BaseTex.Key + key : BaseTex.Health;
     const at = (dx: number, dy: number, dz: number) =>
       pushVertex(s, t.x + dx, z + dz, t.y + dy, 0.5 + dx / (2 * r), 0.5 + dz / (2 * r), tex, m, 1);
     const top = at(0, 0, r * 1.4);
@@ -200,5 +200,5 @@ export function buildLevelMesh(map: MapData): LevelMesh {
     vo += b.v.length;
     io += b.i.length;
   }
-  return { vertices, indices, sectors, doors: doors.length, keys };
+  return { vertices, indices, sectors, doors: doors.length, pickups };
 }

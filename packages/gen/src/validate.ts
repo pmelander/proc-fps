@@ -1,4 +1,4 @@
-import { CellGrid, DoorKind, ThingType, doorKindOf, keyOfThing, validateGridAlignment, validateMap, type MapData } from '@proc-fps/core';
+import { CellGrid, DoorKind, ThingType, doorKindOf, isEnemyThing, keyOfThing, validateGridAlignment, validateMap, type MapData } from '@proc-fps/core';
 
 /**
  * Gameplay validation on top of structural checks. Reachability runs on the
@@ -26,6 +26,24 @@ export function validateGenerated(map: MapData): string[] {
   });
   if (traps.length) errors.push(`${traps.length} trap cell(s) cannot reach the exit: ${traps.slice(0, 5).join(' ')}`);
   errors.push(...validateKeys(map, grid, sx, sy, ex, ey, reachable));
+  errors.push(...validateThings(map, grid));
+  return errors;
+}
+
+/** Every thing on its own walkable cell; enemies never next to the start, so no fight begins before the first step. */
+function validateThings(map: MapData, grid: CellGrid): string[] {
+  const errors: string[] = [];
+  const seen = new Map<number, number>();
+  const start = map.things.find((t) => t.type === ThingType.PlayerStart)!;
+  const [sx, sy] = grid.cellOf(start.x, start.y);
+  map.things.forEach((t, i) => {
+    const [cx, cy] = grid.cellOf(t.x, t.y);
+    const c = cx + cy * grid.width;
+    if (!grid.walkable(cx, cy)) errors.push(`thing ${i} (type ${t.type}) on a cell that is not walkable`);
+    if (seen.has(c)) errors.push(`things ${seen.get(c)} and ${i} share cell (${cx}, ${cy})`);
+    seen.set(c, i);
+    if (isEnemyThing(t.type) && Math.abs(cx - sx) + Math.abs(cy - sy) <= 1) errors.push(`enemy ${i} next to the player start`);
+  });
   return errors;
 }
 

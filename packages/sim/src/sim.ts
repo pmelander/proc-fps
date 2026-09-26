@@ -1,14 +1,21 @@
-import { HEADING_DX, HEADING_DY, DoorKind } from '@proc-fps/core';
+import { DoorKind, HEADING_DX, HEADING_DY, STEP_TICKS } from '@proc-fps/core';
+import { stepEnemies } from './ai.js';
+import { playerFire, stepProjectiles } from './combat.js';
 import { quantizeInput, type InputFrame } from './input.js';
 import { stepPlayer, type DoorGate } from './player.js';
-import { DOOR_OPEN_TICKS, type SimState } from './state.js';
+import { DOOR_OPEN_TICKS, HEALTH_PICKUP, PLAYER_MAX_HEALTH, type SimState } from './state.js';
 import { doorAtCell, type World } from './world.js';
 
 /** Advances the simulation by exactly one fixed tick. Mutates `state`. */
 export function stepSim(world: World, state: SimState, input: InputFrame): void {
+  state.events = [];
+  // Death and the exit end the level: the world holds still and input is ignored.
+  if (state.dead || state.won) {
+    state.tick++;
+    return;
+  }
   const q = quantizeInput(input);
   const p = state.player;
-  state.events = [];
 
   const open = (door: number) => {
     if (state.doors[door] !== 0) return;
@@ -32,13 +39,17 @@ export function stepSim(world: World, state: SimState, input: InputFrame): void 
   }
   p.prevUse = q.use;
 
+  const enemyIn = (cx: number, cy: number) =>
+    state.enemies.some((e) => e.mode !== 'dead' && ((e.cx === cx && e.cy === cy) || (e.stepTick > 0 && e.fromCx === cx && e.fromCy === cy)));
   const gate: DoorGate = {
     blocked: (cx, cy) => {
+      if (enemyIn(cx, cy)) return true;
       const door = doorAtCell(world, cx, cy);
       return door >= 0 && state.doors[door]! < DOOR_OPEN_TICKS;
     },
     bump: (cx, cy, fresh) => {
       const door = doorAtCell(world, cx, cy);
+      if (door < 0) return false; // an enemy is in the way
       const info = world.doors[door]!;
       if (info.kind === DoorKind.Auto) {
         open(door);
@@ -56,14 +67,31 @@ export function stepSim(world: World, state: SimState, input: InputFrame): void 
     if (d > 0 && d < DOOR_OPEN_TICKS) state.doors[i] = d + 1;
   });
 
-  // Pick up keys in the cell the player is standing in (by position, so mid-step counts).
+  // Pickups in the cell the player is standing in (by position, so mid-step counts). Health
+  // stays on the floor while the player is at full health.
   const [cx, cy] = world.grid.cellOf(p.x, p.y);
-  world.keys.forEach((k, i) => {
-    if (state.taken & (1 << i) || k.cx !== cx || k.cy !== cy) return;
-    state.taken |= 1 << i;
-    state.keys |= 1 << k.key;
-    state.events.push({ type: 'key', key: k.key });
+  world.pickups.forEach((k, i) => {
+    if (state.taken[i] || k.cx !== cx || k.cy !== cy) return;
+    if (k.kind === 'health') {
+      if (p.health >= PLAYER_MAX_HEALTH) return;
+      const amount = Math.min(HEALTH_PICKUP, PLAYER_MAX_HEALTH - p.health);
+      p.health += amount;
+      state.events.push({ type: 'health', amount });
+    } else {
+      state.keys |= 1 << k.key;
+      state.events.push({ type: 'key', key: k.key });
+    }
+    state.taken[i] = true;
   });
 
+  playerFire(world, state, q.fire);
+  stepEnemies(world, state);
+  stepProjectiles(world, state);
+
+  const arrived = p.stepTick === 0 || p.stepTick >= STEP_TICKS;
+  if (!state.dead && world.exit && arrived && p.cx === world.exit[0] && p.cy === world.exit[1]) {
+    state.won = true;
+    state.events.push({ type: 'exit' });
+  }
   state.tick++;
 }

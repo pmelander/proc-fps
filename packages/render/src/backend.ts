@@ -108,6 +108,8 @@ export interface RenderBackend {
 
   createVertexBuffer(data: Float32Array): BufferHandle;
   createIndexBuffer(data: Uint32Array): BufferHandle;
+  /** Replaces a vertex buffer's contents (any size): for geometry rebuilt every frame. */
+  updateVertexBuffer(handle: BufferHandle, data: Float32Array): void;
   createTexture(desc: TextureDesc, rgba?: Uint8Array): TextureHandle;
   createRenderTarget(width: number, height: number, filter: TextureFilter): RenderTargetHandle;
   createPipeline(desc: PipelineDesc): PipelineHandle;

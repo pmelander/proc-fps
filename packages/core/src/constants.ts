@@ -2,7 +2,7 @@
 export const PLAYER_RADIUS = 16;
 export const PLAYER_HEIGHT = 72;
 /**
- * Camera only (render-side). Doom's 41/56 read taller than it was because of its 1.2 vertical pixel
+ * Camera and hitscan origin. Doom's 41/56 read taller than it was because of its 1.2 vertical pixel
  * stretch; with square pixels the player needs more height. Keep it below PLAYER_HEIGHT minus the
  * near plane and bob, so the camera never pokes through the lowest ceiling validation allows.
  */

@@ -89,6 +89,105 @@ canvas[hidden] {
   color: #f2b04a;
   background: rgb(0 0 0 / 0.5);
 }
+#crosshair {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border: 1px solid rgb(242 176 74 / 0.9);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.6);
+  pointer-events: none;
+}
+#health {
+  position: fixed;
+  left: 16px;
+  bottom: 12px;
+  font: 700 38px/1 ui-monospace, monospace;
+  color: #c8f0a0;
+  text-shadow: 2px 2px 0 #000;
+  pointer-events: none;
+}
+#health::after {
+  content: ' HP';
+  font-size: 16px;
+  color: #8f8a80;
+}
+#health.low {
+  color: #ff5a4a;
+}
+/* A blocky gun at the bottom: placeholder until M4 sprites. */
+#gun {
+  position: fixed;
+  left: 50%;
+  bottom: 0;
+  width: 120px;
+  height: 150px;
+  transform: translateX(-10%);
+  pointer-events: none;
+  image-rendering: pixelated;
+}
+#gun .body {
+  position: absolute;
+  left: 30px;
+  bottom: 0;
+  width: 60px;
+  height: 70px;
+  background: linear-gradient(90deg, #2a2a2e, #4a4a52 45%, #26262a);
+  border: 3px solid #111;
+}
+#gun .barrel {
+  position: absolute;
+  left: 46px;
+  bottom: 64px;
+  width: 28px;
+  height: 64px;
+  background: linear-gradient(90deg, #333338, #5a5a64 50%, #2c2c30);
+  border: 3px solid #111;
+}
+#gun .flash {
+  position: absolute;
+  left: 30px;
+  bottom: 118px;
+  width: 60px;
+  height: 36px;
+  background: radial-gradient(closest-side, #fff6c0, #ffb040 55%, transparent);
+  opacity: 0;
+}
+#gun.firing .flash {
+  opacity: 1;
+}
+#gun.firing {
+  transform: translateX(-10%) translateY(8px);
+}
+#hurt {
+  position: fixed;
+  inset: 0;
+  background: rgb(255 30 20 / 0.28);
+  pointer-events: none;
+}
+#hurt[hidden],
+#end[hidden] {
+  display: none;
+}
+#end {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  background: rgb(0 0 0 / 0.6);
+}
+#end .title {
+  margin: 0 0 8px;
+  font-size: 32px;
+  font-weight: 700;
+  color: #f2b04a;
+}
+#end p {
+  margin: 0;
+}
 #compass-arrow {
   display: inline-block;
   font-size: 18px;

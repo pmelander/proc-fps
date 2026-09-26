@@ -1,6 +1,6 @@
 import { DoorKind, ThingType, doorKindOf, keyOfThing, secretOf, type MapData } from '@proc-fps/core';
 import { paletteRGBA } from '@proc-fps/render';
-import type { SimState, World } from '@proc-fps/sim';
+import { isPickupThing, type SimState, type World } from '@proc-fps/sim';
 
 /** Matches the 3D view's low-res height so the map has the same chunky pixels. */
 const ROWS = 240;
@@ -109,10 +109,12 @@ export function drawAutomap(canvas: HTMLCanvasElement, map: MapData, view: Autom
     line(sx(a.x, a.y), sy(a.x, a.y), sx(b.x, b.y), sy(b.x, b.y), c);
   }
 
-  let keyIndex = 0;
+  // Things: exit, player start and uncollected keys (health and enemies stay off the map).
+  let pickup = 0;
   for (const t of map.things) {
     const key = keyOfThing(t.type);
-    if (key >= 0 && state.taken & (1 << keyIndex++)) continue;
+    if (isPickupThing(t.type) && state.taken[pickup++]) continue;
+    if (key < 0 && t.type !== ThingType.Exit && t.type !== ThingType.PlayerStart) continue;
     const x = sx(t.x, t.y);
     const y = sy(t.x, t.y);
     const c = key >= 0 ? KEY[key]! : t.type === ThingType.Exit ? EXIT : THING;

@@ -16,4 +16,6 @@ export const BaseTex = {
   DoorKey: 10,
   /** Key pickup markers: Key + key id. */
   Key: 14,
+  /** Health pickup marker. */
+  Health: 18,
 } as const;

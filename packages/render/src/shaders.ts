@@ -115,6 +115,11 @@ vec3 pattern(int id, vec2 uv) {
   if (id >= 14 && id <= 17) { // key pickups: bright, slowly pulsing
     return keyColor(id - 14) * (1.1 + 0.25 * sin(uTime * 4.0) - 0.4 * uv.y);
   }
+  if (id == 18) { // health pickup: white with a red cross
+    vec2 c = abs(uv - 0.5);
+    float cross = step(min(c.x, c.y), 0.12) * step(max(c.x, c.y), 0.34);
+    return mix(vec3(0.95), vec3(0.9, 0.08, 0.06), cross) * (1.05 + 0.15 * sin(uTime * 3.0));
+  }
   // Missing texture: loud checker, never silently wrong.
   float c = mod(floor(uv.x * 4.0) + floor(uv.y * 4.0), 2.0);
   return mix(vec3(1.0, 0.0, 1.0), vec3(0.0), c);
@@ -168,4 +173,98 @@ void main() {
     if (dd < bestD) { bestD = dd; best = p; }
   }
   outColor = vec4(best, 1.0);
+}`;
+
+/** Doom-style diminishing light, as in LEVEL_FS: sector light fades with distance, in 16 bands. */
+const LIGHTING = /* glsl */ `
+float lightBand(float light, vec3 world, vec3 eye) {
+  float fall = clamp(1.0 - distance(world, eye) / 1600.0, 0.0, 1.0);
+  float b = light * (0.3 + 0.9 * fall);
+  return 0.08 + 1.1 * floor(clamp(b, 0.0, 1.0) * 16.0) / 16.0;
+}`;
+
+export const SPRITE_VS = /* glsl */ `#version 300 es
+in vec3 aPos;
+in vec2 aUV;
+in float aShape;
+in float aCharge;
+in float aFlash;
+in float aLight;
+uniform mat4 uViewProj;
+out vec2 vUV;
+flat out int vShape;
+out float vCharge;
+out float vFlash;
+out float vLight;
+out vec3 vWorld;
+void main() {
+  vUV = aUV;
+  vShape = int(aShape + 0.5);
+  vCharge = aCharge;
+  vFlash = aFlash;
+  vLight = aLight;
+  vWorld = aPos;
+  gl_Position = uViewProj * vec4(aPos, 1.0);
+}`;
+
+/** Procedural silhouettes (signed distance, < 0 inside) until M4 bakes real sprites. */
+export const SPRITE_FS = /* glsl */ `#version 300 es
+precision highp float;
+in vec2 vUV;
+flat in int vShape;
+in float vCharge;
+in float vFlash;
+in float vLight;
+in vec3 vWorld;
+uniform vec3 uEye;
+uniform float uTime;
+out vec4 outColor;
+${LIGHTING}
+float circle(vec2 p, vec2 c, float r) { return length(p - c) - r; }
+float box(vec2 p, vec2 c, vec2 h, float r) {
+  vec2 d = abs(p - c) - h + r;
+  return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - r;
+}
+void main() {
+  vec2 p = vUV;
+  if (vShape == 8) { // projectile: a hot, self-lit orb
+    float r = length(p - 0.5) * 2.0;
+    if (r > 1.0) discard;
+    outColor = vec4(mix(vec3(1.0, 0.95, 0.6), vec3(1.0, 0.35, 0.05), r), 1.0);
+    return;
+  }
+  float d;
+  float eyes = 1.0;
+  vec3 col;
+  if (vShape == 9) { // corpse
+    d = box(p, vec2(0.5, 0.3), vec2(0.46, 0.26), 0.2);
+    col = vec3(0.34, 0.07, 0.05);
+  } else if (vShape == 1 || vShape == 3) { // brute / mini boss: wide and hunched
+    d = min(box(p, vec2(0.5, 0.42), vec2(0.36, 0.3), 0.14), circle(p, vec2(0.5, 0.74), 0.13));
+    d = min(d, min(box(p, vec2(0.2, 0.36), vec2(0.09, 0.24), 0.06), box(p, vec2(0.8, 0.36), vec2(0.09, 0.24), 0.06)));
+    d = min(d, min(box(p, vec2(0.38, 0.08), vec2(0.1, 0.08), 0.03), box(p, vec2(0.62, 0.08), vec2(0.1, 0.08), 0.03)));
+    if (vShape == 3) d = min(d, min(circle(p, vec2(0.18, 0.7), 0.07), circle(p, vec2(0.82, 0.7), 0.07)));
+    col = vShape == 3 ? vec3(0.56, 0.3, 0.08) : vec3(0.5, 0.12, 0.1);
+    eyes = min(circle(p, vec2(0.45, 0.76), 0.028), circle(p, vec2(0.55, 0.76), 0.028));
+  } else if (vShape == 2) { // sniper: thin, one big eye
+    d = min(box(p, vec2(0.5, 0.38), vec2(0.13, 0.3), 0.06), circle(p, vec2(0.5, 0.8), 0.11));
+    d = min(d, box(p, vec2(0.5, 0.08), vec2(0.1, 0.08), 0.02));
+    col = vec3(0.24, 0.3, 0.44);
+    eyes = circle(p, vec2(0.5, 0.81), 0.05);
+  } else if (vShape == 4) { // boss: huge, horned, three eyes
+    d = min(circle(p, vec2(0.5, 0.44), 0.4), min(box(p, vec2(0.26, 0.88), vec2(0.05, 0.12), 0.03), box(p, vec2(0.74, 0.88), vec2(0.05, 0.12), 0.03)));
+    col = vec3(0.36, 0.18, 0.42);
+    eyes = min(min(circle(p, vec2(0.38, 0.56), 0.04), circle(p, vec2(0.62, 0.56), 0.04)), circle(p, vec2(0.5, 0.66), 0.05));
+  } else { // grunt: humanoid
+    d = min(box(p, vec2(0.5, 0.4), vec2(0.22, 0.26), 0.08), circle(p, vec2(0.5, 0.78), 0.14));
+    d = min(d, min(box(p, vec2(0.41, 0.09), vec2(0.07, 0.09), 0.02), box(p, vec2(0.59, 0.09), vec2(0.07, 0.09), 0.02)));
+    col = vec3(0.42, 0.36, 0.2);
+    eyes = min(circle(p, vec2(0.44, 0.8), 0.028), circle(p, vec2(0.56, 0.8), 0.028));
+  }
+  if (d > 0.0) discard;
+  col *= (0.7 + 0.4 * p.y) * (1.0 - 0.45 * smoothstep(-0.035, 0.0, d)); // top light, dark rim
+  vec3 lit = col * lightBand(vLight, vWorld, uEye);
+  // Eyes glow whatever the light, brighter through the wind-up: the telegraph.
+  if (eyes < 0.0) lit = mix(vec3(0.9, 0.15, 0.05), vec3(1.0, 0.95, 0.5), vCharge) * (0.8 + vCharge);
+  outColor = vec4(mix(lit, vec3(1.0), vFlash * 0.85), 1.0);
 }`;

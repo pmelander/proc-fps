@@ -52,3 +52,20 @@ describe('door panels', () => {
     expect(panelTextures(doorOf(DoorKind.Secret))).toEqual([BaseTex.Stone]);
   });
 });
+
+describe('sprites', () => {
+  it('build two camera-facing triangles per sprite', async () => {
+    const { SPRITE_FLOATS_PER_VERTEX, buildSpriteVertices } = await import('../src/sprites.js');
+    const v = buildSpriteVertices([{ x: 100, y: 200, z: 0, width: 40, height: 72, shape: 0, charge: 0, flash: 0, light: 1 }], 0);
+    expect(v.length).toBe(6 * SPRITE_FLOATS_PER_VERTEX);
+    // Facing east (yaw 0) the quad spans map y ± 20 (world z ∓ 20) and 0–72 in height.
+    const zs = new Set<number>();
+    const ys = new Set<number>();
+    for (let i = 0; i < 6; i++) {
+      zs.add(Math.round(v[i * SPRITE_FLOATS_PER_VERTEX + 2]!));
+      ys.add(Math.round(v[i * SPRITE_FLOATS_PER_VERTEX + 1]!));
+    }
+    expect([...zs].sort((a, b) => a - b)).toEqual([-220, -180]);
+    expect([...ys].sort((a, b) => a - b)).toEqual([0, 72]);
+  });
+});

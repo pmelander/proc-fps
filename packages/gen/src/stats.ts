@@ -1,4 +1,4 @@
-import { DoorKind, doorKindOf, doorSectors } from '@proc-fps/core';
+import { DoorKind, ThingType, doorKindOf, doorSectors, isEnemyThing } from '@proc-fps/core';
 import type { Generated } from './generate.js';
 import type { RoomTemplate } from './rooms.js';
 
@@ -16,6 +16,8 @@ export interface LevelStats {
   /** Mission cycles (edges − nodes + 1). */
   loops: number;
   templates: Record<RoomTemplate, number>;
+  enemies: number;
+  health: number;
   /** Layout attempts used, 1 = first try. */
   attempts: number;
 }
@@ -59,6 +61,8 @@ export function levelStats(g: Generated): LevelStats {
     secrets: count('secret'),
     loops: mission.edges.length - mission.nodes.length + 1,
     templates,
+    enemies: map.things.filter((t) => isEnemyThing(t.type)).length,
+    health: map.things.filter((t) => t.type === ThingType.Health).length,
     attempts: g.attempts,
   };
 }

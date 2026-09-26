@@ -1,4 +1,4 @@
-import { BaseTex, DoorKind, ThingType, doorKindOf, keyOfThing, sectorPolygons, secretOf, type MapData, type Sector } from '@proc-fps/core';
+import { BaseTex, DoorKind, ThingType, doorKindOf, isEnemyThing, keyOfThing, sectorPolygons, secretOf, type MapData, type Sector } from '@proc-fps/core';
 import { KEY_COLORS } from './keys.js';
 
 const PAD = 6;
@@ -76,6 +76,16 @@ export function drawThumbnail(canvas: HTMLCanvasElement, map: MapData, size: num
     } else if (t.type === ThingType.Exit) {
       ctx.fillStyle = '#60e070';
       ctx.fillRect(x - r, y - r, 2 * r, 2 * r);
+    } else if (isEnemyThing(t.type)) {
+      // Bigger dot for the mini boss and boss.
+      ctx.fillStyle = '#ff4a3a';
+      ctx.beginPath();
+      ctx.arc(x, y, t.type >= 40 ? r * 1.4 : r * 0.7, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (t.type === ThingType.Health) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(x - r * 0.9, y - r * 0.3, r * 1.8, r * 0.6);
+      ctx.fillRect(x - r * 0.3, y - r * 0.9, r * 0.6, r * 1.8);
     } else if (key >= 0) {
       ctx.fillStyle = KEY_COLORS[key]!;
       ctx.beginPath();

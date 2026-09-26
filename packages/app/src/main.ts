@@ -1,7 +1,9 @@
 import { DoorKind, HEADING_DX, HEADING_DY, PLAYER_EYE_HEIGHT, STEP_TICKS, TICK_DT, type MapData } from '@proc-fps/core';
 import { GENERATOR_VERSION, generate, validateGenerated } from '@proc-fps/gen';
-import { HIDDEN_OFFSET, LevelRenderer, WebGL2Backend } from '@proc-fps/render';
+import { HIDDEN_OFFSET, LevelRenderer, SpriteShape, WebGL2Backend, type Sprite } from '@proc-fps/render';
 import {
+  ENEMY_DEFS,
+  PLAYER_MAX_HEALTH,
   ReplayRecorder,
   clonePlayer,
   createSimState,
@@ -9,17 +11,19 @@ import {
   doorAtCell,
   doorOffset,
   stepSim,
+  type EnemyState,
   type PlayerState,
   type SimState,
   type World,
 } from '@proc-fps/sim';
 import test01 from '@proc-fps/core/maps/test01.json';
 import test02 from '@proc-fps/core/maps/test02.json';
+import test03 from '@proc-fps/core/maps/test03.json';
 import { drawAutomap } from './automap.js';
 import { InputSampler } from './input.js';
 import { KEY_COLORS, KEY_NAMES } from './keys.js';
 
-const TEST_MAPS: Record<string, MapData> = { test01: test01 as MapData, test02: test02 as MapData };
+const TEST_MAPS: Record<string, MapData> = { test01: test01 as MapData, test02: test02 as MapData, test03: test03 as MapData };
 const NOTICE_SECONDS = 2.5;
 const MAX_FRAME_TIME = 0.25; // avoid spiral of death after tab-out
 const BOB_HEIGHT = 2.5;
@@ -93,6 +97,43 @@ function popcount(n: number): number {
 const KEY_ICON = (color: string) =>
   `<svg viewBox="0 0 16 16" width="36" height="36" shape-rendering="crispEdges"><path fill="${color}" d="M3 5h5v2h6v2h-2v2h-2V9H8v2H3zM5 7v2h1V7z"/></svg>`;
 
+const SHAPE: Record<number, number> = {
+  32: SpriteShape.Grunt,
+  33: SpriteShape.Brute,
+  34: SpriteShape.Sniper,
+  40: SpriteShape.MiniBoss,
+  41: SpriteShape.Boss,
+};
+const PROJECTILE_SIZE = 14;
+const FLASH_SECONDS = 0.12;
+
+/** Enemies, corpses and projectiles as sprites, enemies interpolated between the last two ticks. */
+function buildSprites(world: World, state: SimState, prevEnemies: readonly EnemyState[], t: number): Sprite[] {
+  const light = (x: number, y: number) => {
+    const [cx, cy] = world.grid.cellOf(x, y);
+    return (world.map.sectors[world.grid.sectorAt(cx, cy)]?.light ?? 160) / 255;
+  };
+  const sprites: Sprite[] = state.enemies.map((e, i) => {
+    const def = ENEMY_DEFS[e.type];
+    const was = prevEnemies[i] ?? e;
+    const x = lerp(was.x, e.x, t);
+    const y = lerp(was.y, e.y, t);
+    const z = lerp(was.z, e.z, t);
+    if (e.mode === 'dead') {
+      return { x, y, z, width: def.radius * 3, height: def.radius * 0.9, shape: SpriteShape.Corpse, charge: 0, flash: 0, light: light(x, y) };
+    }
+    const charge = e.mode === 'windup' ? 1 - e.timer / def.windup : 0;
+    return {
+      x, y, z, width: def.radius * 2.6, height: def.height, shape: SHAPE[e.type] ?? SpriteShape.Grunt,
+      charge, flash: e.mode === 'pain' ? 1 : 0, light: light(x, y),
+    };
+  });
+  for (const q of state.projectiles) {
+    sprites.push({ x: q.x, y: q.y, z: q.z - PROJECTILE_SIZE / 2, width: PROJECTILE_SIZE, height: PROJECTILE_SIZE, shape: SpriteShape.Projectile, charge: 0, flash: 0, light: 1 });
+  }
+  return sprites;
+}
+
 function main(): void {
   const canvas = document.getElementById('view') as HTMLCanvasElement;
   const automap = document.getElementById('automap') as HTMLCanvasElement;
@@ -101,6 +142,12 @@ function main(): void {
   const compassArrow = document.getElementById('compass-arrow') as HTMLSpanElement;
   const compassLetter = document.getElementById('compass-letter') as HTMLElement;
   const prompt = document.getElementById('prompt') as HTMLDivElement;
+  const health = document.getElementById('health') as HTMLDivElement;
+  const gun = document.getElementById('gun') as HTMLDivElement;
+  const hurtFlash = document.getElementById('hurt') as HTMLDivElement;
+  const end = document.getElementById('end') as HTMLDivElement;
+  let shotUntil = 0;
+  let hurtUntil = 0;
   let notice = '';
   let noticeUntil = 0;
   let shownPrompt = '';
@@ -109,6 +156,7 @@ function main(): void {
   const world = createWorld(map);
   const state = createSimState(world);
   let prev: PlayerState = clonePlayer(state.player);
+  let prevEnemies: EnemyState[] = state.enemies.map((e) => ({ ...e }));
   const recorder = new ReplayRecorder(map);
 
   const backend = WebGL2Backend.create(canvas);
@@ -120,6 +168,11 @@ function main(): void {
   document.addEventListener('pointerlockchange', () => (start.hidden = input.locked));
 
   addEventListener('keydown', (e) => {
+    // After death or the exit, E (or Space) moves on: retry the level, or a new one.
+    if ((state.dead || state.won) && (e.code === 'KeyE' || e.code === 'Space')) {
+      if (state.won && map.meta.seed) newLevel();
+      else location.reload();
+    }
     if (e.code === 'Tab') automap.hidden = false;
     if (e.code === 'F2') newLevel();
     if (e.code === 'F8') downloadJSON(`replay-${map.meta.seed ?? map.meta.name}-${state.tick}.json`, recorder.finish());
@@ -151,6 +204,7 @@ function main(): void {
     acc += dt;
     while (acc >= TICK_DT) {
       prev = clonePlayer(state.player);
+      prevEnemies = state.enemies.map((e) => ({ ...e }));
       const f = input.sample();
       if (input.locked) recorder.record(f);
       stepSim(world, state, f);
@@ -158,11 +212,14 @@ function main(): void {
         if (e.type === 'key') [notice, noticeUntil] = [`Picked up the ${KEY_NAMES[e.key]} key`, now + NOTICE_SECONDS];
         if (e.type === 'locked') [notice, noticeUntil] = [`Needs the ${KEY_NAMES[e.key]} key`, now + NOTICE_SECONDS];
         if (e.type === 'secret') [notice, noticeUntil] = ['You found a secret!', now + NOTICE_SECONDS];
+        if (e.type === 'health') [notice, noticeUntil] = [`+${e.amount} health`, now + NOTICE_SECONDS];
+        if (e.type === 'shot') shotUntil = now + FLASH_SECONDS;
+        if (e.type === 'hurt') hurtUntil = now + FLASH_SECONDS * 2;
       }
       acc -= TICK_DT;
     }
     world.doors.forEach((_, i) => (renderer.movers[i] = doorOffset(world, state, i)));
-    world.keys.forEach((_, i) => (renderer.movers[world.doors.length + i] = state.taken & (1 << i) ? HIDDEN_OFFSET : 0));
+    world.pickups.forEach((_, i) => (renderer.movers[world.doors.length + i] = state.taken[i] ? HIDDEN_OFFSET : 0));
 
     const t = acc / TICK_DT;
     const p = state.player;
@@ -173,7 +230,20 @@ function main(): void {
       yaw: lerpAngle(prev.angle, p.angle, t),
       pitch: lerp(prev.pitch, p.pitch, t),
     };
-    renderer.render(view, now);
+    renderer.render(view, now, buildSprites(world, state, prevEnemies, t));
+
+    health.textContent = String(p.health);
+    health.classList.toggle('low', p.health <= PLAYER_MAX_HEALTH / 4);
+    gun.classList.toggle('firing', now < shotUntil);
+    hurtFlash.hidden = now >= hurtUntil;
+    const ending = state.dead ? 'dead' : state.won ? 'won' : '';
+    if (end.dataset.state !== ending) {
+      end.dataset.state = ending;
+      end.hidden = !ending;
+      end.innerHTML = state.dead
+        ? '<p class="title">You died</p><p>Press E to try again.</p>'
+        : `<p class="title">Level complete</p><p>Press E for ${map.meta.seed ? 'the next level' : 'another go'}.</p>`;
+    }
 
     // Compass: where W will take you, relative to where you're looking.
     compassArrow.style.transform = `rotate(${((view.yaw - (p.heading * Math.PI) / 2) * 180) / Math.PI}deg)`;

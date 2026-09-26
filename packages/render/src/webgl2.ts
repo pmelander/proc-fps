@@ -70,6 +70,14 @@ export class WebGL2Backend implements RenderBackend {
     return this.createBuffer(this.gl.ELEMENT_ARRAY_BUFFER, data);
   }
 
+  updateVertexBuffer(handle: BufferHandle, data: Float32Array): void {
+    const gl = this.gl;
+    gl.bindVertexArray(null);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.get(handle.id) ?? null);
+    gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, null);
+  }
+
   private createBuffer(target: number, data: ArrayBufferView): BufferHandle {
     const gl = this.gl;
     const buf = gl.createBuffer();

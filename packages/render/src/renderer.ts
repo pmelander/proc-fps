@@ -2,7 +2,8 @@ import { mat4Mul, mat4Perspective, viewFromMapCamera, type MapData } from '@proc
 import type { BufferHandle, PipelineHandle, RenderBackend, RenderTargetHandle, TextureHandle } from './backend.js';
 import { LEVEL_LAYOUT, MAX_MOVERS, buildLevelMesh, type SectorRange } from './mesh.js';
 import { PALETTE_SIZE, paletteRGBA } from './palette.js';
-import { LEVEL_FS, LEVEL_VS, POST_FS, POST_VS } from './shaders.js';
+import { LEVEL_FS, LEVEL_VS, POST_FS, POST_VS, SPRITE_FS, SPRITE_VS } from './shaders.js';
+import { SPRITE_LAYOUT, buildSpriteVertices, type Sprite } from './sprites.js';
 
 export interface Camera {
   /** Map-space position. */
@@ -34,6 +35,8 @@ const DEFAULTS: RendererOptions = { lowResHeight: 240, fovY: (74 * Math.PI) / 18
 export class LevelRenderer {
   private readonly opts: RendererOptions;
   private readonly levelPipeline: PipelineHandle;
+  private readonly spritePipeline: PipelineHandle;
+  private readonly spriteBuffer: BufferHandle;
   private readonly postPipeline: PipelineHandle;
   private readonly palette: TextureHandle;
   private target: RenderTargetHandle | null = null;
@@ -54,6 +57,15 @@ export class LevelRenderer {
       depthWrite: true,
       cullBack: false,
     });
+    this.spritePipeline = backend.createPipeline({
+      label: 'sprites',
+      shader: { glsl: { vertex: SPRITE_VS, fragment: SPRITE_FS } },
+      layout: SPRITE_LAYOUT,
+      depthTest: true,
+      depthWrite: true,
+      cullBack: false,
+    });
+    this.spriteBuffer = backend.createVertexBuffer(new Float32Array(0));
     this.postPipeline = backend.createPipeline({
       label: 'palette-post',
       shader: { glsl: { vertex: POST_VS, fragment: POST_FS } },
@@ -84,7 +96,8 @@ export class LevelRenderer {
     this.target = this.backend.createRenderTarget(w, h, 'nearest');
   }
 
-  render(cam: Camera, time: number): void {
+  /** Draws the level, then `sprites` (enemies, corpses, projectiles) in the same depth-tested pass. */
+  render(cam: Camera, time: number, sprites: readonly Sprite[] = []): void {
     if (!this.target) this.resize();
     const target = this.target!;
     const be = this.backend;
@@ -104,6 +117,20 @@ export class LevelRenderer {
           uEye: new Float32Array([cam.x, cam.eyeZ, -cam.y]),
           uTime: time,
           uMover: { floats: this.movers },
+        },
+      });
+    }
+    if (sprites.length) {
+      be.updateVertexBuffer(this.spriteBuffer, buildSpriteVertices(sprites, cam.yaw));
+      be.draw({
+        pipeline: this.spritePipeline,
+        vertices: this.spriteBuffer,
+        first: 0,
+        count: sprites.length * 6,
+        uniforms: {
+          uViewProj: mat4Mul(proj, view),
+          uEye: new Float32Array([cam.x, cam.eyeZ, -cam.y]),
+          uTime: time,
         },
       });
     }

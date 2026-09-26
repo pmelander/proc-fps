@@ -196,7 +196,7 @@ describe('doors and keys (test02)', () => {
     ]);
     expect(withKey.keys).toBe(1);
     expect(withKey.secrets).toBe(0);
-    expect(withKey.taken).toBe(1);
+    expect(withKey.taken).toEqual([true]);
     expect(cell(withKey)).toEqual([6, 4]);
   });
 });

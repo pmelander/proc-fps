@@ -1,10 +1,14 @@
-import { DEG_TO_RAD, ThingType, type Heading } from '@proc-fps/core';
+import { DEG_TO_RAD, ThingType, isEnemyThing, type EnemyType, type Heading } from '@proc-fps/core';
+import { ENEMY_DEFS } from './enemies.js';
 import type { World } from './world.js';
 
 /** No buffered step. */
 export const NO_QUEUE = -1;
 /** Ticks for a door to open fully (≈ 0.33 s). */
 export const DOOR_OPEN_TICKS = 20;
+export const PLAYER_MAX_HEALTH = 100;
+/** What a health pickup restores (never above the maximum). */
+export const HEALTH_PICKUP = 25;
 
 export interface PlayerState {
   // --- grid movement (authoritative) ---
@@ -38,6 +42,45 @@ export interface PlayerState {
   // --- free look ---
   angle: number;
   pitch: number;
+
+  // --- combat ---
+  health: number;
+  /** Ticks until the weapon can fire again. */
+  fireCooldown: number;
+}
+
+export type EnemyMode = 'idle' | 'alert' | 'chase' | 'windup' | 'pain' | 'dead';
+
+export interface EnemyState {
+  type: EnemyType;
+  /** Destination cell while stepping; current cell when idle. */
+  cx: number;
+  cy: number;
+  fromCx: number;
+  fromCy: number;
+  /** 0 = idle, 1..stepTicks = progress through the current step. */
+  stepTick: number;
+  x: number;
+  y: number;
+  z: number;
+  hp: number;
+  mode: EnemyMode;
+  /** Ticks left in the current mode (alert, windup, pain). */
+  timer: number;
+  /** Ticks until the next attack may start. */
+  cooldown: number;
+}
+
+export interface Projectile {
+  x: number;
+  y: number;
+  z: number;
+  vx: number;
+  vy: number;
+  vz: number;
+  damage: number;
+  /** Ticks alive. */
+  ttl: number;
 }
 
 /** Things that happened this tick, for the HUD and (later) sound. Cleared every tick. */
@@ -46,7 +89,17 @@ export type SimEvent =
   /** Tried a key door without its key. */
   | { type: 'locked'; door: number; key: number }
   | { type: 'key'; key: number }
-  | { type: 'secret'; secret: number };
+  | { type: 'health'; amount: number }
+  | { type: 'secret'; secret: number }
+  | { type: 'shot' }
+  | { type: 'hurt'; amount: number }
+  | { type: 'hit'; enemy: number }
+  | { type: 'kill'; enemy: number }
+  /** An enemy started its wind-up (the telegraph) or attacked. */
+  | { type: 'windup'; enemy: number }
+  | { type: 'attack'; enemy: number }
+  | { type: 'death' }
+  | { type: 'exit' };
 
 export interface SimState {
   tick: number;
@@ -58,10 +111,16 @@ export interface SimState {
   doors: number[];
   /** Bitmask of key ids held. */
   keys: number;
-  /** Bitmask over `world.keys`: pickups already taken. */
-  taken: number;
+  /** Per `world.pickups`: already taken. */
+  taken: boolean[];
   /** Bitmask of secret ids found. */
   secrets: number;
+  enemies: EnemyState[];
+  projectiles: Projectile[];
+  /** The player died; the sim ignores input from here. */
+  dead: boolean;
+  /** The player reached the exit; the sim ignores input from here. */
+  won: boolean;
   events: SimEvent[];
 }
 
@@ -76,6 +135,16 @@ export function createSimState(world: World): SimState {
   if (!world.grid.walkable(cx, cy)) throw new Error('player start is not on a walkable cell');
   const [x, y] = world.grid.center(cx, cy);
   const angle = start.angle * DEG_TO_RAD;
+  const enemies = world.map.things.flatMap((t): EnemyState[] => {
+    if (!isEnemyThing(t.type)) return [];
+    const [ex, ey] = world.grid.cellOf(t.x, t.y);
+    const [px, py] = world.grid.center(ex, ey);
+    return [{
+      type: t.type, cx: ex, cy: ey, fromCx: ex, fromCy: ey, stepTick: 0,
+      x: px, y: py, z: world.grid.floorAt(ex, ey),
+      hp: ENEMY_DEFS[t.type].hp, mode: 'idle', timer: 0, cooldown: 0,
+    }];
+  });
   return {
     tick: 0,
     player: {
@@ -98,11 +167,17 @@ export function createSimState(world: World): SimState {
       sector: world.grid.sectorAt(cx, cy),
       angle,
       pitch: 0,
+      health: PLAYER_MAX_HEALTH,
+      fireCooldown: 0,
     },
     doors: world.doors.map(() => 0),
     keys: 0,
-    taken: 0,
+    taken: world.pickups.map(() => false),
     secrets: 0,
+    enemies,
+    projectiles: [],
+    dead: false,
+    won: false,
     events: [],
   };
 }

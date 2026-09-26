@@ -63,6 +63,8 @@ col('auto doors', summary(stats.map((s) => s.doors.auto)));
 col('key doors', histogram(stats.map((s) => s.doors.key)));
 col('loot rooms', histogram(stats.map((s) => s.loot)));
 col('secrets', histogram(stats.map((s) => s.secrets)));
+col('enemies', summary(stats.map((s) => s.enemies)));
+col('health', summary(stats.map((s) => s.health)));
 const templateTotal: Record<string, number> = {};
 for (const s of stats) for (const [t, n] of Object.entries(s.templates)) templateTotal[t] = (templateTotal[t] ?? 0) + n;
 const rooms = Object.values(templateTotal).reduce((a, b) => a + b, 0);

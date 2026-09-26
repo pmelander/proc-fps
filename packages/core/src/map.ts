@@ -79,7 +79,24 @@ export interface Thing {
 export const ThingType = {
   PlayerStart: 1,
   Exit: 2,
+  /** Restores health when walked over. */
+  Health: 3,
 } as const;
+
+/** Enemy thing types. Stats and behaviour live in the sim (`ENEMY_DEFS`). */
+export const EnemyType = {
+  /** Throws slow projectiles you can sidestep. */
+  Grunt: 32,
+  /** Charges and hits in melee. */
+  Brute: 33,
+  /** Rare: charges up a visible hitscan shot; break line of sight to dodge it. */
+  Sniper: 34,
+  MiniBoss: 40,
+  Boss: 41,
+} as const;
+export type EnemyType = (typeof EnemyType)[keyof typeof EnemyType];
+const ENEMY_TYPES = new Set<number>(Object.values(EnemyType));
+export const isEnemyThing = (type: number): type is EnemyType => ENEMY_TYPES.has(type);
 
 /** Key things are KEY_THING_BASE + key id, for key ids 0 … MAX_KEYS - 1. */
 export const KEY_THING_BASE = 16;

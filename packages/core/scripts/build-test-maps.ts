@@ -9,6 +9,7 @@ import {
   CELL_SIZE,
   CellPlan,
   DoorKind,
+  EnemyType,
   MapBuilder,
   SPECIAL_SECRET_AREA,
   ThingType,
@@ -88,7 +89,34 @@ export function buildTest02(): MapData {
   return b.build({ name: 'test02', theme: 'base' });
 }
 
-const maps: Record<string, () => MapData> = { test01: buildTest01, test02: buildTest02 };
+/**
+ * test03: combat arena (cells; y grows north).
+ *   Arena A (0–11, 0–6), start (0, 3) facing east: grunt (7, 3), brute (10, 5), sniper (11, 0),
+ *   health at (1, 6) and (2, 6), a pillar pair for cover at (5, 2) and (5, 4).
+ *   A → auto door (12, 3) → room B (13–17, 1–5) with the mini boss (16, 3) and the exit (17, 3).
+ */
+export function buildTest03(): MapData {
+  const plan = new CellPlan();
+  const arena = plan.spec({ floor: 0, ceil: 256, light: 176, floorTex: T.FloorTile, ceilTex: T.Ceiling, wallTex: T.Stone });
+  const lair = plan.spec({ floor: 0, ceil: 256, light: 128, floorTex: T.Slime, ceilTex: T.Ceiling, wallTex: T.Tech });
+  for (let y = 0; y < 7; y++) for (let x = 0; x < 12; x++) if (!(x === 5 && (y === 2 || y === 4))) plan.set(x, y, arena);
+  for (let y = 1; y < 6; y++) for (let x = 13; x < 18; x++) plan.set(x, y, lair);
+  plan.set(12, 3, plan.spec({ floor: 0, ceil: 128, light: 160, floorTex: T.Trim, ceilTex: T.Ceiling, wallTex: T.Metal, special: DoorKind.Auto }));
+  const b = new MapBuilder();
+  emitCellPlan(b, plan, CELL_SIZE);
+  const at = (type: number, x: number, y: number, angle = 180) => b.thing(type, (x + 0.5) * CELL_SIZE, (y + 0.5) * CELL_SIZE, angle);
+  at(ThingType.PlayerStart, 0, 3, 0);
+  at(EnemyType.Grunt, 7, 3);
+  at(EnemyType.Brute, 10, 5);
+  at(EnemyType.Sniper, 11, 0);
+  at(ThingType.Health, 1, 6);
+  at(ThingType.Health, 2, 6);
+  at(EnemyType.MiniBoss, 16, 3);
+  at(ThingType.Exit, 17, 3);
+  return b.build({ name: 'test03', theme: 'base' });
+}
+
+const maps: Record<string, () => MapData> = { test01: buildTest01, test02: buildTest02, test03: buildTest03 };
 
 for (const [name, fn] of Object.entries(maps)) {
   const map = fn();

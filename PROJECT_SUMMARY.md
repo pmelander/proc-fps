@@ -27,7 +27,7 @@ This file summarises the decisions made so far, the current state of the code, a
 | Package | Contents |
 |---|---|
 | `core` | `map.ts` (format v0, `hashMap`), `cells.ts` (`CellPlan`: cells → sectors with automatic T-junction splits), `rng.ts` (sfc32 + named forks), `dmath.ts` (deterministic trig), `math.ts` (render-side mat4), `geometry.ts` (sector loops, `SectorLocator`), `builder.ts` (`MapBuilder`, `rect`), `grid.ts` (`CellGrid`, `validateGridAlignment`), `validate.ts`, `constants.ts`, `textures.ts`. `maps/test01.json` is built by `scripts/build-test-maps.ts`. |
-| `gen` | `generate.ts` (v0.6.0: mission → layout → room templates → cell plan → sectors), `mission.ts` (mission graph), `layout.ts` (grid embedding), `rooms.ts` (room templates), `validate.ts` (structural + grid + reachability + traps), `scripts/stats.ts` (headless health check). |
+| `gen` | `generate.ts` (v0.7.0: mission → layout → room templates → cell plan → sectors), `mission.ts` (mission graph), `layout.ts` (grid embedding), `rooms.ts` (room templates), `validate.ts` (structural + grid + reachability + traps), `scripts/stats.ts` (headless health check). |
 | `sim` | `input.ts` (`InputFrame`, quantization), `world.ts`, `state.ts`, `player.ts` (grid movement), `sim.ts`, `replay.ts`. |
 | `render` | `backend.ts` (interface), `webgl2.ts`, `mesh.ts` (map → per-sector mesh), `palette.ts` (64 colours), `shaders.ts`, `renderer.ts` (`LevelRenderer`). |
 | `app` | `main.ts` (loop, interpolation, HUD, compass), `input.ts` (DOM → `InputFrame`), `automap.ts`. |
@@ -36,7 +36,7 @@ Commands:
 
 ```
 npm install
-npm run dev              # ?seed=anything  or  ?map=test01 / test02 (doors, keys, secret);  /browse.html = seed browser
+npm run dev              # ?seed=anything  or  ?map=test01 / test02 (doors, keys, secret) / test03 (combat);  /browse.html = seed browser
 npm run ci               # typecheck + tests + gen:stats (2000 seeds) + build
 npm run maps:build       # regenerate test map JSON (CI fails if it drifted)
 npm run gen:stats -- --seeds 10000   # health check + distributions (rooms, doors, secrets, templates, attempts, gen time)
@@ -78,20 +78,28 @@ npm run gen:stats -- --seeds 10000   # health check + distributions (rooms, door
 **Working:**
 - Map format and validation, including trap detection: every cell reachable from the start must still be able to reach the exit.
 - The grid-aligned test map, which covers a platform, drop, stairs, and a void pillar.
-- The v0.6 generator: a mission graph (M2 slice 1) embedded on the grid (slice 2) as rooms sized by type, joined by corridors, with loops routed by pathfinding. Rooms use templates (slice 3): hall (pillar rows), platform (or an unclimbable plinth), pit, stairs to a dais, and arena (boss and mini boss); start, exit, and loot rooms stay plain. Floors are flat (one storey) and hazard stripes mark only corridor ends. Connections get doors (slice 4) as the mission says, auto or key, with keys placed on base floor in their rooms. Up to 2 secret rooms per level (slice 5) hang off ordinary rooms behind secret doors.
+- The v0.7 generator: a mission graph (M2 slice 1) embedded on the grid (slice 2) as rooms sized by type, joined by corridors, with loops routed by pathfinding. Rooms use templates (slice 3): hall (pillar rows), platform (or an unclimbable plinth), pit, stairs to a dais, and arena (boss and mini boss); start, exit, and loot rooms stay plain. Floors are flat (one storey) and hazard stripes mark only corridor ends. Connections get doors (slice 4) as the mission says, auto or key, with keys placed on base floor in their rooms. Up to 2 secret rooms per level (slice 5) hang off ordinary rooms behind secret doors.
 - The WebGL2 renderer, which uses per-sector light with distance falloff in 16 bands and renders at 240p before a 64-colour palette post pass with Bayer dithering.
 - Placeholder procedural patterns per texture id, with floor and ceiling tiles aligned to cells.
 - Grid movement, replays (F8 downloads one), the automap (hold Tab; rotates with the look direction, drawn at 240p in the palette), and the HUD compass showing where W goes.
 
 **Verified:**
 - The typecheck is clean.
-- 50 tests pass.
+- 61 tests pass.
 - 2000 seeds produce 0 validation failures (about 12 ms per map including validation).
 - The production build succeeds (about 45 kB JS).
 - Headless Chromium (SwiftShader) renders correctly.
 
 **Not yet verified:** real mouse and keyboard play. Pointer lock can't run headless.
 
+- Combat (M3), all in the deterministic sim, so replays cover it:
+  - Player: 100 health, a free-aim hitscan weapon (hold the mouse button; `FIRE_COOLDOWN` 16 ticks, 20 damage) traced through the grid with the level's own floors, ceilings and doors (`castRay`), death and the exit ending the level.
+  - Enemies (`ENEMY_DEFS` in `sim/src/enemies.ts`): grunt (projectiles), brute (melee), sniper (rare, telegraphed hitscan), mini boss and boss (volleys). Grid-bound, one per cell, own step timers, pathing on a distance field to the player's cell through auto doors (key and secret doors are walls to them). Modes: idle → alert → chase ⇄ windup → attack, pain, dead. They wake on sight (10 cells, line of sight through open cells), on gunfire (a flood fill of 14 cells that closed doors stop), or when shot.
+  - Dodging is the core skill: projectiles (5 units/tick) take longer than a player step to cross a cell, melee and hitscan land only if the player is still adjacent or in sight when the wind-up ends. Every enemy is at least player height so level shots connect.
+  - Projectiles collide with the grid (cells, floors, ceilings, closed doors) rather than line segments: every wall is on the grid.
+  - Rendering: a dynamic sprite pass (`render/src/sprites.ts`) with procedural silhouettes per enemy type; eyes glow through the wind-up (the telegraph), pain flashes white, corpses stay. Health packs are mesh pickups like keys.
+  - HUD: health, crosshair, a placeholder gun with muzzle flash, a red hurt flash, and death / level-complete screens (E retries or moves on).
+  - Generator: enemies by room kind (ordinary rooms by size, the mini boss with an escort, the boss alone; none in start, exit, loot, or secret rooms), never in front of a doorway; health in loot and secret rooms and some ordinary rooms. `?map=test03` is a combat arena.
 - Secrets (M2 slice 5): a secret door looks like the wall it sits in (same texture, no gap under it), ignores bumping, opens with E, and never shows a prompt. Opening it finds the secret (`secret` event, a notice, and a found/total count on the HUD). Secret areas (`SPECIAL_SECRET_AREA`, id in `tag`) stay off the automap until found. `test02` has one north of the key room.
 - Doors and keys (M2 slice 4): door state and held keys in `SimState`, auto doors that open when walked into, key doors opened with E/Space while holding the key, key pickups, and events (`door`, `locked`, `key`) for the HUD and later sound. The renderer moves door slabs and hides taken keys with per-frame mover offsets on a static mesh. The HUD shows an E or the missing key in the upper right when facing a closed key door. `?map=test02` has both door types.
 
@@ -117,12 +125,7 @@ npm run gen:stats -- --seeds 10000   # health check + distributions (rooms, door
   - ✅ Slice 4: doors and keys in the map format, sim, renderer, HUD, and generator; validation walks the level collecting keys.
   - ✅ Slice 5: secrets: optional dead-end rooms behind secret doors, hidden on the automap until found.
   - ✅ Slice 6: tooling: `/browse.html` shows thumbnails and stats for pages of seeds (click to play); `gen:stats` reports distributions through `levelStats`.
-- **M3 — combat:**
-  - Grid-bound enemies: one per cell, own step timers, BFS pathfinding.
-  - Wake-up by noise flood fill across sectors.
-  - A state machine: idle, alert, chase, attack, pain, death.
-  - Free-aim hitscan and projectiles. Projectiles need circle/segment collision, since player collision was replaced by the grid.
-  - Keep hitscan enemies rare or telegraphed, and tune projectile speed against `STEP_TICKS`.
+- **M3 — combat:** ✅ complete (generator v0.7.0). Grid-bound enemies with their own step timers and distance-field pathing, wake-up by sight, noise and damage, the idle/alert/chase/windup/pain/dead state machine, free-aim hitscan, dodgeable projectiles (grid collision, since all walls are on the grid), rare telegraphed hitscan snipers, player health, death and the exit. Balance (enemy budget by graph depth, health along the critical path) stays in M5; some levels currently have no health at all.
 - **M4 — procedural content:**
   - Textures baked to an atlas via GPU render-to-texture with per-theme palettes.
   - SDF-composed 8-direction enemy sprites.
@@ -155,7 +158,6 @@ In the map format a door is a one-cell sector with its kind in `Sector.special` 
 
 Ideas noted during play-testing, not yet scheduled. Each line points at whatever already exists for it.
 
-- **Health.** Nothing tracks it yet. M3 (damage from enemies) and M5 (health placed along the critical path) both assume it. It belongs in sim state so replays cover it.
 - **Floor hazards.** Damage floors. `Sector.special` is already reserved for this, but nothing reads it. Depends on health. Validation must keep the critical path hazard-free, or at least survivable.
 - **Elevators and storeys.** Floor plans are flat per storey (done in M2 slice 2 for a single storey); elevators will join storeys. Lifts are the undecided half of the doors question. On the grid, a lift fits as a one-cell sector whose floor moves between two heights, the same moving-sector machinery as doors (M2 slice 4). Validation must treat a lift as a step in both directions only when it can be called from either end.
 - **Catwalks and double-height rooms.** A catwalk bridges a tall room on a second level, and the player can walk under it. The sector model allows one floor and one ceiling per point, but the renderer is true 3D with a depth buffer (unlike Doom's), so the limit is the map format and the grid, not rendering. Plan: *slabs* (3D-floor style) on cells with a top and an underside, which means a `MAP_FORMAT_VERSION` bump; `CellGrid` cells hold a stack of walkable levels; `canStep` moves level to level with the same step and headroom rules, with the level picked by the player's z; reachability and trap search run over (cell, level); the automap dims levels below. The generator then gives tall rooms catwalks joining upper doorways, so rooms can connect on two levels. Schedule after M2 slice 4 (doors), so the grid and movement rule change once. Fully stacked rooms with walls on both levels are a bigger, later step.

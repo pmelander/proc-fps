@@ -57,7 +57,8 @@ const fill = () => {
     const s = levelStats(g);
     drawThumbnail(card.querySelector('canvas')!, g.map, THUMB);
     meta.textContent =
-      `${s.rooms} rooms · ${s.doors.key} key door${s.doors.key === 1 ? '' : 's'} · ${s.secrets} secret${s.secrets === 1 ? '' : 's'}\n` +
+      `${s.rooms} rooms · ${s.enemies} enemies · ${s.health} health\n` +
+      `${s.doors.key} key door${s.doors.key === 1 ? '' : 's'} · ${s.secrets} secret${s.secrets === 1 ? '' : 's'}\n` +
       `${s.width}×${s.height} cells · ${s.attempts} ${s.attempts === 1 ? 'try' : 'tries'} · ${ms.toFixed(1)} ms`;
     if (errors.length) {
       invalid++;
