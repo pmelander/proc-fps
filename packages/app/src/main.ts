@@ -11,6 +11,7 @@ import {
   doorAtCell,
   doorOffset,
   liftHeight,
+  pickupCell,
   stepSim,
   type EnemyState,
   type PlayerState,
@@ -24,6 +25,8 @@ import test04 from '@proc-fps/core/maps/test04.json';
 import { AudioEngine } from './audio/engine.js';
 import type { SoundId } from './audio/sounds.js';
 import { drawAutomap } from './automap.js';
+import { Gore } from './gore.js';
+import { Weapon } from './weapon.js';
 import { InputSampler } from './input.js';
 import { KEY_COLORS, KEY_NAMES } from './keys.js';
 
@@ -31,6 +34,8 @@ const TEST_MAPS: Record<string, MapData> = { test01: test01 as MapData, test02: 
 const NOTICE_SECONDS = 2.5;
 /** Dev: run the sim without the pointer lock (the in-app preview cannot take it). */
 const AUTOPLAY = new URLSearchParams(location.search).has('autoplay');
+/** Dev: hold the trigger (with autoplay, to see the gun and gore without input). */
+const AUTOFIRE = new URLSearchParams(location.search).has('autofire');
 const MAX_FRAME_TIME = 0.25; // avoid spiral of death after tab-out
 const BOB_HEIGHT = 2.5;
 const HEADING_LETTERS = ['E', 'N', 'W', 'S'] as const;
@@ -145,9 +150,16 @@ const SHAPE: Record<number, number> = {
 const PROJECTILE_SIZE = 14;
 /** Events that play a sound with no position (the player's own). */
 const SOUND_OF: Partial<Record<string, SoundId>> = {
-  shot: 'shot', hurt: 'hurt', death: 'death', locked: 'locked', key: 'key', health: 'health', ammo: 'health', empty: 'locked', secret: 'secret', exit: 'exit',
+  shot: 'shot', hurt: 'hurt', death: 'death', locked: 'locked', key: 'key', health: 'health', secret: 'secret', exit: 'exit',
 };
 const FLASH_SECONDS = 0.12;
+/** Kill sounds pitch down with size; gib counts grow with it. */
+const DEATH_PITCH: Record<number, number> = { 32: 1, 33: 0.8, 34: 1.2, 40: 0.65, 41: 0.5 };
+const GIBS: Record<number, number> = { 32: 14, 33: 20, 34: 12, 40: 40, 41: 70 };
+/** A killing blow throws the corpse this far (map units) over CORPSE_THROW_SECONDS. */
+const CORPSE_THROW = 40;
+const CORPSE_THROW_SECONDS = 0.3;
+const JOLT_SECONDS = 0.09;
 
 const SPRITE_WIDTH = 2.6; // × enemy radius
 const OCTANT = Math.PI / 4;
@@ -165,7 +177,13 @@ function facing(e: EnemyState, spawnAngle: number, player: { x: number; y: numbe
 }
 
 /** Enemies, corpses and projectiles as sprites, enemies interpolated between the last two ticks. */
-function buildSprites(world: World, state: SimState, prevEnemies: readonly EnemyState[], t: number, cam: { x: number; y: number }, spawnAngles: readonly number[]): Sprite[] {
+/** When and which way each enemy was killed, for throwing its corpse (render-only). */
+type Throws = Map<number, { at: number; dx: number; dy: number }>;
+
+function buildSprites(
+  world: World, state: SimState, prevEnemies: readonly EnemyState[], t: number, cam: { x: number; y: number },
+  spawnAngles: readonly number[], throws: Throws, now: number,
+): Sprite[] {
   const light = (x: number, y: number) => {
     const [cx, cy] = world.grid.cellOf(x, y);
     return (world.map.sectors[world.grid.sectorAt(cx, cy)]?.light ?? 160) / 255;
@@ -173,8 +191,15 @@ function buildSprites(world: World, state: SimState, prevEnemies: readonly Enemy
   const sprites: Sprite[] = state.enemies.map((e, i) => {
     const def = ENEMY_DEFS[e.type];
     const was = prevEnemies[i] ?? e;
-    const x = lerp(was.x, e.x, t);
-    const y = lerp(was.y, e.y, t);
+    let x = lerp(was.x, e.x, t);
+    let y = lerp(was.y, e.y, t);
+    const thrown = throws.get(i);
+    if (thrown) {
+      const k = Math.min(1, (now - thrown.at) / CORPSE_THROW_SECONDS);
+      const d = CORPSE_THROW * (1 - (1 - k) * (1 - k));
+      x += thrown.dx * d;
+      y += thrown.dy * d;
+    }
     const z = lerp(was.z, e.z, t);
     const shape = SHAPE[e.type] ?? SpriteShape.Grunt;
     // View direction: the camera's bearing from the enemy, relative to where it faces, in octants.
@@ -186,6 +211,14 @@ function buildSprites(world: World, state: SimState, prevEnemies: readonly Enemy
       x, y, z, width: def.radius * SPRITE_WIDTH, height: def.height, shape,
       charge, flash: e.mode === 'pain' ? 1 : 0, light: light(x, y), tile: spriteTile(shape, direction, frame),
     };
+  });
+  // Keys: bobbing and glowing where they lie (a carried key appears where its carrier died).
+  world.pickups.forEach((k, i) => {
+    const at = k.kind === 'key' && !state.taken[i] ? pickupCell(state, k) : null;
+    if (!at) return;
+    const [kx, ky] = world.grid.center(at[0], at[1]);
+    const bob = 6 * Math.sin(performance.now() / 300 + i);
+    sprites.push({ x: kx, y: ky, z: world.grid.floorAt(at[0], at[1]) + 18 + bob, width: 28, height: 28, shape: SpriteShape.Key + k.key, charge: 0, flash: 0, light: 1, tile: -1 });
   });
   for (const q of state.projectiles) {
     sprites.push({ x: q.x, y: q.y, z: q.z - PROJECTILE_SIZE / 2, width: PROJECTILE_SIZE, height: PROJECTILE_SIZE, shape: SpriteShape.Projectile, charge: 0, flash: 0, light: 1, tile: -1 });
@@ -202,11 +235,12 @@ function main(): void {
   const compassLetter = document.getElementById('compass-letter') as HTMLElement;
   const prompt = document.getElementById('prompt') as HTMLDivElement;
   const health = document.getElementById('health') as HTMLDivElement;
-  const ammo = document.getElementById('ammo') as HTMLDivElement;
-  const gun = document.getElementById('gun') as HTMLDivElement;
+  const weapon = new Weapon(document.getElementById('gun') as HTMLCanvasElement);
+  const gore = new Gore();
+  const throws: Throws = new Map();
+  let joltUntil = 0;
   const hurtFlash = document.getElementById('hurt') as HTMLDivElement;
   const end = document.getElementById('end') as HTMLDivElement;
-  let shotUntil = 0;
   let hurtUntil = 0;
   let notice = '';
   let noticeUntil = 0;
@@ -289,6 +323,7 @@ function main(): void {
       prev = clonePlayer(state.player);
       prevEnemies = state.enemies.map((e) => ({ ...e }));
       const f = input.sample();
+      if (AUTOFIRE) f.fire = true;
       recorder.record(f);
       const wasStepping = state.player.stepTick;
       stepSim(world, state, f);
@@ -299,7 +334,29 @@ function main(): void {
         const sound = SOUND_OF[e.type];
         if (sound) audio.play(sound);
         if (e.type === 'door') audio.play('door', doorCells[e.door], listener);
-        if (e.type === 'hit' || e.type === 'kill') audio.play(e.type, enemyAt(e.enemy), listener);
+        if (e.type === 'hit' || e.type === 'kill' || e.type === 'melee') {
+          const enemy = enemyAt(e.enemy);
+          const def = ENEMY_DEFS[enemy.type];
+          const mid = enemy.z + def.height * 0.6;
+          if (e.type === 'kill') {
+            // Spectacular: burst into gibs thrown along the blow, and throw the corpse after them.
+            const dx = enemy.x - state.player.x;
+            const dy = enemy.y - state.player.y;
+            const len = Math.hypot(dx, dy) || 1;
+            gore.burst(enemy.x, enemy.y, mid, dx / len, dy / len, GIBS[enemy.type] ?? 14, def.radius);
+            throws.set(e.enemy, { at: now, dx: dx / len, dy: dy / len });
+            audio.play('kill', enemy, listener, DEATH_PITCH[enemy.type] ?? 1);
+            audio.play('gib', enemy, listener);
+          } else {
+            gore.splash(enemy.x, enemy.y, mid);
+            if (e.type === 'hit') audio.play('hit', enemy, listener);
+          }
+        }
+        if (e.type === 'melee') {
+          weapon.melee();
+          audio.play('punch');
+          joltUntil = now + JOLT_SECONDS;
+        }
         if (e.type === 'windup' || e.type === 'attack') {
           const enemy = enemyAt(e.enemy);
           const kind = ENEMY_DEFS[enemy.type].attack;
@@ -312,9 +369,16 @@ function main(): void {
         if (e.type === 'locked') [notice, noticeUntil] = [`Needs the ${KEY_NAMES[e.key]} key`, now + NOTICE_SECONDS];
         if (e.type === 'secret') [notice, noticeUntil] = ['You found a secret!', now + NOTICE_SECONDS];
         if (e.type === 'health') [notice, noticeUntil] = [`+${e.amount} health`, now + NOTICE_SECONDS];
-        if (e.type === 'ammo') [notice, noticeUntil] = [`+${e.amount} ammo`, now + NOTICE_SECONDS];
-        if (e.type === 'shot') shotUntil = now + FLASH_SECONDS;
-        if (e.type === 'hurt') hurtUntil = now + FLASH_SECONDS * 2;
+        if (e.type === 'shot') {
+          weapon.fire(now);
+          renderer.flash = 1;
+          joltUntil = now + JOLT_SECONDS;
+          window.setTimeout(() => audio.play('pump'), 220);
+        }
+        if (e.type === 'hurt') {
+          hurtUntil = now + FLASH_SECONDS * 2;
+          joltUntil = now + JOLT_SECONDS;
+        }
       }
       acc -= TICK_DT;
     }
@@ -322,8 +386,11 @@ function main(): void {
     audio.setIntensity(state.enemies.filter((e) => e.mode === 'chase' || e.mode === 'windup').length / 2);
     world.doors.forEach((_, i) => (renderer.movers[i] = doorOffset(world, state, i)));
     world.lifts.forEach((lift, i) => (renderer.movers[world.doors.length + i] = -(liftHeight(world, state, i) - lift.bottom)));
-    const pickupMover = world.doors.length + world.lifts.length;
-    world.pickups.forEach((_, i) => (renderer.movers[pickupMover + i] = state.taken[i] ? HIDDEN_OFFSET : 0));
+    // Health packs are mesh markers, after doors and lifts, in thing order.
+    let healthMover = world.doors.length + world.lifts.length;
+    world.pickups.forEach((k, i) => {
+      if (k.kind === 'health') renderer.movers[healthMover++] = state.taken[i] ? HIDDEN_OFFSET : 0;
+    });
 
     const t = acc / TICK_DT;
     const p = state.player;
@@ -334,13 +401,25 @@ function main(): void {
       yaw: lerpAngle(prev.angle, p.angle, t),
       pitch: lerp(prev.pitch, p.pitch, t),
     };
-    renderer.render(view, now, buildSprites(world, state, prevEnemies, t, view, spawnAngles));
+    // Gore (render-only particles), the muzzle flash's light, the screen jolt.
+    const goreWorld = {
+      floorAt: (x: number, y: number) => {
+        const [cx, cy] = world.grid.cellOf(x, y);
+        return world.grid.walkable(cx, cy) ? world.grid.floorAt(cx, cy) : undefined;
+      },
+      light: (x: number, y: number) => {
+        const [cx, cy] = world.grid.cellOf(x, y);
+        return (world.map.sectors[world.grid.sectorAt(cx, cy)]?.light ?? 160) / 255;
+      },
+    };
+    gore.update(dt, goreWorld);
+    renderer.flash = Math.max(0, renderer.flash - dt * 12);
+    canvas.style.transform = now < joltUntil ? `translate(${(Math.random() - 0.5) * 10}px, ${(Math.random() - 0.5) * 8}px)` : '';
+    renderer.render(view, now, [...buildSprites(world, state, prevEnemies, t, view, spawnAngles, throws, now), ...gore.sprites(goreWorld)]);
+    weapon.update(now, dt, state.player.stepTick / STEP_TICKS);
 
     health.textContent = String(p.health);
-    ammo.textContent = String(p.ammo);
-    ammo.classList.toggle('low', p.ammo <= 10);
     health.classList.toggle('low', p.health <= PLAYER_MAX_HEALTH / 4);
-    gun.classList.toggle('firing', now < shotUntil);
     hurtFlash.hidden = now >= hurtUntil;
     const ending = state.dead ? 'dead' : state.won ? 'won' : '';
     if (end.dataset.state !== ending) {

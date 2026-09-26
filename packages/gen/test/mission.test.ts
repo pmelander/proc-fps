@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Rng } from '@proc-fps/core';
-import { BOSS_KEY, generateMission, validateMission, type Mission } from '../src/index.js';
+import { BOSS_KEY, EXIT_KEY, generateMission, validateMission, type Mission } from '../src/index.js';
 
 const mission = (seed: string) => generateMission(new Rng(seed).fork('mission'));
 
@@ -30,14 +30,14 @@ describe('mission graph', () => {
 });
 
 describe('validateMission', () => {
-  // start – gate =key=> boss – exit, with the boss key in a dead end behind the mini boss.
+  // start – gate =key=> boss =key=> exit; the mini boss carries the boss key, the boss the exit key.
   const base = (): Mission => ({
     nodes: [
       { id: 0, kind: 'start' },
       { id: 1, kind: 'room' },
-      { id: 2, kind: 'miniboss' },
-      { id: 3, kind: 'room', key: BOSS_KEY },
-      { id: 4, kind: 'boss' },
+      { id: 2, kind: 'miniboss', key: BOSS_KEY },
+      { id: 3, kind: 'room' },
+      { id: 4, kind: 'boss', key: EXIT_KEY },
       { id: 5, kind: 'exit' },
     ],
     edges: [
@@ -45,7 +45,7 @@ describe('validateMission', () => {
       { a: 0, b: 2, door: 'auto' },
       { a: 2, b: 3, door: 'open' },
       { a: 1, b: 4, door: 'key', key: BOSS_KEY },
-      { a: 4, b: 5, door: 'auto' },
+      { a: 4, b: 5, door: 'key', key: EXIT_KEY },
     ],
   });
 
@@ -55,8 +55,8 @@ describe('validateMission', () => {
 
   it('rejects a key locked behind its own door', () => {
     const m = base();
-    delete m.nodes[3]!.key;
-    m.nodes[4]!.key = BOSS_KEY;
+    delete m.nodes[2]!.key;
+    m.nodes[5]!.key = BOSS_KEY; // the boss key behind the boss room's own door
     expect(validateMission(m)).toContain('unreachable with keys in play: 4, 5');
   });
 
@@ -69,7 +69,9 @@ describe('validateMission', () => {
 
   it('rejects a boss key reachable without the mini boss', () => {
     const m = base();
-    m.edges.push({ a: 1, b: 3, door: 'open' });
+    delete m.nodes[2]!.key;
+    m.nodes[3]!.key = BOSS_KEY; // in the room behind the mini boss…
+    m.edges.push({ a: 1, b: 3, door: 'open' }); // …which the gate room now reaches directly
     expect(validateMission(m)).toContain('boss key reachable without passing the mini boss');
   });
 });

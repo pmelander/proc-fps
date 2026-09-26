@@ -1,12 +1,10 @@
 import {
-  AMMO_PICKUP,
   DoorKind,
   HAZARD_DAMAGE,
   HAZARD_TICKS,
   HEADING_DX,
   HEADING_DY,
   HEALTH_PICKUP,
-  MAX_AMMO,
   MAX_STEP,
   PLAYER_MAX_HEALTH,
   STEP_TICKS,
@@ -18,7 +16,7 @@ import { quantizeInput, type InputFrame } from './input.js';
 import { callLift, floorNow, liftAtCell, liftMoving, stepLifts } from './lifts.js';
 import { stepPlayer, type MoveGate } from './player.js';
 import { DOOR_OPEN_TICKS, type SimState } from './state.js';
-import { doorAtCell, type World } from './world.js';
+import { doorAtCell, pickupCell, type World } from './world.js';
 
 /** Advances the simulation by exactly one fixed tick. Mutates `state`. */
 export function stepSim(world: World, state: SimState, input: InputFrame): void {
@@ -96,21 +94,17 @@ export function stepSim(world: World, state: SimState, input: InputFrame): void 
   });
   stepLifts(world, state);
 
-  // Pickups in the cell the player is standing in (by position, so mid-step counts). Health and
-  // ammo stay on the floor while the player is full.
+  // Pickups in the cell the player is standing in (by position, so mid-step counts). Health
+  // stays on the floor while the player is at full health.
   const [cx, cy] = world.grid.cellOf(p.x, p.y);
   world.pickups.forEach((k, i) => {
-    if (state.taken[i] || k.cx !== cx || k.cy !== cy) return;
+    const at = pickupCell(state, k);
+    if (state.taken[i] || !at || at[0] !== cx || at[1] !== cy) return;
     if (k.kind === 'health') {
       if (p.health >= PLAYER_MAX_HEALTH) return;
       const amount = Math.min(HEALTH_PICKUP, PLAYER_MAX_HEALTH - p.health);
       p.health += amount;
       state.events.push({ type: 'health', amount });
-    } else if (k.kind === 'ammo') {
-      if (p.ammo >= MAX_AMMO) return;
-      const amount = Math.min(AMMO_PICKUP, MAX_AMMO - p.ammo);
-      p.ammo += amount;
-      state.events.push({ type: 'ammo', amount });
     } else {
       state.keys |= 1 << k.key;
       state.events.push({ type: 'key', key: k.key });

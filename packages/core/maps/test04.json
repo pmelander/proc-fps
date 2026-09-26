@@ -49,7 +49,7 @@
     {"floor":0,"ceil":192,"light":176,"floorTex":4,"ceilTex":5,"tag":0,"special":0},
     {"floor":-24,"ceil":192,"light":200,"floorTex":7,"ceilTex":5,"tag":0,"special":16},
     {"floor":0,"ceil":128,"light":144,"floorTex":6,"ceilTex":5,"tag":0,"special":0},
-    {"floor":0,"ceil":320,"light":176,"floorTex":6,"ceilTex":5,"tag":192,"special":8},
+    {"floor":0,"ceil":320,"light":176,"floorTex":20,"ceilTex":5,"tag":192,"special":8},
     {"floor":192,"ceil":384,"light":208,"floorTex":3,"ceilTex":5,"tag":0,"special":0}
   ],
   "things": [

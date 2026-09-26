@@ -7,8 +7,8 @@ import type { Rng } from '@proc-fps/core';
  * Built by cyclic generation in the style of Dormans. The main cycle has two arcs from the
  * start to the gate, the room in front of the boss key door:
  * - the short arc reaches the gate directly, so the player sees the boss door early;
- * - the long arc passes the mini boss, and the boss key lies in a dead end behind it, so it
- *   cannot be had without that fight.
+ * - the long arc passes the mini boss, which carries the boss key, so it cannot be had
+ *   without that fight. The boss carries the exit key; the exit sits behind its own key door.
  * Loot rooms hang off the cycle behind key doors whose keys are placed where they can
  * be reached first. Dead ends and small detour loops add variety. Secret rooms hang off
  * ordinary rooms behind secret doors; the level never needs them.
@@ -41,6 +41,8 @@ export interface Mission {
 /** A room has four sides; capping connections at four keeps the embedding tractable. */
 export const MAX_DEGREE = 4;
 export const BOSS_KEY = 0;
+/** The exit's key door; dropped by the boss. Loot keys use the ids between. */
+export const EXIT_KEY = 3;
 
 const AUTO_DOOR_CHANCE = 0.4;
 
@@ -70,13 +72,12 @@ export function generateMission(rng: Rng): Mission {
   // Real doors on both sides of the mini boss, so the fight is announced.
   connect(approach[approach.length - 1]!, miniboss, 'auto');
   connect(miniboss, retreat[0]!, 'auto');
-  const keyRoom = add('room');
-  nodes[keyRoom]!.key = BOSS_KEY;
-  connect(miniboss, keyRoom, plain());
+  nodes[miniboss]!.key = BOSS_KEY; // dropped when it dies
 
   const boss = add('boss');
   connect(gate, boss, 'key', BOSS_KEY);
-  connect(boss, add('exit'), 'auto');
+  nodes[boss]!.key = EXIT_KEY; // dropped when it dies
+  connect(boss, add('exit'), 'key', EXIT_KEY);
 
   // Detour loops: add u–w–v beside a plain edge u–v between ordinary rooms, so neither the
   // mini boss nor a key door can be bypassed.
@@ -183,6 +184,7 @@ export function validateMission(m: Mission): string[] {
   if (needed.length) errors.push(`rooms only reachable through a secret: ${needed.join(', ')}`);
 
   const exitLinks = m.edges.filter((e) => e.a === exit || e.b === exit);
+  if (m.nodes.find((x) => x.kind === 'boss')!.key !== EXIT_KEY || exitLinks[0]?.key !== EXIT_KEY) errors.push('the boss must carry the exit key and the exit be behind its door');
   if (exitLinks.length !== 1 || ![exitLinks[0]!.a, exitLinks[0]!.b].includes(boss)) errors.push('exit must connect only to the boss room');
   const bossEntries = m.edges.filter((e) => (e.a === boss || e.b === boss) && e.a !== exit && e.b !== exit);
   if (bossEntries.length !== 1 || bossEntries[0]!.key !== BOSS_KEY) errors.push('boss room must have exactly one entry, a door needing the boss key');

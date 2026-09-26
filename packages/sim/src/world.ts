@@ -6,6 +6,8 @@ import {
   ThingType,
   doorKindOf,
   doorSectors,
+  droppedKey,
+  isEnemyThing,
   isLift,
   keyOfThing,
   secretCount,
@@ -40,11 +42,14 @@ export interface LiftInfo {
 
 /** Something picked up by walking over it. */
 export interface PickupInfo {
-  kind: 'key' | 'health' | 'ammo';
+  kind: 'key' | 'health';
   /** Key id, for keys. */
   key: number;
+  /** Where it lies; a dropped key lies where its carrier died instead. */
   cx: number;
   cy: number;
+  /** Index into `state.enemies` of the enemy carrying it, or -1. */
+  carrier: number;
 }
 
 /** Immutable per-level data the sim needs, derived once from the map. */
@@ -79,11 +84,17 @@ export function createWorld(map: MapData): World {
   const doorOfSector = new Map(doors.map((d, i) => [d.sector, i]));
   const doorAt = new Int32Array(grid.width * grid.height).fill(-1);
   grid.sector.forEach((s, i) => (doorAt[i] = doorOfSector.get(s) ?? -1));
+  let enemy = 0;
   const pickups = map.things.flatMap((t): PickupInfo[] => {
-    const key = keyOfThing(t.type);
-    if (key < 0 && t.type !== ThingType.Health && t.type !== ThingType.Ammo) return [];
     const [cx, cy] = grid.cellOf(t.x, t.y);
-    return [{ kind: key >= 0 ? 'key' : t.type === ThingType.Health ? 'health' : 'ammo', key, cx, cy }];
+    if (isEnemyThing(t.type)) {
+      const carrier = enemy++;
+      const key = droppedKey(t);
+      return key >= 0 ? [{ kind: 'key', key, cx, cy, carrier }] : [];
+    }
+    const key = keyOfThing(t.type);
+    if (key < 0 && t.type !== ThingType.Health) return [];
+    return [{ kind: key >= 0 ? 'key' : 'health', key, cx, cy, carrier: -1 }];
   });
   const lifts: LiftInfo[] = [];
   const liftAt = new Int32Array(grid.width * grid.height).fill(-1);
@@ -102,8 +113,15 @@ export function createWorld(map: MapData): World {
   return { map, locator: new SectorLocator(map), grid, doors, doorAt, lifts, liftAt, pickups, exit, secrets: secretCount(map) };
 }
 
-/** True for pickups that render as markers: the mover order of the level mesh. */
-export const isPickupThing = (type: number): boolean => keyOfThing(type) >= 0 || type === ThingType.Health || type === ThingType.Ammo;
+/** True for things that are floor pickups (keys and health; carried keys come from enemies). */
+export const isPickupThing = (type: number): boolean => keyOfThing(type) >= 0 || type === ThingType.Health;
+
+/** Where a pickup is now, or null while its carrier lives. */
+export function pickupCell(state: { enemies: readonly { mode: string; cx: number; cy: number }[] }, k: PickupInfo): [number, number] | null {
+  if (k.carrier < 0) return [k.cx, k.cy];
+  const e = state.enemies[k.carrier]!;
+  return e.mode === 'dead' ? [e.cx, e.cy] : null;
+}
 
 /** Door id at a cell, or -1. */
 export function doorAtCell(world: World, cx: number, cy: number): number {

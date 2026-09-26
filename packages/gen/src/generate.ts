@@ -26,7 +26,7 @@ import { designRoom, type RoomDesign } from './rooms.js';
  * Bump on ANY change that alters output for an existing seed.
  * seed + GENERATOR_VERSION must always reproduce the same map.
  */
-export const GENERATOR_VERSION = '0.10.0';
+export const GENERATOR_VERSION = '0.11.0';
 
 /** Layout attempts per mission, and missions tried, before giving up on a seed. */
 const LAYOUT_TRIES = 8;
@@ -54,7 +54,7 @@ export interface Generated {
 
 /**
  * Pipeline: mission graph → grid embedding → room templates → cell plan → sectors, with doors
- * in corridor cells, keys in their rooms, secret areas marked, and enemies, health and ammo
+ * in corridor cells, keys in their rooms, secret areas marked, and enemies and health
  * balanced by level and depth. The level only changes the population: the same seed at a
  * higher level is the same layout, harder.
  */
@@ -109,7 +109,7 @@ function assignStoreys(mission: Mission, rng: Rng, level: number): number[] {
 
 const DOOR_KIND: Record<MissionDoor, DoorKind> = { open: DoorKind.None, auto: DoorKind.Auto, key: DoorKind.Key, secret: DoorKind.Secret };
 /** Rooms a door belongs next to: it guards them. */
-const GUARDED: readonly RoomKind[] = ['miniboss', 'boss', 'loot'];
+const GUARDED: readonly RoomKind[] = ['miniboss', 'boss', 'loot', 'exit'];
 
 function emit(seed: string, mission: Mission, layout: Layout, rng: Rng, level: number): { map: MapData; designs: RoomDesign[] } {
   const C = CELL_SIZE;
@@ -134,7 +134,8 @@ function emit(seed: string, mission: Mission, layout: Layout, rng: Rng, level: n
   }
 
   const wallSet: TextureId[] = [T.Stone, T.Metal, T.Tech];
-  const things: [number, number, number, number][] = [];
+  /** [type, x, y, angle, flags] in cells. */
+  const things: [number, number, number, number, number?][] = [];
   // Secret ids in node order; every sector of a secret carries its id (see SPECIAL_SECRET_AREA).
   const secretId = new Map(mission.nodes.filter((n) => n.kind === 'secret').map((n, i) => [n.id, i]));
   const secretArea = (id: number | undefined) => (id === undefined ? {} : { special: SPECIAL_SECRET_AREA, tag: id });
@@ -178,8 +179,8 @@ function emit(seed: string, mission: Mission, layout: Layout, rng: Rng, level: n
       things.push([ThingType.PlayerStart, sx, sy, heading * 90]);
     }
     if (node.kind === 'exit') things.push([ThingType.Exit, cx, cy, 0]);
-    if (node.key !== undefined) {
-      // On base floor, as near the centre as the template allows (the outer ring always is).
+    if (node.key !== undefined && node.kind !== 'miniboss' && node.kind !== 'boss') {
+      // Keys lie on base floor (the mini boss and boss carry theirs), as near the centre as the template allows (the outer ring always is).
       let best: [number, number] = [cx, cy];
       let bestD = Infinity;
       for (let y = 0; y < h; y++) {
@@ -193,7 +194,7 @@ function emit(seed: string, mission: Mission, layout: Layout, rng: Rng, level: n
     return design;
   });
 
-  // Population: enemies, health and ammo, balanced by level and depth (population.ts).
+  // Population: enemies and health, balanced by level and depth (population.ts).
   const occupied = new Set(things.map(([, x, y]) => `${x},${y}`));
   const nearDoor = new Set<string>();
   doorways.forEach((list) => list.forEach(([x, y, h]) => nearDoor.add(`${x - HEADING_DX[h as 0]},${y - HEADING_DY[h as 0]}`)));
@@ -215,7 +216,7 @@ function emit(seed: string, mission: Mission, layout: Layout, rng: Rng, level: n
     const upperIsA = floorOf(edge.a) > floorOf(edge.b);
     if (high > low) {
       const [lx, ly] = c.cells[upperIsA ? 0 : c.cells.length - 1]!;
-      plan.set(lx, ly, plan.spec({ floor: low, ceil: high + CORRIDOR_HEIGHT, light: 176, floorTex: T.Trim, ceilTex: T.Ceiling, wallTex: T.Metal, special: SPECIAL_LIFT, tag: high }));
+      plan.set(lx, ly, plan.spec({ floor: low, ceil: high + CORRIDOR_HEIGHT, light: 176, floorTex: T.Lift, ceilTex: T.Ceiling, wallTex: T.Metal, special: SPECIAL_LIFT, tag: high }));
     }
 
     // The door goes in the corridor cell next to the room it guards (the b end otherwise). A
@@ -244,7 +245,7 @@ function emit(seed: string, mission: Mission, layout: Layout, rng: Rng, level: n
 
   const b = new MapBuilder();
   emitCellPlan(b, plan, C);
-  for (const [type, x, y, angle] of things) b.thing(type, (x + 0.5) * C, (y + 0.5) * C, angle);
+  for (const [type, x, y, angle, flags] of things) b.thing(type, (x + 0.5) * C, (y + 0.5) * C, angle, flags ?? 0);
   // The theme picks the texture set's colours; its own stream, so it never shifts other choices.
   const style = rng.fork('style').pick(THEME_NAMES);
   return { map: b.build({ name: `gen-${seed}`, seed, generatorVersion: GENERATOR_VERSION, theme: style, level }), designs };

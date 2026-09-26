@@ -5,14 +5,14 @@ export * from './sim.js';
 export * from './replay.js';
 // Combat tuning lives in core (shared with the generator); re-exported for sim users.
 export {
-  AMMO_PICKUP,
   ENEMY_DEFS,
   FIRE_COOLDOWN,
+  MELEE_DAMAGE,
+  MELEE_REACH,
+  PELLETS,
   HEALTH_PICKUP,
-  MAX_AMMO,
   PLAYER_DAMAGE,
   PLAYER_MAX_HEALTH,
-  START_AMMO,
   WEAPON_RANGE,
   type EnemyDef,
 } from '@proc-fps/core';

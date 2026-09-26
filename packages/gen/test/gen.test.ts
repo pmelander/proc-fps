@@ -76,19 +76,4 @@ describe('balance', () => {
     }
     expect(harder).toBeGreaterThan(easier * 1.3);
   });
-
-  it('rejects a level without enough ammo for its enemies', async () => {
-    const { AMMO_PICKUP } = await import('@proc-fps/core');
-    const plan = new CellPlan();
-    const room = plan.spec({ floor: 0, ceil: 192 });
-    for (let x = 0; x < 8; x++) plan.set(x, 0, room);
-    const b = new MapBuilder();
-    emitCellPlan(b, plan, C);
-    b.thing(ThingType.PlayerStart, C / 2, C / 2);
-    b.thing(ThingType.Exit, 7.5 * C, C / 2);
-    b.thing(ThingType.Health, 1.5 * C, C / 2);
-    b.thing(41, 5.5 * C, C / 2); // the boss: far more hit points than 40 rounds cover
-    expect(validateGenerated(b.build({ name: 'dry' }))).toEqual([expect.stringMatching(/^ammo for 40 shots, enemies need \d+$/)]);
-    expect(AMMO_PICKUP).toBeGreaterThan(0);
-  });
 });

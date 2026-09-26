@@ -1,6 +1,6 @@
-import { DoorKind, ThingType, doorKindOf, keyOfThing, secretOf, type MapData } from '@proc-fps/core';
+import { DoorKind, ThingType, doorKindOf, secretOf, type MapData } from '@proc-fps/core';
 import { paletteRGBA } from '@proc-fps/render';
-import { isPickupThing, type SimState, type World } from '@proc-fps/sim';
+import { pickupCell, type SimState, type World } from '@proc-fps/sim';
 
 /** Matches the 3D view's low-res height so the map has the same chunky pixels. */
 const ROWS = 240;
@@ -109,17 +109,19 @@ export function drawAutomap(canvas: HTMLCanvasElement, map: MapData, view: Autom
     line(sx(a.x, a.y), sy(a.x, a.y), sx(b.x, b.y), sy(b.x, b.y), c);
   }
 
-  // Things: exit, player start and uncollected keys (health and enemies stay off the map).
-  let pickup = 0;
-  for (const t of map.things) {
-    const key = keyOfThing(t.type);
-    if (isPickupThing(t.type) && state.taken[pickup++]) continue;
-    if (key < 0 && t.type !== ThingType.Exit && t.type !== ThingType.PlayerStart) continue;
-    const x = sx(t.x, t.y);
-    const y = sy(t.x, t.y);
-    const c = key >= 0 ? KEY[key]! : t.type === ThingType.Exit ? EXIT : THING;
+  // Exit, player start, and keys lying anywhere (health and enemies stay off the map).
+  const dot = (mx: number, my: number, c: number) => {
+    const x = sx(mx, my);
+    const y = sy(mx, my);
     for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) plot(x + i, y + j, c);
+  };
+  for (const t of map.things) {
+    if (t.type === ThingType.Exit || t.type === ThingType.PlayerStart) dot(t.x, t.y, t.type === ThingType.Exit ? EXIT : THING);
   }
+  world.pickups.forEach((k, i) => {
+    const at = k.kind === 'key' && !state.taken[i] ? pickupCell(state, k) : null;
+    if (at) dot(...world.grid.center(at[0], at[1]), KEY[k.key]!);
+  });
 
   // Player chevron, always pointing up.
   line(cx, cy - 4, cx - 3, cy + 3, PLAYER);

@@ -7,23 +7,33 @@ export const PLAYER_HEIGHT = 72;
  * near plane and bob, so the camera never pokes through the lowest ceiling validation allows.
  */
 export const PLAYER_EYE_HEIGHT = 64;
-/** Player combat and resources: the sim applies them, the generator balances against them. */
+/** Player combat and resources: the sim applies them, the generator balances against them. Ammo is infinite. */
 export const PLAYER_MAX_HEALTH = 100;
 /** What a health pickup restores (never above the maximum). */
 export const HEALTH_PICKUP = 25;
-export const START_AMMO = 40;
-export const MAX_AMMO = 200;
-export const AMMO_PICKUP = 20;
 /** Lifts: wait this long with the player aboard, then travel at LIFT_SPEED units per tick. */
 export const LIFT_WAIT = 20;
 export const LIFT_SPEED = 3;
 /** Standing on a damaging floor costs HAZARD_DAMAGE every HAZARD_TICKS. */
 export const HAZARD_DAMAGE = 5;
 export const HAZARD_TICKS = 30;
-/** Player weapon: free-aim hitscan along the view direction. */
-export const FIRE_COOLDOWN = 16;
-export const PLAYER_DAMAGE = 20;
+/**
+ * Player weapon: a shotgun. PELLETS hitscan pellets in a fixed spread around the view direction
+ * (fixed, so replays hold), PLAYER_DAMAGE each: devastating up close, a pump between shots.
+ * With an enemy right in front, firing is an automatic melee strike instead.
+ */
+export const FIRE_COOLDOWN = 36;
+export const PELLETS = 8;
+export const PLAYER_DAMAGE = 12;
 export const WEAPON_RANGE = 4096;
+/** Pellet offsets from the aim, radians: [yaw, pitch]. */
+export const PELLET_SPREAD: readonly (readonly [number, number])[] = [
+  [0, 0], [-0.035, 0.012], [0.035, -0.012], [-0.07, 0], [0.07, 0.01], [-0.02, -0.03], [0.022, 0.03], [0, -0.018],
+];
+export const MELEE_DAMAGE = 60;
+export const MELEE_COOLDOWN = 24;
+/** Melee reaches an enemy within this distance (map units) and 45° of the aim. */
+export const MELEE_REACH = 170;
 
 /** Max floor rise between adjacent cells the player can step up. Drops are unlimited. */
 export const MAX_STEP = 24;

@@ -1,15 +1,15 @@
-import { AMMO_PICKUP, ENEMY_DEFS, EnemyType, PLAYER_DAMAGE, START_AMMO, ThingType, type Rng } from '@proc-fps/core';
+import { EnemyType, ThingType, dropsKeyFlags, type Rng } from '@proc-fps/core';
 import type { Layout } from './layout.js';
 import type { Mission } from './mission.js';
 import type { RoomDesign } from './rooms.js';
 
 /**
- * Enemies, health and ammo, balanced (M5):
+ * Enemies and health, balanced:
  * - Difficulty rises with the run's level and with each room's depth along the mission graph,
  *   so rooms near the exit are fuller and nastier than rooms near the start. Snipers appear
  *   only deep in a level or from level 2.
  * - Health sits along the way (always one in the gate room before the boss) and in loot and
- *   secret rooms; ammo is placed to cover every enemy with a margin, nearer rooms first.
+ *   secret rooms. Ammo is infinite.
  * Things go on free base floor, never on a cell in front of a doorway, never two on a cell.
  * Start and exit rooms stay empty.
  */
@@ -25,14 +25,13 @@ export interface PopulationInput {
   level: number;
 }
 
-export type Placed = [type: number, x: number, y: number, angle: number];
+export type Placed = [type: number, x: number, y: number, angle: number, flags?: number];
 
-const CELLS_PER_ENEMY = 14;
-const MAX_ROOM_ENEMIES = 5;
+/** Hordes: about one enemy per this many cells of an ordinary room (before level and depth). */
+const CELLS_PER_ENEMY = 6;
+const MAX_ROOM_ENEMIES = 10;
 /** Budget points per enemy. */
 const COST: Partial<Record<EnemyType, number>> = { [EnemyType.Grunt]: 1, [EnemyType.Brute]: 1.5, [EnemyType.Sniper]: 2 };
-/** Ammo for every enemy's hit points, times this. */
-const AMMO_MARGIN = 1.5;
 const ROOM_HEALTH_CHANCE = 0.25;
 
 /** How much harder each level after the first is. */
@@ -59,21 +58,23 @@ export function populate(input: PopulationInput): Placed[] {
     }
     return cells;
   });
-  const put = (id: number, type: number, index = rng.int(0, free[id]!.length - 1)) => {
+  const put = (id: number, type: number, index = rng.int(0, free[id]!.length - 1), flags = 0) => {
     const cells = free[id]!;
     if (!cells.length) return false;
     const [[x, y]] = cells.splice(index, 1) as [[number, number]];
     occupied.add(`${x},${y}`);
-    placed.push([type, x, y, 0]);
+    placed.push([type, x, y, 0, flags]);
     return true;
   };
+  /** Near the room centre; a room's key (mini boss, boss) is carried by the enemy placed here. */
   const putCentral = (id: number, type: number) => {
+    const key = mission.nodes[id]!.key;
     const r = layout.rooms[id]!;
     const [cx, cy] = [(r.x0 + r.x1 - 1) / 2, (r.y0 + r.y1 - 1) / 2];
     const cells = free[id]!;
     if (!cells.length) return;
     const dist = ([x, y]: [number, number]) => Math.abs(x - cx) + Math.abs(y - cy);
-    put(id, type, cells.reduce((best, c, i) => (dist(c) < dist(cells[best]!) ? i : best), 0));
+    put(id, type, cells.reduce((best, c, i) => (dist(c) < dist(cells[best]!) ? i : best), 0), key === undefined ? 0 : dropsKeyFlags(key));
   };
   const pickEnemy = (deep: number): EnemyType => {
     const weights: [EnemyType, number][] = [
@@ -99,11 +100,11 @@ export function populate(input: PopulationInput): Placed[] {
       }
     } else if (node.kind === 'miniboss') {
       putCentral(id, EnemyType.MiniBoss);
-      const escort = rng.int(1, 1 + Math.floor(level / 2));
+      const escort = rng.int(2, 3 + Math.floor(level / 2));
       for (let n = 0; n < escort; n++) put(id, rng.chance(0.3 * (level - 1)) ? EnemyType.Brute : EnemyType.Grunt);
     } else if (node.kind === 'boss') {
       putCentral(id, EnemyType.Boss);
-      const escort = level >= 3 ? Math.min(4, rng.int(1, level - 1)) : 0;
+      const escort = Math.min(8, rng.int(1, 1 + level));
       for (let n = 0; n < escort; n++) put(id, EnemyType.Grunt);
     }
   });
@@ -123,25 +124,6 @@ export function populate(input: PopulationInput): Placed[] {
     }
   });
 
-  // Ammo: enough to kill everything with a margin, spread from the start outwards; loot and
-  // secret rooms add one box each on top.
-  const shots = placed.reduce((sum, [type]) => {
-    const def = ENEMY_DEFS[type as EnemyType];
-    return def ? sum + Math.ceil(def.hp / PLAYER_DAMAGE) : sum;
-  }, 0);
-  let boxes = Math.max(0, Math.ceil((shots * AMMO_MARGIN - START_AMMO) / AMMO_PICKUP));
-  const holders = mission.nodes
-    .filter((n) => n.kind === 'room' || n.kind === 'miniboss' || n.kind === 'boss')
-    .sort((a, b) => depth[a.id]! - depth[b.id]!)
-    .map((n) => n.id);
-  for (let pass = 0; boxes > 0 && pass < 8; pass++) {
-    for (const id of holders) {
-      if (boxes > 0 && put(id, ThingType.Ammo)) boxes--;
-    }
-  }
-  mission.nodes.forEach((node, id) => {
-    if (node.kind === 'loot' || node.kind === 'secret') put(id, ThingType.Ammo);
-  });
   return placed;
 }
 

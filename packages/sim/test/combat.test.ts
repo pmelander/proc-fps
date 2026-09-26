@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { CELL_SIZE as C, CellPlan, DoorKind, EnemyType, MapBuilder, STEP_TICKS, ThingType, emitCellPlan, type MapData } from '@proc-fps/core';
+import { CELL_SIZE as C, CellPlan, DoorKind, EnemyType, MapBuilder, STEP_TICKS, ThingType, dropsKeyFlags, emitCellPlan, type MapData } from '@proc-fps/core';
 import {
   DOOR_OPEN_TICKS,
   EMPTY_INPUT,
   ENEMY_DEFS,
   FIRE_COOLDOWN,
   HEALTH_PICKUP,
+  MELEE_DAMAGE,
+  PELLETS,
   PLAYER_DAMAGE,
   PLAYER_MAX_HEALTH,
   createSimState,
@@ -19,7 +21,7 @@ import {
  * A room of w × h cells (optionally with a door cell and a second room beyond it on the east),
  * player start at (0, py) facing east, plus things by cell.
  */
-function arena(opts: { w: number; h: number; py?: number; things?: [number, number, number][]; doorAt?: number; beyond?: number }): MapData {
+function arena(opts: { w: number; h: number; py?: number; things?: [number, number, number, number?][]; doorAt?: number; beyond?: number }): MapData {
   const plan = new CellPlan();
   const room = plan.spec({ floor: 0, ceil: 192, light: 200 });
   for (let y = 0; y < opts.h; y++) for (let x = 0; x < opts.w; x++) plan.set(x, y, room);
@@ -31,7 +33,7 @@ function arena(opts: { w: number; h: number; py?: number; things?: [number, numb
   const b = new MapBuilder();
   emitCellPlan(b, plan, C);
   b.thing(ThingType.PlayerStart, 0.5 * C, ((opts.py ?? 0) + 0.5) * C, 0);
-  for (const [type, x, y] of opts.things ?? []) b.thing(type, (x + 0.5) * C, (y + 0.5) * C, 180);
+  for (const [type, x, y, flags] of opts.things ?? []) b.thing(type, (x + 0.5) * C, (y + 0.5) * C, 180, flags ?? 0);
   return b.build({ name: 'arena' });
 }
 
@@ -47,13 +49,25 @@ function sim(map: MapData) {
 const events = (s: SimState, type: string) => s.events.filter((e) => e.type === type);
 
 describe('player weapon', () => {
-  it('hits the enemy in the crosshair and kills it after enough shots', () => {
-    const { state, step } = sim(arena({ w: 8, h: 1, things: [[EnemyType.Grunt, 5, 0]] }));
+  it('kills a brute outright with a close blast; at range only the central pellets connect', () => {
+    const close = sim(arena({ w: 12, h: 3, py: 1, things: [[EnemyType.Brute, 2, 1]] }));
+    close.step({ fire: true });
+    expect(close.state.enemies[0]!.mode).toBe('dead');
+    const far = sim(arena({ w: 12, h: 3, py: 1, things: [[EnemyType.Brute, 10, 1]] }));
+    far.step({ fire: true });
+    const e = far.state.enemies[0]!;
+    expect(e.mode).not.toBe('dead');
+    expect(e.hp).toBeLessThan(ENEMY_DEFS[EnemyType.Brute].hp);
+    expect(ENEMY_DEFS[EnemyType.Brute].hp - e.hp).toBeLessThan(PELLETS * PLAYER_DAMAGE);
+  });
+
+  it('strikes an enemy right in front instead of shooting', () => {
+    const { state, step } = sim(arena({ w: 6, h: 1, things: [[EnemyType.Grunt, 1, 0]] }));
     step({ fire: true });
-    expect(state.enemies[0]!.hp).toBe(ENEMY_DEFS[EnemyType.Grunt].hp - PLAYER_DAMAGE);
-    const shots = Math.ceil(ENEMY_DEFS[EnemyType.Grunt].hp / PLAYER_DAMAGE);
-    for (let i = 1; i < shots; i++) step({ fire: true }, FIRE_COOLDOWN);
+    expect(events(state, 'melee')).toEqual([{ type: 'melee', enemy: 0 }]);
+    expect(events(state, 'shot')).toEqual([]);
     expect(state.enemies[0]!.mode).toBe('dead');
+    expect(MELEE_DAMAGE).toBeGreaterThan(ENEMY_DEFS[EnemyType.Grunt].hp);
   });
 
   it('misses when aiming away, and walls stop the shot', () => {
@@ -182,17 +196,14 @@ describe('replays with combat', () => {
   });
 });
 
-describe('ammo', () => {
-  it('spends a round per shot, clicks empty, and refills from a box', async () => {
-    const { AMMO_PICKUP, START_AMMO } = await import('../src/index.js');
-    const { state, step } = sim(arena({ w: 4, h: 1, things: [[ThingType.Ammo, 1, 0]] }));
-    step({ fire: true });
-    expect(state.player.ammo).toBe(START_AMMO - 1);
-    state.player.ammo = 0;
-    let clicked = false;
-    for (let i = 0; i < FIRE_COOLDOWN + 1; i++) clicked ||= events(step({ fire: true }), 'empty').length > 0;
-    expect(clicked).toBe(true);
-    step({ move: 1 }, STEP_TICKS + 1);
-    expect(state.player.ammo).toBe(AMMO_PICKUP);
+
+describe('bosses drop keys', () => {
+  it('leaves the carried key where the carrier dies, for the player to pick up', () => {
+    const { state, step } = sim(arena({ w: 8, h: 1, things: [[EnemyType.MiniBoss, 3, 0, dropsKeyFlags(0)]] }));
+    for (let t = 0; t < 900 && state.enemies[0]!.mode !== 'dead'; t++) step({ fire: true });
+    expect(state.enemies[0]!.mode).toBe('dead');
+    expect(state.keys).toBe(0);
+    step({ move: 1 }, STEP_TICKS * 4);
+    expect(state.keys).toBe(1);
   });
 });

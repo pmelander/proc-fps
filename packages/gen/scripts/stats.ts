@@ -66,7 +66,6 @@ col('loot rooms', histogram(stats.map((s) => s.loot)));
 col('secrets', histogram(stats.map((s) => s.secrets)));
 col('enemies', summary(stats.map((s) => s.enemies)));
 col('health', summary(stats.map((s) => s.health)));
-col('ammo boxes', summary(stats.map((s) => s.ammo)));
 col('lifts', histogram(stats.map((s) => Math.min(s.lifts, 5))));
 const templateTotal: Record<string, number> = {};
 for (const s of stats) for (const [t, n] of Object.entries(s.templates)) templateTotal[t] = (templateTotal[t] ?? 0) + n;

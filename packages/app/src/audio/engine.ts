@@ -55,12 +55,13 @@ export class AudioEngine {
   }
 
   /** Plays a sound; with a position it is panned and quieter with distance from the listener. */
-  play(id: SoundId, at?: { x: number; y: number }, listener?: Listener): void {
+  play(id: SoundId, at?: { x: number; y: number }, listener?: Listener, rate = 1): void {
     const ctx = this.ctx;
     const buf = this.buffers.get(id);
     if (!ctx || !buf || !this.sfx || !this.soundOn) return;
     const src = ctx.createBufferSource();
     src.buffer = buf;
+    src.playbackRate.value = rate;
     let node: AudioNode = src;
     if (at && listener) {
       const dx = at.x - listener.x;

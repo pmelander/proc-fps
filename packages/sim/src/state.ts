@@ -1,4 +1,4 @@
-import { DEG_TO_RAD, ENEMY_DEFS, PLAYER_MAX_HEALTH, START_AMMO, ThingType, isEnemyThing, type EnemyType, type Heading } from '@proc-fps/core';
+import { DEG_TO_RAD, ENEMY_DEFS, PLAYER_MAX_HEALTH, ThingType, isEnemyThing, type EnemyType, type Heading } from '@proc-fps/core';
 import type { World } from './world.js';
 
 /** No buffered step. */
@@ -41,7 +41,6 @@ export interface PlayerState {
 
   // --- combat ---
   health: number;
-  ammo: number;
   /** Ticks until the weapon can fire again. */
   fireCooldown: number;
   /** Ticks spent on a damaging floor since it last hurt. */
@@ -98,13 +97,12 @@ export type SimEvent =
   | { type: 'locked'; door: number; key: number }
   | { type: 'key'; key: number }
   | { type: 'health'; amount: number }
-  | { type: 'ammo'; amount: number }
-  /** Pulled the trigger with no ammo. */
-  | { type: 'empty' }
   | { type: 'secret'; secret: number }
   | { type: 'shot' }
   | { type: 'hurt'; amount: number }
   | { type: 'hit'; enemy: number }
+  /** An automatic melee strike landed. */
+  | { type: 'melee'; enemy: number }
   | { type: 'kill'; enemy: number }
   /** An enemy started its wind-up (the telegraph) or attacked. */
   | { type: 'windup'; enemy: number }
@@ -181,7 +179,6 @@ export function createSimState(world: World): SimState {
       angle,
       pitch: 0,
       health: PLAYER_MAX_HEALTH,
-      ammo: START_AMMO,
       fireCooldown: 0,
       hazardTicks: 0,
     },

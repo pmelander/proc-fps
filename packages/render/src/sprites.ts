@@ -35,6 +35,10 @@ export const SpriteShape = {
   Boss: 4,
   Projectile: 8,
   Corpse: 9,
+  /** Keys: Key + key id (0–3), in the key's colour. */
+  Key: 10,
+  Gib: 14,
+  Blood: 15,
 } as const;
 
 export interface Sprite {
@@ -72,7 +76,17 @@ export function buildSpriteVertices(sprites: readonly Sprite[], yaw: number): Fl
       const mx = s.x + rx * u * s.width;
       const my = s.y + ry * u * s.width;
       // World: X = map.x, Y = height, Z = -map.y
-      out.set([mx, s.z + v * s.height, -my, u + 0.5, v, s.shape, s.charge, s.flash, s.light, s.tile], o);
+      // Written field by field: hundreds of gore particles per frame, so no per-vertex arrays.
+      out[o] = mx;
+      out[o + 1] = s.z + v * s.height;
+      out[o + 2] = -my;
+      out[o + 3] = u + 0.5;
+      out[o + 4] = v;
+      out[o + 5] = s.shape;
+      out[o + 6] = s.charge;
+      out[o + 7] = s.flash;
+      out[o + 8] = s.light;
+      out[o + 9] = s.tile;
       o += SPRITE_FLOATS_PER_VERTEX;
     }
   }

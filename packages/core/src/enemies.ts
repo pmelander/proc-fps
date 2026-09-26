@@ -9,6 +9,8 @@ import { EnemyType } from './map.js';
  * a projectile needs longer than one player step to cross a cell so a sidestep dodges it, and
  * hitscan is rare and telegraphed by a long wind-up that breaking line of sight cancels. Every
  * enemy is at least as tall as the player (72), so a level shot from eye height (64) connects.
+ * Hordes, not bullet sponges: ordinary enemies die to a close shotgun blast (8 × 12); the
+ * difficulty is their number (see gen/src/population.ts). They are deliberately slow.
  */
 export type AttackKind = 'melee' | 'projectile' | 'hitscan';
 
@@ -41,23 +43,23 @@ const base = { projectileSpeed: 0, volley: 1, spread: 0 };
 
 export const ENEMY_DEFS: Record<EnemyType, EnemyDef> = {
   [EnemyType.Grunt]: {
-    ...base, name: 'grunt', hp: 40, radius: 18, height: 72, stepTicks: 22,
+    ...base, name: 'grunt', hp: 20, radius: 20, height: 72, stepTicks: 26,
     attack: 'projectile', windup: 24, cooldown: 70, damage: 10, range: 10, projectileSpeed: 5, pain: 10,
   },
   [EnemyType.Brute]: {
-    ...base, name: 'brute', hp: 90, radius: 24, height: 80, stepTicks: STEP_TICKS + 4,
+    ...base, name: 'brute', hp: 55, radius: 26, height: 80, stepTicks: STEP_TICKS + 8,
     attack: 'melee', windup: 20, cooldown: 40, damage: 20, range: 1, pain: 6,
   },
   [EnemyType.Sniper]: {
-    ...base, name: 'sniper', hp: 30, radius: 16, height: 78, stepTicks: 28,
+    ...base, name: 'sniper', hp: 20, radius: 22, height: 78, stepTicks: 32,
     attack: 'hitscan', windup: 60, cooldown: 120, damage: 25, range: 14, pain: 12,
   },
   [EnemyType.MiniBoss]: {
-    ...base, name: 'mini boss', hp: 320, radius: 30, height: 96, stepTicks: 24,
+    ...base, name: 'mini boss', hp: 260, radius: 32, height: 96, stepTicks: 28,
     attack: 'projectile', windup: 30, cooldown: 80, damage: 12, range: 12, projectileSpeed: 5.5, volley: 3, spread: 0.22, pain: 0,
   },
   [EnemyType.Boss]: {
-    ...base, name: 'boss', hp: 900, radius: 42, height: 120, stepTicks: 30,
+    ...base, name: 'boss', hp: 700, radius: 44, height: 120, stepTicks: 34,
     attack: 'projectile', windup: 40, cooldown: 90, damage: 14, range: 14, projectileSpeed: 5, volley: 5, spread: 0.18, pain: 0,
   },
 };

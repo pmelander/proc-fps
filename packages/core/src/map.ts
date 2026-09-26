@@ -82,8 +82,6 @@ export const ThingType = {
   Exit: 2,
   /** Restores health when walked over. */
   Health: 3,
-  /** Refills ammo when walked over. */
-  Ammo: 4,
 } as const;
 
 /** Enemy thing types. Stats and behaviour live in the sim (`ENEMY_DEFS`). */
@@ -100,6 +98,12 @@ export const EnemyType = {
 export type EnemyType = (typeof EnemyType)[keyof typeof EnemyType];
 const ENEMY_TYPES = new Set<number>(Object.values(EnemyType));
 export const isEnemyThing = (type: number): type is EnemyType => ENEMY_TYPES.has(type);
+
+/** Thing flag: this enemy carries key (flags & 3) and drops it where it dies. */
+export const THING_DROPS_KEY = 1 << 4;
+export const dropsKeyFlags = (key: number): number => THING_DROPS_KEY | (key & 3);
+/** Key an enemy thing drops on death, or -1. */
+export const droppedKey = (t: Thing): number => (t.flags & THING_DROPS_KEY ? t.flags & 3 : -1);
 
 /** Key things are KEY_THING_BASE + key id, for key ids 0 … MAX_KEYS - 1. */
 export const KEY_THING_BASE = 16;

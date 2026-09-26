@@ -117,70 +117,22 @@ canvas[hidden] {
 #health.low {
   color: #ff5a4a;
 }
-#ammo {
-  position: fixed;
-  right: 16px;
-  bottom: 12px;
-  font: 700 38px/1 ui-monospace, monospace;
-  color: #f2d06a;
-  text-shadow: 2px 2px 0 #000;
-  pointer-events: none;
-}
-#ammo::after {
-  content: ' AMMO';
-  font-size: 16px;
-  color: #8f8a80;
-}
-#ammo.low {
-  color: #ff5a4a;
-}
 #end .stats {
   margin: 0 0 12px;
   color: #c8f0a0;
 }
-/* A blocky gun at the bottom: placeholder until M4 sprites. */
+/* The shotgun view model (weapon.ts): pixel art, big and heavy. */
 #gun {
   position: fixed;
   left: 50%;
-  bottom: 0;
-  width: 120px;
-  height: 150px;
-  transform: translateX(-10%);
-  pointer-events: none;
+  bottom: -2vh;
+  width: auto;
+  height: 48vh;
+  inset: auto auto -2vh 50%;
+  aspect-ratio: 160 / 110;
   image-rendering: pixelated;
-}
-#gun .body {
-  position: absolute;
-  left: 30px;
-  bottom: 0;
-  width: 60px;
-  height: 70px;
-  background: linear-gradient(90deg, #2a2a2e, #4a4a52 45%, #26262a);
-  border: 3px solid #111;
-}
-#gun .barrel {
-  position: absolute;
-  left: 46px;
-  bottom: 64px;
-  width: 28px;
-  height: 64px;
-  background: linear-gradient(90deg, #333338, #5a5a64 50%, #2c2c30);
-  border: 3px solid #111;
-}
-#gun .flash {
-  position: absolute;
-  left: 30px;
-  bottom: 118px;
-  width: 60px;
-  height: 36px;
-  background: radial-gradient(closest-side, #fff6c0, #ffb040 55%, transparent);
-  opacity: 0;
-}
-#gun.firing .flash {
-  opacity: 1;
-}
-#gun.firing {
-  transform: translateX(-10%) translateY(8px);
+  pointer-events: none;
+  transform-origin: 60% 100%;
 }
 #hurt {
   position: fixed;

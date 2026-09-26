@@ -1,5 +1,5 @@
 import earcut from 'earcut';
-import { BaseTex, DoorKind, SectorLocator, ThingType, doorKindOf, doorSectors, isLift, keyOfThing, sectorPolygons, type MapData, type Side } from '@proc-fps/core';
+import { BaseTex, DoorKind, SectorLocator, ThingType, doorKindOf, doorSectors, isLift, sectorPolygons, type MapData, type Side } from '@proc-fps/core';
 import type { VertexLayout } from './backend.js';
 
 /** pos(3) uv(2) light(1) tex(1) mover(1) move(1) slide(1) */
@@ -21,8 +21,7 @@ export const TEX_SCALE = 1 / 64;
 
 /**
  * Movers: geometry the static mesh shifts down by a per-frame offset (a uniform array).
- * Mover ids are door ids first, then lifts (sector order), then pickups (keys, health, ammo) in
- * thing order. A door's offset is how far its ceiling sits below the open height; a lift's is
+ * Mover ids are door ids first, then lifts (sector order), then health packs in thing order. A door's offset is how far its ceiling sits below the open height; a lift's is
  * minus how far its floor has risen; a taken pickup's sinks its marker out of view.
  */
 export const MAX_MOVERS = 128;
@@ -158,7 +157,7 @@ export function buildLevelMesh(map: MapData): LevelMesh {
       const N = map.sectors[other.sector]!;
       const motion = liftMotion.get(liftSide.sector)!;
       if (N.floor > L.floor) quad(liftSide.sector, a.x, a.y, b.x, b.y, L.floor, N.floor, other.lower, motion, STILL);
-      else quad(other.sector, a.x, a.y, b.x, b.y, N.floor, L.floor, liftSide.lower, STILL, motion, true);
+      else quad(other.sector, a.x, a.y, b.x, b.y, N.floor, L.floor, BaseTex.Lift, STILL, motion, true); // the platform's own side
       liftEdge = true;
     }
     // Door panel, seen from the neighbour: hangs from the door's open ceiling and slides down to its floor.
@@ -184,18 +183,18 @@ export function buildLevelMesh(map: MapData): LevelMesh {
     // Middle textures on two-sided lines (grates, windows) need alpha: later.
   }
 
-  // Pickups (keys, health, ammo): a small diamond hovering over the floor, sunk out of view once taken.
+  // Health packs: a small diamond hovering over the floor, sunk out of view once taken. (Keys
+  // are sprites: they can be dropped anywhere.)
   const locator = new SectorLocator(map);
   let pickups = 0;
   for (const t of map.things) {
-    const key = keyOfThing(t.type);
-    if (key < 0 && t.type !== ThingType.Health && t.type !== ThingType.Ammo) continue;
+    if (t.type !== ThingType.Health) continue;
     const s = locator.locate(t.x, t.y);
     const m = { mover: doors.length + lifts.length + pickups++, move: 1, slide: 0 };
     if (s < 0 || m.mover >= MAX_MOVERS) continue;
     const z = map.sectors[s]!.floor + KEY_MARKER_HEIGHT;
     const r = KEY_MARKER_SIZE;
-    const tex = key >= 0 ? BaseTex.Key + key : t.type === ThingType.Health ? BaseTex.Health : BaseTex.Ammo;
+    const tex = BaseTex.Health;
     const at = (dx: number, dy: number, dz: number) =>
       pushVertex(s, t.x + dx, z + dz, t.y + dy, 0.5 + dx / (2 * r), 0.5 + dz / (2 * r), tex, m, 1);
     const top = at(0, 0, r * 1.4);

@@ -68,6 +68,8 @@ export class LevelRenderer {
   private ib: BufferHandle | null = null;
   private indexCount = 0;
   sectorRanges: SectorRange[] = [];
+  /** Muzzle-flash light, 0–1, set by the app each frame. */
+  flash = 0;
   /** Per-mover offsets for this frame (door ids, then key pickups); see `mesh.ts`. */
   readonly movers = new Float32Array(MAX_MOVERS);
 
@@ -194,6 +196,7 @@ export class LevelRenderer {
           uEye: new Float32Array([cam.x, cam.eyeZ, -cam.y]),
           uTime: time,
           uMover: { vec4s: this.movers },
+          uFlash: this.flash,
         },
         textures: { uAtlas: this.atlas.color },
       });
@@ -209,6 +212,7 @@ export class LevelRenderer {
           uViewProj: mat4Mul(proj, view),
           uEye: new Float32Array([cam.x, cam.eyeZ, -cam.y]),
           uTime: time,
+          uFlash: this.flash,
         },
         textures: { uSpriteAtlas: this.spriteAtlas.color },
       });

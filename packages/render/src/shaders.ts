@@ -57,6 +57,7 @@ in vec3 vWorld;
 uniform vec3 uEye;
 uniform float uTime;
 uniform sampler2D uAtlas;
+uniform float uFlash;
 out vec4 outColor;
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -73,7 +74,7 @@ void main() {
   // Doom-style diminishing light: sector light fades with distance, in bands.
   float dist = distance(vWorld, uEye);
   float fall = clamp(1.0 - dist / 1600.0, 0.0, 1.0);
-  float b = vLight * (0.3 + 0.9 * fall);
+  float b = vLight * (0.3 + 0.9 * fall) + uFlash * clamp(1.0 - dist / 1100.0, 0.0, 1.0);
   b = floor(clamp(b, 0.0, 1.0) * 16.0) / 16.0;
   outColor = vec4(base * (0.08 + 1.1 * b), 1.0);
 }`;
@@ -164,10 +165,16 @@ vec4 pattern(int id, vec2 uv) {
     float cross = step(min(c.x, c.y), 0.12) * step(max(c.x, c.y), 0.34);
     return vec4(mix(vec3(0.95), vec3(0.9, 0.08, 0.06), cross), 0.6);
   }
-  if (id == 19) { // ammo pickup: brass shells on olive
-    vec2 f = fract(uv);
-    float shell = step(abs(fract(f.x * 3.0) - 0.5), 0.2) * step(0.2, f.y) * step(f.y, 0.85);
-    return vec4(mix(vec3(0.3, 0.34, 0.16), mix(vec3(0.95, 0.75, 0.25), vec3(0.8, 0.3, 0.1), step(0.72, f.y)), shell), 0.4);
+  if (id == 20) { // lift: diamond-plate steel inside a yellow chevron border, a glowing seam
+    vec2 f = fract(uv * 0.5);
+    vec2 d = fract(uv * 6.0) - 0.5;
+    float studs = step(abs(d.x) + abs(d.y), 0.18);
+    vec3 steel = uMetal * (0.8 + 0.25 * fbm(uv, 4.0)) + studs * 0.12;
+    float border = 1.0 - edge(f, 0.12);
+    float chevron = step(0.5, fract((f.x + f.y) * 6.0));
+    vec3 c = mix(steel, mix(vec3(0.08), uHazard, chevron), border);
+    float seam = step(abs(f.y - 0.5), 0.012) * (1.0 - border);
+    return vec4(mix(c, uTechLight, seam), seam);
   }
   // Missing texture: loud checker, never silently wrong.
   float c = mod(floor(uv.x * 4.0) + floor(uv.y * 4.0), 2.0);
@@ -223,9 +230,11 @@ void main() {
 
 /** Doom-style diminishing light, as in LEVEL_FS: sector light fades with distance, in 16 bands. */
 const LIGHTING = /* glsl */ `
+uniform float uFlash;
 float lightBand(float light, vec3 world, vec3 eye) {
-  float fall = clamp(1.0 - distance(world, eye) / 1600.0, 0.0, 1.0);
-  float b = light * (0.3 + 0.9 * fall);
+  float d = distance(world, eye);
+  float fall = clamp(1.0 - d / 1600.0, 0.0, 1.0);
+  float b = light * (0.3 + 0.9 * fall) + uFlash * clamp(1.0 - d / 1100.0, 0.0, 1.0);
   return 0.08 + 1.1 * floor(clamp(b, 0.0, 1.0) * 16.0) / 16.0;
 }`;
 
@@ -287,6 +296,25 @@ void main() {
     outColor = vec4(mix(c, vec3(1.0), vFlash * 0.85), 1.0);
     return;
   }
+  if (vShape == 14 || vShape == 15) { // gib chunk (14) or blood drop (15)
+    vec2 q = p - 0.5;
+    float d = vShape == 14 ? length(q * vec2(1.0, 1.35)) - 0.42 + 0.08 * sin(atan(q.y, q.x) * 5.0) : length(q) - 0.45;
+    if (d > 0.0) discard;
+    vec3 c = vShape == 14 ? mix(vec3(0.42, 0.05, 0.04), vec3(0.75, 0.35, 0.3), step(0.12, p.y - 0.5 - q.x * 0.3)) : vec3(0.55, 0.02, 0.02);
+    outColor = vec4(c * lightBand(vLight, vWorld, uEye), 1.0);
+    return;
+  }
+  if (vShape >= 10 && vShape <= 13) { // key: ring, shaft and teeth, glowing in its colour
+    float ring = abs(length(p - vec2(0.5, 0.74)) - 0.16) - 0.055;
+    float shaft = box(p, vec2(0.5, 0.38), vec2(0.05, 0.26), 0.02);
+    float teeth = min(box(p, vec2(0.6, 0.18), vec2(0.07, 0.035), 0.01), box(p, vec2(0.58, 0.3), vec2(0.05, 0.035), 0.01));
+    float k = min(ring, min(shaft, teeth));
+    if (k > 0.0) discard;
+    int id = vShape - 10;
+    vec3 kc = id == 0 ? vec3(0.25, 0.45, 1.0) : id == 1 ? vec3(1.0, 0.22, 0.15) : id == 2 ? vec3(1.0, 0.85, 0.2) : vec3(0.25, 0.9, 0.3);
+    outColor = vec4(kc * (0.9 + 0.5 * p.y) * (1.0 - 0.4 * smoothstep(-0.03, 0.0, k)), 1.0);
+    return;
+  }
   if (vShape == 8) { // projectile: a hot, self-lit orb
     float r = length(p - 0.5) * 2.0;
     if (r > 1.0) discard;
@@ -336,8 +364,8 @@ export const SPRITE_FRAMES = 4;
 export const SPRITE_ROWS = 5;
 
 /**
- * Bakes enemy sprites once: each enemy is a small 3D signed-distance model (capsules, spheres,
- * rounded boxes) ray-marched orthographically from 8 directions in 4 frames (walk A, walk B,
+ * Bakes enemy sprites once: each enemy is a small 3D signed-distance model of a mutant (capsules,
+ * spheres, rounded boxes; skin, bone, raw flesh, glowing eyes) ray-marched orthographically from 8 directions in 4 frames (walk A, walk B,
  * attack, dead). Model space: y up, height 1 = the sprite's height, facing +z, +x on the model's
  * left, so a camera turning counter-clockwise around it moves towards +x. Output alpha:
  * 0 = empty, 0.5 = body, 1 = eye (glows in SPRITE_FS).
@@ -363,47 +391,85 @@ float smin(float a, float b, float k) {
   return mix(b, a, h) - k * h * (1.0 - h);
 }
 
-// x = distance, y = material (0 body, 1 eye, 2 accent).
+// x = distance, y = material (0 skin, 1 eye, 2 bone: teeth, claws, horns, 3 raw flesh).
+vec2 pick(vec2 a, vec2 b) { return a.x < b.x ? a : b; }
+
 vec2 model(vec3 p, int shape, int frame) {
   float swing = frame == 0 ? 0.08 : frame == 1 ? -0.08 : 0.0; // walk: legs and arms swing opposite
   bool attack = frame == 2;
-  float body;
+  float skin;
   float eyes = 1e9;
-  float accent = 1e9;
-  if (shape == 0) { // grunt: a soldier with a thrower arm
-    body = capsule(p, vec3(0.0, 0.5, 0.0), vec3(0.0, 0.76, 0.0), 0.12);
-    body = smin(body, sphere(p, vec3(0.0, 0.9, 0.01), 0.085), 0.03);
-    body = min(body, capsule(p, vec3(0.07, 0.46, 0.0), vec3(0.08, 0.03, swing), 0.045));
-    body = min(body, capsule(p, vec3(-0.07, 0.46, 0.0), vec3(-0.08, 0.03, -swing), 0.045));
-    body = min(body, capsule(p, vec3(0.16, 0.74, 0.0), attack ? vec3(0.16, 0.9, 0.14) : vec3(0.19, 0.5, -swing), 0.04));
-    body = min(body, capsule(p, vec3(-0.16, 0.74, 0.0), vec3(-0.19, 0.5, swing), 0.04));
-    eyes = min(sphere(p, vec3(0.035, 0.91, 0.075), 0.016), sphere(p, vec3(-0.035, 0.91, 0.075), 0.016));
-  } else if (shape == 1 || shape == 3) { // brute / mini boss: hunched, knuckles near the floor
-    body = rbox(p, vec3(0.0, 0.56, -0.02), vec3(0.2, 0.19, 0.13), 0.08);
-    body = smin(body, sphere(p, vec3(0.0, 0.8, 0.07), 0.085), 0.04);
-    body = min(body, capsule(p, vec3(0.08, 0.38, 0.0), vec3(0.1, 0.03, swing), 0.065));
-    body = min(body, capsule(p, vec3(-0.08, 0.38, 0.0), vec3(-0.1, 0.03, -swing), 0.065));
-    float reach = attack ? 0.22 : 0.0;
-    body = min(body, capsule(p, vec3(0.24, 0.68, 0.0), vec3(0.28, attack ? 0.62 : 0.14, reach - swing), 0.07));
-    body = min(body, capsule(p, vec3(-0.24, 0.68, 0.0), vec3(-0.28, attack ? 0.62 : 0.14, reach + swing), 0.07));
-    eyes = min(sphere(p, vec3(0.035, 0.81, 0.15), 0.017), sphere(p, vec3(-0.035, 0.81, 0.15), 0.017));
-    if (shape == 3) accent = min(sphere(p, vec3(0.24, 0.8, -0.02), 0.07), sphere(p, vec3(-0.24, 0.8, -0.02), 0.07)); // shoulder spikes
-  } else if (shape == 2) { // sniper: thin, one big eye, a long rifle
-    body = capsule(p, vec3(0.0, 0.48, 0.0), vec3(0.0, 0.8, 0.0), 0.075);
-    body = smin(body, sphere(p, vec3(0.0, 0.92, 0.0), 0.07), 0.02);
-    body = min(body, capsule(p, vec3(0.045, 0.46, 0.0), vec3(0.05, 0.02, swing), 0.03));
-    body = min(body, capsule(p, vec3(-0.045, 0.46, 0.0), vec3(-0.05, 0.02, -swing), 0.03));
-    accent = capsule(p, vec3(0.06, 0.72, -0.05), vec3(0.06, attack ? 0.8 : 0.66, 0.3), 0.022); // rifle
-    eyes = sphere(p, vec3(0.0, 0.93, 0.06), 0.03);
-  } else { // boss: a horned mass with three eyes
-    body = sphere(p, vec3(0.0, 0.46, 0.0), 0.36);
-    body = min(body, capsule(p, vec3(0.16, 0.2, 0.0), vec3(0.18, 0.02, swing), 0.09));
-    body = min(body, capsule(p, vec3(-0.16, 0.2, 0.0), vec3(-0.18, 0.02, -swing), 0.09));
-    accent = min(capsule(p, vec3(0.18, 0.72, 0.0), vec3(0.3, 0.98, attack ? 0.1 : -0.05), 0.04), capsule(p, vec3(-0.18, 0.72, 0.0), vec3(-0.3, 0.98, attack ? 0.1 : -0.05), 0.04));
-    eyes = min(min(sphere(p, vec3(0.1, 0.58, 0.31), 0.04), sphere(p, vec3(-0.1, 0.58, 0.31), 0.04)), sphere(p, vec3(0.0, 0.68, 0.3), 0.045));
+  float bone = 1e9;
+  float flesh = 1e9;
+  if (shape == 0) { // grunt: a hunched shambler with lopsided shoulders, claws and a gaping jaw
+    skin = capsule(p, vec3(0.0, 0.44, 0.0), vec3(0.0, 0.72, 0.08), 0.13);
+    skin = smin(skin, sphere(p, vec3(0.0, 0.52, 0.05), 0.12), 0.05);
+    skin = smin(skin, sphere(p, vec3(0.11, 0.75, -0.02), 0.095), 0.04);
+    skin = smin(skin, sphere(p, vec3(-0.12, 0.72, -0.01), 0.07), 0.04);
+    skin = smin(skin, sphere(p, vec3(0.0, 0.8, 0.15), 0.075), 0.03);
+    skin = smin(skin, rbox(p, vec3(0.0, 0.745, 0.18), vec3(0.058, 0.025, 0.05), 0.02), 0.02);
+    skin = max(skin, -sphere(p, vec3(0.0, 0.765, 0.235), 0.04)); // the open mouth
+    flesh = sphere(p, vec3(0.0, 0.765, 0.2), 0.03);
+    for (int i = -2; i <= 2; i++) bone = min(bone, sphere(p, vec3(float(i) * 0.018, 0.785, 0.215), 0.011));
+    // Arms to the knees, the right one thrown forward to attack, three claws each.
+    vec3 rh = attack ? vec3(0.16, 0.95, 0.24) : vec3(0.18, 0.32, 0.1 - swing);
+    vec3 re = attack ? vec3(0.2, 0.82, 0.14) : vec3(0.21, 0.55, 0.06 - swing * 0.5);
+    vec3 lh = vec3(-0.19, 0.3, 0.1 + swing);
+    vec3 le = vec3(-0.21, 0.54, 0.05 + swing * 0.5);
+    skin = min(skin, min(capsule(p, vec3(0.14, 0.73, 0.02), re, 0.045), capsule(p, re, rh, 0.04)));
+    skin = min(skin, min(capsule(p, vec3(-0.14, 0.71, 0.02), le, 0.045), capsule(p, le, lh, 0.04)));
+    for (int i = -1; i <= 1; i++) {
+      bone = min(bone, capsule(p, rh, rh + vec3(float(i) * 0.02, -0.06, 0.03), 0.009));
+      bone = min(bone, capsule(p, lh, lh + vec3(float(i) * 0.02, -0.06, 0.03), 0.009));
+    }
+    // Bent legs.
+    skin = min(skin, min(capsule(p, vec3(0.07, 0.44, 0.0), vec3(0.09, 0.24, 0.06 + swing), 0.05), capsule(p, vec3(0.09, 0.24, 0.06 + swing), vec3(0.09, 0.02, swing), 0.045)));
+    skin = min(skin, min(capsule(p, vec3(-0.07, 0.44, 0.0), vec3(-0.09, 0.24, 0.06 - swing), 0.05), capsule(p, vec3(-0.09, 0.24, 0.06 - swing), vec3(-0.09, 0.02, -swing), 0.045)));
+    // Ribs showing through.
+    for (int i = 0; i < 3; i++) flesh = min(flesh, capsule(p, vec3(-0.09, 0.56 + float(i) * 0.045, 0.14), vec3(0.09, 0.56 + float(i) * 0.045, 0.14), 0.008));
+    eyes = min(sphere(p, vec3(0.03, 0.825, 0.21), 0.013), sphere(p, vec3(-0.03, 0.825, 0.21), 0.013));
+  } else if (shape == 1 || shape == 3) { // brute / mini boss: a hulk with a spiked hump, tusks, huge fists
+    skin = rbox(p, vec3(0.0, 0.52, 0.0), vec3(0.23, 0.19, 0.15), 0.1);
+    skin = smin(skin, sphere(p, vec3(0.0, 0.7, -0.07), 0.17), 0.06); // back hump
+    skin = smin(skin, sphere(p, vec3(0.0, 0.7, 0.17), 0.075), 0.04); // head sunk into the chest
+    skin = max(skin, -sphere(p, vec3(0.0, 0.665, 0.25), 0.035));
+    flesh = sphere(p, vec3(0.0, 0.665, 0.22), 0.03);
+    bone = min(capsule(p, vec3(0.04, 0.655, 0.23), vec3(0.06, 0.71, 0.26), 0.012), capsule(p, vec3(-0.04, 0.655, 0.23), vec3(-0.06, 0.71, 0.26), 0.012)); // tusks
+    for (int i = 0; i < 4; i++) bone = min(bone, capsule(p, vec3(0.0, 0.62 + float(i) * 0.06, -0.2 + float(i) * 0.015), vec3(0.0, 0.66 + float(i) * 0.06, -0.3 + float(i) * 0.015), 0.018)); // back spikes
+    float reach = attack ? 0.24 : 0.0;
+    vec3 rf = vec3(0.3, attack ? 0.6 : 0.1, 0.06 + reach - swing);
+    vec3 lf = vec3(-0.3, attack ? 0.6 : 0.1, 0.06 + reach + swing);
+    skin = min(skin, min(capsule(p, vec3(0.25, 0.66, 0.0), rf, 0.075), capsule(p, vec3(-0.25, 0.66, 0.0), lf, 0.075)));
+    skin = min(skin, min(sphere(p, rf, 0.1), sphere(p, lf, 0.1)));
+    skin = min(skin, min(capsule(p, vec3(0.09, 0.36, 0.0), vec3(0.11, 0.03, swing), 0.07), capsule(p, vec3(-0.09, 0.36, 0.0), vec3(-0.11, 0.03, -swing), 0.07)));
+    flesh = min(flesh, sphere(p, vec3(0.12, 0.5, 0.15), 0.05)); // a raw wound
+    if (shape == 3) bone = min(bone, min(capsule(p, vec3(0.24, 0.76, 0.0), vec3(0.34, 0.9, -0.02), 0.03), capsule(p, vec3(-0.24, 0.76, 0.0), vec3(-0.34, 0.9, -0.02), 0.03)));
+    eyes = min(sphere(p, vec3(0.03, 0.72, 0.235), 0.014), sphere(p, vec3(-0.03, 0.72, 0.235), 0.014));
+  } else if (shape == 2) { // sniper: a gaunt stalker, long skull, one huge eye, a bone rifle
+    skin = capsule(p, vec3(0.0, 0.48, 0.0), vec3(0.0, 0.8, 0.04), 0.08);
+    skin = smin(skin, min(sphere(p, vec3(0.1, 0.8, 0.0), 0.06), sphere(p, vec3(-0.1, 0.8, 0.0), 0.06)), 0.04); // bony shoulders
+    skin = smin(skin, capsule(p, vec3(0.0, 0.87, 0.04), vec3(0.0, 0.97, -0.07), 0.062), 0.03); // long skull
+    for (int i = 0; i < 4; i++) flesh = min(flesh, capsule(p, vec3(-0.06, 0.55 + float(i) * 0.05, 0.075), vec3(0.06, 0.55 + float(i) * 0.05, 0.075), 0.007));
+    skin = min(skin, min(capsule(p, vec3(0.05, 0.47, 0.0), vec3(0.06, 0.24, -0.05 + swing), 0.035), capsule(p, vec3(0.06, 0.24, -0.05 + swing), vec3(0.05, 0.02, swing), 0.03)));
+    skin = min(skin, min(capsule(p, vec3(-0.05, 0.47, 0.0), vec3(-0.06, 0.24, -0.05 - swing), 0.035), capsule(p, vec3(-0.06, 0.24, -0.05 - swing), vec3(-0.05, 0.02, -swing), 0.03)));
+    bone = capsule(p, vec3(0.07, 0.72, -0.06), vec3(0.06, attack ? 0.82 : 0.7, 0.34), 0.026); // rifle
+    skin = min(skin, capsule(p, vec3(0.1, 0.78, 0.0), vec3(0.07, 0.72, 0.16), 0.03));
+    eyes = sphere(p, vec3(0.0, 0.915, 0.075), 0.034);
+  } else { // boss: a lumpy mass with a toothed maw, curved horns and four eyes
+    skin = sphere(p, vec3(0.0, 0.46, 0.0), 0.34);
+    skin = smin(skin, sphere(p, vec3(0.16, 0.66, -0.05), 0.16), 0.08);
+    skin = smin(skin, sphere(p, vec3(-0.18, 0.6, -0.02), 0.14), 0.08);
+    skin = max(skin, -rbox(p, vec3(0.0, 0.42, 0.33), vec3(0.16, 0.06, 0.08), 0.04)); // the maw
+    flesh = rbox(p, vec3(0.0, 0.42, 0.27), vec3(0.14, 0.05, 0.03), 0.03);
+    for (int i = -3; i <= 3; i++) {
+      bone = min(bone, capsule(p, vec3(float(i) * 0.04, 0.48, 0.3), vec3(float(i) * 0.04, 0.44, 0.31), 0.012));
+      bone = min(bone, capsule(p, vec3(float(i) * 0.04 + 0.02, 0.36, 0.3), vec3(float(i) * 0.04 + 0.02, 0.4, 0.31), 0.012));
+    }
+    bone = min(bone, min(capsule(p, vec3(0.16, 0.74, 0.02), vec3(0.3, 0.96, attack ? 0.14 : -0.04), 0.035), capsule(p, vec3(-0.16, 0.74, 0.02), vec3(-0.3, 0.96, attack ? 0.14 : -0.04), 0.035)));
+    skin = min(skin, min(capsule(p, vec3(0.16, 0.18, 0.0), vec3(0.18, 0.02, swing), 0.09), capsule(p, vec3(-0.16, 0.18, 0.0), vec3(-0.18, 0.02, -swing), 0.09)));
+    eyes = min(min(sphere(p, vec3(0.08, 0.6, 0.3), 0.035), sphere(p, vec3(-0.08, 0.6, 0.3), 0.035)), min(sphere(p, vec3(0.15, 0.68, 0.25), 0.025), sphere(p, vec3(-0.15, 0.66, 0.26), 0.028)));
   }
-  float d = min(body, min(eyes, accent));
-  return vec2(d, d == eyes ? 1.0 : d == accent ? 2.0 : 0.0);
+  return pick(pick(vec2(skin, 0.0), vec2(eyes, 1.0)), pick(vec2(bone, 2.0), vec2(flesh, 3.0)));
 }
 
 // Dead: the body lies on its back, head towards -z, face up; standing otherwise.
@@ -411,8 +477,19 @@ vec3 toModel(vec3 p, int frame) {
   return frame == 3 ? vec3(p.x, 0.5 - p.z, p.y - 0.12) : p;
 }
 
-vec3 bodyColor(int shape) {
-  return shape == 0 ? vec3(0.45, 0.38, 0.2) : shape == 1 ? vec3(0.52, 0.14, 0.11) : shape == 2 ? vec3(0.25, 0.32, 0.46) : shape == 3 ? vec3(0.58, 0.32, 0.09) : vec3(0.38, 0.2, 0.44);
+float hash3(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+float noise3(vec3 p) {
+  vec3 i = floor(p), f = fract(p);
+  vec3 u = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(mix(hash3(i), hash3(i + vec3(1, 0, 0)), u.x), mix(hash3(i + vec3(0, 1, 0)), hash3(i + vec3(1, 1, 0)), u.x), u.y),
+    mix(mix(hash3(i + vec3(0, 0, 1)), hash3(i + vec3(1, 0, 1)), u.x), mix(hash3(i + vec3(0, 1, 1)), hash3(i + vec3(1, 1, 1)), u.x), u.y),
+    u.z);
+}
+
+// Sickly skin per shape: green-grey, flayed red, bruise blue, rust, bruise purple.
+vec3 skinColor(int shape) {
+  return shape == 0 ? vec3(0.36, 0.4, 0.26) : shape == 1 ? vec3(0.5, 0.22, 0.17) : shape == 2 ? vec3(0.34, 0.38, 0.46) : shape == 3 ? vec3(0.55, 0.3, 0.12) : vec3(0.36, 0.2, 0.36);
 }
 
 void main() {
@@ -454,7 +531,8 @@ void main() {
     outColor = vec4(1.0, 1.0, 1.0, 1.0);
     return;
   }
-  vec3 col = hit.y == 2.0 ? vec3(0.62, 0.6, 0.55) : bodyColor(shape);
+  // Mottled skin, yellowed bone, wet raw flesh.
+  vec3 col = hit.y == 2.0 ? vec3(0.7, 0.66, 0.52) : hit.y == 3.0 ? vec3(0.45, 0.05, 0.05) : skinColor(shape) * (0.68 + 0.45 * noise3(sp * 22.0)) * (0.85 + 0.2 * noise3(sp * 6.0 + 3.0));
   if (frame == 3) col *= vec3(0.75, 0.45, 0.4); // dead: bloodied and darker
   outColor = vec4(col * diff, 0.5);
 }`;

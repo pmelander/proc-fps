@@ -1,12 +1,9 @@
 import {
-  AMMO_PICKUP,
   CellGrid,
   DoorKind,
-  ENEMY_DEFS,
-  PLAYER_DAMAGE,
-  START_AMMO,
   ThingType,
   doorKindOf,
+  droppedKey,
   isEnemyThing,
   keyOfThing,
   validateGridAlignment,
@@ -45,20 +42,11 @@ export function validateGenerated(map: MapData): string[] {
   return errors;
 }
 
-/** Enough ammo to kill every enemy, and some health wherever there are enemies. */
+/** Some health wherever there are enemies. (Ammo is infinite.) */
 function validateSupplies(map: MapData): string[] {
-  const errors: string[] = [];
-  let shots = 0;
-  let ammo = START_AMMO;
-  let health = 0;
-  for (const t of map.things) {
-    if (isEnemyThing(t.type)) shots += Math.ceil(ENEMY_DEFS[t.type].hp / PLAYER_DAMAGE);
-    if (t.type === ThingType.Ammo) ammo += AMMO_PICKUP;
-    if (t.type === ThingType.Health) health++;
-  }
-  if (ammo < shots) errors.push(`ammo for ${ammo} shots, enemies need ${shots}`);
-  if (shots > 0 && health === 0) errors.push('enemies but no health');
-  return errors;
+  const enemies = map.things.some((t) => isEnemyThing(t.type));
+  const health = map.things.some((t) => t.type === ThingType.Health);
+  return enemies && !health ? ['enemies but no health'] : [];
 }
 
 /** Every thing on its own walkable cell; enemies never next to the start, so no fight begins before the first step. */
@@ -91,8 +79,10 @@ function validateKeys(map: MapData, grid: CellGrid, sx: number, sy: number, ex: 
     if (sec && doorKindOf(sec) === DoorKind.Key) locks.set(sec.tag, [...(locks.get(sec.tag) ?? []), i]);
   });
   const keyCells = new Map<number, number>(); // key → cell
+  // Keys lying on the floor, and keys enemies carry (counted where the enemy starts: it cannot
+  // leave the part of the level reachable from there without keys).
   for (const t of map.things) {
-    const k = keyOfThing(t.type);
+    const k = keyOfThing(t.type) >= 0 ? keyOfThing(t.type) : isEnemyThing(t.type) ? droppedKey(t) : -1;
     if (k < 0) continue;
     const [cx, cy] = grid.cellOf(t.x, t.y);
     if (keyCells.has(k)) errors.push(`key ${k} placed twice`);
