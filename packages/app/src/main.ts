@@ -82,10 +82,15 @@ function main(): void {
   document.addEventListener('pointerlockchange', () => (start.hidden = input.locked));
 
   addEventListener('keydown', (e) => {
-    if (e.code === 'Tab') automap.hidden = !automap.hidden;
+    if (e.code === 'Tab') automap.hidden = false;
     if (e.code === 'F2') newLevel();
     if (e.code === 'F8') downloadJSON(`replay-${map.meta.seed ?? map.meta.name}-${state.tick}.json`, recorder.finish());
   });
+  // The automap shows only while Tab is held.
+  addEventListener('keyup', (e) => {
+    if (e.code === 'Tab') automap.hidden = true;
+  });
+  addEventListener('blur', () => (automap.hidden = true));
 
   const resize = () => {
     const dpr = Math.min(devicePixelRatio || 1, 2);
@@ -116,23 +121,20 @@ function main(): void {
 
     const t = acc / TICK_DT;
     const p = state.player;
-    renderer.render(
-      {
-        x: lerp(prev.x, p.x, t),
-        y: lerp(prev.y, p.y, t),
-        eyeZ: lerp(prev.z + bob(prev), p.z + bob(p), t) + PLAYER_EYE_HEIGHT,
-        yaw: lerpAngle(prev.angle, p.angle, t),
-        pitch: lerp(prev.pitch, p.pitch, t),
-      },
-      now,
-    );
+    const view = {
+      x: lerp(prev.x, p.x, t),
+      y: lerp(prev.y, p.y, t),
+      eyeZ: lerp(prev.z + bob(prev), p.z + bob(p), t) + PLAYER_EYE_HEIGHT,
+      yaw: lerpAngle(prev.angle, p.angle, t),
+      pitch: lerp(prev.pitch, p.pitch, t),
+    };
+    renderer.render(view, now);
 
     // Compass: where W will take you, relative to where you're looking.
-    const yaw = lerpAngle(prev.angle, p.angle, t);
-    compassArrow.style.transform = `rotate(${((yaw - (p.heading * Math.PI) / 2) * 180) / Math.PI}deg)`;
+    compassArrow.style.transform = `rotate(${((view.yaw - (p.heading * Math.PI) / 2) * 180) / Math.PI}deg)`;
     compassLetter.textContent = HEADING_LETTERS[p.heading];
 
-    if (!automap.hidden) drawAutomap(automap, map, p);
+    if (!automap.hidden) drawAutomap(automap, map, view);
     hud.textContent =
       `${map.meta.seed ? `seed ${map.meta.seed}  gen ${GENERATOR_VERSION}` : `map ${map.meta.name}`}\n` +
       `${fps.toFixed(0)} fps  tick ${state.tick}  sector ${p.sector}\n` +

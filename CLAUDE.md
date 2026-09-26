@@ -38,7 +38,7 @@ core MapBuilder ────┴─> MapData ─ validate ─┤
 - **gen**: `generate.ts` is currently a stub (`GENERATOR_VERSION = '0.2.0-stub'`). `validateGenerated` layers gameplay checks (grid alignment, reachability) on top of core's structural `validateMap`.
 - **sim**: fixed-step state machine. `InputFrame`s go in, `PlayerState` comes out. `ReplayRecorder` and `runReplay` store a map hash plus the input log, and `hashState` pins behaviour in tests.
 - **render**: `RenderBackend` interface with the WebGL2 implementation behind it. The mesh is grouped per sector (`LevelRenderer.sectorRanges`, reserved for portal culling). The scene renders at low resolution, then a 64-colour palette post pass applies Bayer dithering.
-- **app**: browser shell only. It holds the loop with tick interpolation, DOM input → `InputFrame`, the HUD compass, and the automap (Tab). F8 downloads the current replay.
+- **app**: browser shell only. It holds the loop with tick interpolation, DOM input → `InputFrame`, the HUD compass, and the automap (hold Tab; look direction up). F8 downloads the current replay.
 
 ## Invariants
 

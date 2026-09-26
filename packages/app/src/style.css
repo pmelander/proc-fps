@@ -14,10 +14,15 @@ canvas {
   height: 100%;
   display: block;
 }
+/* `display: block` above would otherwise override the hidden attribute. */
+canvas[hidden] {
+  display: none;
+}
 #view {
   image-rendering: pixelated;
 }
 #automap {
+  image-rendering: pixelated;
   pointer-events: none;
 }
 #hud {

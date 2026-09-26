@@ -81,7 +81,7 @@ npm run gen:stats -- --seeds 10000
 - The v0.2 stub generator: a chain of rooms plus stepped one-cell corridors, with pillar, platform, and pit features in interior cells.
 - The WebGL2 renderer, which uses per-sector light with distance falloff in 16 bands and renders at 240p before a 64-colour palette post pass with Bayer dithering.
 - Placeholder procedural patterns per texture id, with floor and ceiling tiles aligned to cells.
-- Grid movement, replays (F8 downloads one), the automap (Tab), and the HUD compass showing where W goes.
+- Grid movement, replays (F8 downloads one), the automap (hold Tab; rotates with the look direction, drawn at 240p in the palette), and the HUD compass showing where W goes.
 
 **Verified:**
 - The typecheck is clean.
@@ -131,3 +131,11 @@ npm run gen:stats -- --seeds 10000
 - **Run key:** a faster step, or remove it.
 - **Doors and lifts:** do they live on cell edges or in cells?
 - **Diagonal-facing move feel.** The compass helps; consider whether 8-way is ever wanted. The current answer is no.
+
+## Backlog
+
+Ideas noted during play-testing, not yet scheduled. Each line points at whatever already exists for it.
+
+- **Health.** Nothing tracks it yet. M3 (damage from enemies) and M5 (health placed along the critical path) both assume it. It belongs in sim state so replays cover it.
+- **Floor hazards.** Damage floors. `Sector.special` is already reserved for this, but nothing reads it. Depends on health. Validation must keep the critical path hazard-free, or at least survivable.
+- **Secrets.** `LineFlags.Secret` exists (hide a line on the automap) but is unused. The automap currently draws every line, so it must honour the flag once secrets exist. M2's mission graph already plans for secret areas; they also need a way to be found (a use-to-open wall, or a sector special that counts a discovery).
