@@ -72,10 +72,12 @@ canvas[hidden] {
   text-shadow: 1px 1px 0 #000;
   pointer-events: none;
 }
+/* The door prompt (E, or the missing key) sits just above the crosshair, where you are looking. */
 #prompt {
   position: fixed;
-  top: 12px;
-  right: 14px;
+  left: 50%;
+  bottom: calc(50% + 14px);
+  transform: translateX(-50%);
   pointer-events: none;
   filter: drop-shadow(2px 2px 0 #000);
 }

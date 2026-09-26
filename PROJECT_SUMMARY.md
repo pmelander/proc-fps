@@ -142,7 +142,7 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
   - HUD: health, crosshair, a placeholder gun with muzzle flash, a red hurt flash, and death / level-complete screens (E retries or moves on).
   - Generator: enemies by room kind (ordinary rooms by size, the mini boss with an escort, the boss alone; none in start, exit, loot, or secret rooms), never in front of a doorway; health in loot and secret rooms and some ordinary rooms. `?map=test03` is a combat arena.
 - Secrets (M2 slice 5): a secret door looks like the wall it sits in (same texture, no gap under it), ignores bumping, opens with E, and never shows a prompt. Opening it finds the secret (`secret` event, a notice, and a found/total count on the HUD). Secret areas (`SPECIAL_SECRET_AREA`, id in `tag`) stay off the automap until found. `test02` has one north of the key room.
-- Doors and keys (M2 slice 4): door state and held keys in `SimState`, auto doors that open when walked into, key doors opened with E/Space while holding the key, key pickups, and events (`door`, `locked`, `key`) for the HUD and later sound. The renderer moves door slabs and hides taken keys with per-frame mover offsets on a static mesh. The HUD shows an E or the missing key in the upper right when facing a closed key door. `?map=test02` has both door types.
+- Doors and keys (M2 slice 4): door state and held keys in `SimState`, auto doors that open when walked into, key doors opened with E/Space while holding the key, key pickups, and events (`door`, `locked`, `key`) for the HUD and later sound. The renderer moves door slabs and hides taken keys with per-frame mover offsets on a static mesh. The HUD shows an E or the missing key just above the crosshair when facing a closed key door. `?map=test02` has both door types.
 
 **Unused but reserved:** `InputFrame.run` (a candidate for a faster step), plus `fire`.
 
@@ -188,7 +188,7 @@ Doors live **in cells**: a door is a one-cell sector whose ceiling drops to its 
 
 A third type, a use door that opened with E but needed no key, was tried in slice 4 and dropped: it added a chore without a decision.
 
-The mission graph therefore places keys to guard optional loot and the boss, rather than scattering locks along the critical path. Doors stay open once opened. When the player faces a closed key door, the HUD shows an E in the upper right if they hold the key, and the missing key otherwise. Lifts join storeys: step on and one carries you up or down once, then waits until you step off and back on.
+The mission graph therefore places keys to guard optional loot and the boss, rather than scattering locks along the critical path. Doors stay open once opened. When the player faces a closed key door, the HUD shows an E just above the crosshair if they hold the key, and the missing key otherwise. Lifts join storeys: step on and one carries you up or down once, then waits until you step off and back on.
 
 In the map format a door is a one-cell sector with its kind in `Sector.special` (`DoorKind.Auto` or `DoorKind.Key`) and a key door's key id in `tag`; keys are things `KEY_THING_BASE + id`. Doors are stored open and start closed in the sim, so a map's geometry is always the open level.
 
