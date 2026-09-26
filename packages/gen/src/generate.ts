@@ -1,4 +1,19 @@
-import { BaseTex as T, CELL_SIZE, CellPlan, DoorKind, HEADING_DX, HEADING_DY, MapBuilder, Rng, ThingType, emitCellPlan, keyThing, type MapData, type TextureId } from '@proc-fps/core';
+import {
+  BaseTex as T,
+  CELL_SIZE,
+  CellPlan,
+  DoorKind,
+  HEADING_DX,
+  HEADING_DY,
+  MapBuilder,
+  Rng,
+  SPECIAL_SECRET_AREA,
+  ThingType,
+  emitCellPlan,
+  keyThing,
+  type MapData,
+  type TextureId,
+} from '@proc-fps/core';
 import { embedMission, type CellRect, type Layout, type LayoutFailure } from './layout.js';
 import { generateMission, type DoorKind as MissionDoor, type Mission, type RoomKind } from './mission.js';
 import { designRoom, type RoomDesign } from './rooms.js';
@@ -7,7 +22,7 @@ import { designRoom, type RoomDesign } from './rooms.js';
  * Bump on ANY change that alters output for an existing seed.
  * seed + GENERATOR_VERSION must always reproduce the same map.
  */
-export const GENERATOR_VERSION = '0.5.0';
+export const GENERATOR_VERSION = '0.6.0';
 
 /** Layout attempts per mission, and missions tried, before giving up on a seed. */
 const LAYOUT_TRIES = 8;
@@ -32,7 +47,7 @@ export interface Generated {
 
 /**
  * M2 pipeline: mission graph → grid embedding → room templates → cell plan → sectors,
- * with doors in corridor cells and keys in their rooms.
+ * with doors in corridor cells, keys in their rooms, and secret areas marked.
  */
 export function generate(seed: string): MapData {
   return generateDetailed(seed).map;
@@ -57,7 +72,7 @@ export function generateDetailed(seed: string): Generated {
   throw new Error(`seed ${seed}: no layout after ${attempts} attempts`);
 }
 
-const DOOR_KIND: Record<MissionDoor, DoorKind> = { open: DoorKind.None, auto: DoorKind.Auto, key: DoorKind.Key };
+const DOOR_KIND: Record<MissionDoor, DoorKind> = { open: DoorKind.None, auto: DoorKind.Auto, key: DoorKind.Key, secret: DoorKind.Secret };
 /** Rooms a door belongs next to: it guards them. */
 const GUARDED: readonly RoomKind[] = ['miniboss', 'boss', 'loot'];
 
@@ -83,6 +98,10 @@ function emit(seed: string, mission: Mission, layout: Layout, rng: Rng): { map: 
 
   const wallSet: TextureId[] = [T.Stone, T.Metal, T.Tech];
   const things: [number, number, number, number][] = [];
+  // Secret ids in node order; every sector of a secret carries its id (see SPECIAL_SECRET_AREA).
+  const secretId = new Map(mission.nodes.filter((n) => n.kind === 'secret').map((n, i) => [n.id, i]));
+  const secretArea = (id: number | undefined) => (id === undefined ? {} : { special: SPECIAL_SECRET_AREA, tag: id });
+
   const designs = mission.nodes.map((node, id) => {
     const r = layout.rooms[id]!;
     const w = r.x1 - r.x0;
@@ -101,6 +120,7 @@ function emit(seed: string, mission: Mission, layout: Layout, rng: Rng): { map: 
         floorTex: reg.floorTex ?? floorTex,
         ceilTex: T.Ceiling,
         wallTex: reg.wallTex ?? wallTex,
+        ...secretArea(secretId.get(id)),
       }),
     );
     for (let y = 0; y < h; y++) {
@@ -136,18 +156,23 @@ function emit(seed: string, mission: Mission, layout: Layout, rng: Rng): { map: 
   });
 
   for (const c of layout.corridors) {
+    const edge = mission.edges[c.edge]!;
+    const secret = secretId.get(edge.a) ?? secretId.get(edge.b);
     const spec = (floorTex: TextureId) =>
-      plan.spec({ floor: STOREY_FLOOR, ceil: STOREY_FLOOR + CORRIDOR_HEIGHT, light: 144, floorTex, ceilTex: T.Ceiling, wallTex: T.Metal });
+      plan.spec({ floor: STOREY_FLOOR, ceil: STOREY_FLOOR + CORRIDOR_HEIGHT, light: 144, floorTex, ceilTex: T.Ceiling, wallTex: T.Metal, ...secretArea(secret) });
     // Hazard stripes mark only a corridor's two ends, so at most 2 striped tiles ever touch.
     const ends = spec(T.Trim);
     const middle = spec(T.Tech);
     c.cells.forEach(([x, y], k) => plan.set(x, y, k === 0 || k === c.cells.length - 1 ? ends : middle));
 
-    // The door goes in the corridor cell next to the room it guards (the b end otherwise).
-    const edge = mission.edges[c.edge]!;
+    // The door goes in the corridor cell next to the room it guards (the b end otherwise). A
+    // secret door goes at the other end, flush with the room it hides from.
     const kind = DOOR_KIND[edge.door];
     if (kind === DoorKind.None) continue;
-    const atA = GUARDED.includes(mission.nodes[edge.a]!.kind) && !GUARDED.includes(mission.nodes[edge.b]!.kind);
+    const atA =
+      kind === DoorKind.Secret
+        ? secretId.has(edge.b)
+        : GUARDED.includes(mission.nodes[edge.a]!.kind) && !GUARDED.includes(mission.nodes[edge.b]!.kind);
     const [dx, dy] = c.cells[atA ? 0 : c.cells.length - 1]!;
     plan.set(dx, dy, plan.spec({
       floor: STOREY_FLOOR,
@@ -156,8 +181,8 @@ function emit(seed: string, mission: Mission, layout: Layout, rng: Rng): { map: 
       floorTex: T.Trim,
       ceilTex: T.Ceiling,
       wallTex: T.Metal,
-      special: kind,
-      tag: edge.key ?? 0,
+      special: kind | (secret === undefined ? 0 : SPECIAL_SECRET_AREA),
+      tag: secret ?? edge.key ?? 0,
     }));
   }
 

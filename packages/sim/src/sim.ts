@@ -16,11 +16,16 @@ export function stepSim(world: World, state: SimState, input: InputFrame): void 
     state.events.push({ type: 'door', door });
   };
 
-  // Use (E/Space): opens the door ahead in the movement heading (where W would go); a key door needs its key.
+  // Use (E/Space): opens the door ahead in the movement heading (where W would go); a key door
+  // needs its key. Opening a secret door finds the secret.
   if (q.use && !p.prevUse) {
     const door = doorAtCell(world, p.cx + HEADING_DX[p.heading], p.cy + HEADING_DY[p.heading]);
     if (door >= 0) {
       const info = world.doors[door]!;
+      if (info.kind === DoorKind.Secret && state.doors[door] === 0) {
+        state.secrets |= 1 << info.key;
+        state.events.push({ type: 'secret', secret: info.key });
+      }
       if (info.kind !== DoorKind.Key || state.keys & (1 << info.key)) open(door);
       else if (state.doors[door] === 0) state.events.push({ type: 'locked', door, key: info.key });
     }
@@ -42,7 +47,7 @@ export function stepSim(world: World, state: SimState, input: InputFrame): void 
       if (fresh && info.kind === DoorKind.Key && !(state.keys & (1 << info.key)) && state.doors[door] === 0) {
         state.events.push({ type: 'locked', door, key: info.key });
       }
-      return state.doors[door]! > 0; // a key door already opening: wait for it too
+      return state.doors[door]! > 0; // a key or secret door already opening: wait for it too; closed, it is a wall
     },
   };
   stepPlayer(world, p, q, gate);

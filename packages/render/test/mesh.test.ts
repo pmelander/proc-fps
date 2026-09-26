@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { MapData } from '@proc-fps/core';
+import { BaseTex, DoorKind, doorKindOf, doorSectors, type MapData } from '@proc-fps/core';
 import { generate } from '@proc-fps/gen';
 import test01 from '@proc-fps/core/maps/test01.json';
+import test02 from '@proc-fps/core/maps/test02.json';
 import { LEVEL_FLOATS_PER_VERTEX, buildLevelMesh } from '../src/mesh.js';
 
 function checkMesh(m: MapData) {
@@ -29,5 +30,25 @@ describe('buildLevelMesh', () => {
   });
   it('builds generated maps', () => {
     for (let i = 0; i < 50; i++) checkMesh(generate(`mesh${i}`));
+  });
+});
+
+describe('door panels', () => {
+  const map = test02 as MapData;
+  const mesh = buildLevelMesh(map);
+  /** Textures of vertices whose texture slides with door `id` (its panels). */
+  const panelTextures = (id: number) => {
+    const out = new Set<number>();
+    for (let v = 0; v < mesh.vertices.length; v += LEVEL_FLOATS_PER_VERTEX) {
+      if (mesh.vertices[v + 7] === id + 1 && mesh.vertices[v + 9] === 1) out.add(mesh.vertices[v + 6]!);
+    }
+    return [...out];
+  };
+  const doorOf = (kind: DoorKind) => doorSectors(map).findIndex((s) => doorKindOf(map.sectors[s]!) === kind);
+
+  it('gives a key door its key colour and a secret door the wall it hides in', () => {
+    expect(panelTextures(doorOf(DoorKind.Auto))).toEqual([BaseTex.Door]);
+    expect(panelTextures(doorOf(DoorKind.Key))).toEqual([BaseTex.DoorKey]);
+    expect(panelTextures(doorOf(DoorKind.Secret))).toEqual([BaseTex.Stone]);
   });
 });

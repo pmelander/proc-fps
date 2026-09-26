@@ -60,6 +60,13 @@ describe('validateMission', () => {
     expect(validateMission(m)).toContain('unreachable with keys in play: 4, 5');
   });
 
+  it('rejects a room that is only reachable through a secret', () => {
+    const m = base();
+    m.nodes.push({ id: 6, kind: 'secret' }, { id: 7, kind: 'room' });
+    m.edges.push({ a: 1, b: 6, door: 'secret' }, { a: 6, b: 7, door: 'open' });
+    expect(validateMission(m)).toEqual(expect.arrayContaining(['secret 6 must be a dead end behind a secret door', 'rooms only reachable through a secret: 7']));
+  });
+
   it('rejects a boss key reachable without the mini boss', () => {
     const m = base();
     m.edges.push({ a: 1, b: 3, door: 'open' });

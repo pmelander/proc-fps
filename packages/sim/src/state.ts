@@ -45,7 +45,8 @@ export type SimEvent =
   | { type: 'door'; door: number }
   /** Tried a key door without its key. */
   | { type: 'locked'; door: number; key: number }
-  | { type: 'key'; key: number };
+  | { type: 'key'; key: number }
+  | { type: 'secret'; secret: number };
 
 export interface SimState {
   tick: number;
@@ -59,6 +60,8 @@ export interface SimState {
   keys: number;
   /** Bitmask over `world.keys`: pickups already taken. */
   taken: number;
+  /** Bitmask of secret ids found. */
+  secrets: number;
   events: SimEvent[];
 }
 
@@ -99,6 +102,7 @@ export function createSimState(world: World): SimState {
     doors: world.doors.map(() => 0),
     keys: 0,
     taken: 0,
+    secrets: 0,
     events: [],
   };
 }

@@ -60,7 +60,8 @@ export interface Sector {
   tag: number;
   /**
    * Bitfield for sector specials. Bits 0–1: door kind (see DoorKind); a key door's key id
-   * is the sector's `tag`. Other bits reserved (damage floors, secrets, flicker…).
+   * is the sector's `tag`. Bit 2: secret area (SPECIAL_SECRET_AREA), with the secret's id in
+   * `tag`. Other bits reserved (damage floors, flicker…).
    */
   special: number;
 }
@@ -100,10 +101,24 @@ export const DoorKind = {
   Auto: 1,
   /** Opens with the use key (E/Space) while holding key `tag`. */
   Key: 2,
+  /** Looks like the wall around it; opens with the use key. Part of secret area `tag`. */
+  Secret: 3,
 } as const;
 export type DoorKind = (typeof DoorKind)[keyof typeof DoorKind];
 export const SPECIAL_DOOR_MASK = 3;
 export const doorKindOf = (s: Sector): DoorKind => (s.special & SPECIAL_DOOR_MASK) as DoorKind;
+
+/**
+ * Secret areas: every sector of a secret (its door, corridor and room) carries this bit with
+ * the secret's id in `tag`. The automap hides them until the secret is found.
+ */
+export const SPECIAL_SECRET_AREA = 1 << 2;
+/** Secret id of a sector, or -1. */
+export const secretOf = (s: Sector): number => (s.special & SPECIAL_SECRET_AREA ? s.tag : -1);
+/** Number of secrets in a map (ids are 0 … n - 1). */
+export function secretCount(map: MapData): number {
+  return map.sectors.reduce((n, s) => Math.max(n, secretOf(s) + 1), 0);
+}
 
 /** Door sectors in index order. A door's position in this list is its door id (sim state, renderer). */
 export function doorSectors(map: MapData): number[] {

@@ -1,12 +1,16 @@
-import { CellGrid, SectorLocator, doorKindOf, doorSectors, keyOfThing, type DoorKind, type MapData } from '@proc-fps/core';
+import { CellGrid, DoorKind, SectorLocator, doorKindOf, doorSectors, keyOfThing, secretCount, type MapData } from '@proc-fps/core';
 
-/** Gap left between a closed door's ceiling and its floor, so the two never z-fight. */
+/**
+ * Gap left between a closed door's ceiling and its floor, so the two never z-fight. Secret
+ * doors close fully: a slit under a wall would give them away, and their ceiling is only ever
+ * seen from the secret side.
+ */
 export const DOOR_CLOSED_GAP = 4;
 
 export interface DoorInfo {
   sector: number;
   kind: DoorKind;
-  /** Key id for a key door (the sector tag). */
+  /** Key id for a key door, secret id for a secret door (the sector tag). */
   key: number;
   /** Ceiling travel between open and closed, in map units. */
   travel: number;
@@ -30,13 +34,16 @@ export interface World {
   readonly doorAt: Int32Array;
   /** Key pickups in thing order. */
   readonly keys: readonly KeyInfo[];
+  /** Number of secrets (ids 0 … secrets - 1). */
+  readonly secrets: number;
 }
 
 export function createWorld(map: MapData): World {
   const grid = new CellGrid(map);
   const doors = doorSectors(map).map((sector) => {
     const s = map.sectors[sector]!;
-    return { sector, kind: doorKindOf(s), key: s.tag, travel: s.ceil - s.floor - DOOR_CLOSED_GAP };
+    const kind = doorKindOf(s);
+    return { sector, kind, key: s.tag, travel: s.ceil - s.floor - (kind === DoorKind.Secret ? 0 : DOOR_CLOSED_GAP) };
   });
   const doorOfSector = new Map(doors.map((d, i) => [d.sector, i]));
   const doorAt = new Int32Array(grid.width * grid.height).fill(-1);
@@ -47,7 +54,7 @@ export function createWorld(map: MapData): World {
     const [cx, cy] = grid.cellOf(t.x, t.y);
     return [{ key, cx, cy }];
   });
-  return { map, locator: new SectorLocator(map), grid, doors, doorAt, keys };
+  return { map, locator: new SectorLocator(map), grid, doors, doorAt, keys, secrets: secretCount(map) };
 }
 
 /** Door id at a cell, or -1. */

@@ -86,6 +86,12 @@ function doorPrompt(world: World, state: SimState): { kind: 'use' } | { kind: 'k
   return null;
 }
 
+function popcount(n: number): number {
+  let c = 0;
+  for (; n; n &= n - 1) c++;
+  return c;
+}
+
 const KEY_ICON = (color: string) =>
   `<svg viewBox="0 0 16 16" width="36" height="36" shape-rendering="crispEdges"><path fill="${color}" d="M3 5h5v2h6v2h-2v2h-2V9H8v2H3zM5 7v2h1V7z"/></svg>`;
 
@@ -153,6 +159,7 @@ function main(): void {
       for (const e of state.events) {
         if (e.type === 'key') [notice, noticeUntil] = [`Picked up the ${KEY_NAMES[e.key]} key`, now + NOTICE_SECONDS];
         if (e.type === 'locked') [notice, noticeUntil] = [`Needs the ${KEY_NAMES[e.key]} key`, now + NOTICE_SECONDS];
+        if (e.type === 'secret') [notice, noticeUntil] = ['You found a secret!', now + NOTICE_SECONDS];
       }
       acc -= TICK_DT;
     }
@@ -188,6 +195,7 @@ function main(): void {
       `${fps.toFixed(0)} fps  tick ${state.tick}  sector ${p.sector}\n` +
       `cell ${p.cx}, ${p.cy}  z ${p.z.toFixed(0)}` +
       (held.length ? `\nkeys: ${held.join(' ')}` : '') +
+      (world.secrets ? `\nsecrets ${popcount(state.secrets)}/${world.secrets}` : '') +
       (now < noticeUntil ? `\n${notice}` : '');
 
     requestAnimationFrame(frame);

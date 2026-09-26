@@ -10,6 +10,7 @@ import {
   CellPlan,
   DoorKind,
   MapBuilder,
+  SPECIAL_SECRET_AREA,
   ThingType,
   emitCellPlan,
   keyThing,
@@ -59,22 +60,25 @@ export function buildTest01(): MapData {
  *   Start room A (0–3, 0–2) → auto door (4, 1) → hall B (5–7, 0–2)
  *   B → auto door (8, 1) → side room C (9–11, 0–2), blue key at (10, 1)
  *   B → blue key door (6, 3) → exit room D (5–7, 4–6), exit at (6, 5)
+ *   C → secret door in C's north wall (10, 3) → secret room E (9–11, 4–5)
  */
 export function buildTest02(): MapData {
   const plan = new CellPlan();
-  const room = (x0: number, y0: number, x1: number, y1: number, light: number, floorTex: number) => {
-    const spec = plan.spec({ floor: 0, ceil: 192, light, floorTex, ceilTex: T.Ceiling, wallTex: T.Stone });
+  const room = (x0: number, y0: number, x1: number, y1: number, light: number, floorTex: number, special = 0) => {
+    const spec = plan.spec({ floor: 0, ceil: 192, light, floorTex, ceilTex: T.Ceiling, wallTex: T.Stone, special });
     for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) plan.set(x, y, spec);
   };
-  const door = (x: number, y: number, kind: DoorKind, tag = 0) =>
-    plan.set(x, y, plan.spec({ floor: 0, ceil: 128, light: 160, floorTex: T.Trim, ceilTex: T.Ceiling, wallTex: T.Metal, special: kind, tag }));
+  const door = (x: number, y: number, special: number, tag = 0) =>
+    plan.set(x, y, plan.spec({ floor: 0, ceil: 128, light: 160, floorTex: T.Trim, ceilTex: T.Ceiling, wallTex: T.Metal, special, tag }));
   room(0, 0, 4, 3, 176, T.FloorTile);
   room(5, 0, 8, 3, 144, T.Tech);
   room(9, 0, 12, 3, 208, T.FloorTile);
   room(5, 4, 8, 7, 224, T.Slime);
+  room(9, 4, 12, 6, 240, T.Tech, SPECIAL_SECRET_AREA);
   door(4, 1, DoorKind.Auto);
   door(8, 1, DoorKind.Auto);
   door(6, 3, DoorKind.Key, 0);
+  door(10, 3, DoorKind.Secret | SPECIAL_SECRET_AREA, 0);
   const b = new MapBuilder();
   emitCellPlan(b, plan, CELL_SIZE);
   const C = CELL_SIZE;

@@ -156,6 +156,18 @@ describe('doors and keys (test02)', () => {
   // Through it, then to (6,1) below the key door.
   const toHall = [...toAutoDoor, ...through, ...forward, ...forward];
 
+  it('keeps a secret door shut to bumping and finds the secret on use', () => {
+    const facingSecret = [...toHall, ...forward, ...through, ...forward, ...forward, ...turn(Math.PI / 2), ...forward]; // (10,2) facing north
+    const secretDoor = doorAtCell(world, 10, 3);
+    const bumped = run(m, [...facingSecret, ...hold({ move: 1 }, 40)]);
+    expect(cell(bumped)).toEqual([10, 2]);
+    expect(bumped.doors[secretDoor]).toBe(0);
+    const found = run(m, [...facingSecret, ...hold({ use: true }, 1)]);
+    expect(found.events).toContainEqual({ type: 'secret', secret: 0 });
+    expect(found.secrets).toBe(1);
+    expect(cell(run(m, [...facingSecret, ...tap({ use: true }, DOOR_OPEN_TICKS), ...forward, ...forward]))).toEqual([10, 4]);
+  });
+
   it('opens an auto door when walked into, then finishes the step', () => {
     const waiting = run(m, [...toAutoDoor, ...tap({ move: 1 }, 5)]);
     expect(cell(waiting)).toEqual([3, 1]);
@@ -183,6 +195,7 @@ describe('doors and keys (test02)', () => {
       ...tap({ use: true }, DOOR_OPEN_TICKS), ...forward, ...forward, // through the lock into the exit room
     ]);
     expect(withKey.keys).toBe(1);
+    expect(withKey.secrets).toBe(0);
     expect(withKey.taken).toBe(1);
     expect(cell(withKey)).toEqual([6, 4]);
   });

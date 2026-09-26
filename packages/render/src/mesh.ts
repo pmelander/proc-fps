@@ -64,9 +64,11 @@ export function buildLevelMesh(map: MapData): LevelMesh {
   const doors = doorSectors(map);
   if (doors.length > MAX_MOVERS) throw new Error(`${doors.length} doors exceed MAX_MOVERS`);
   const doorOf = new Map(doors.map((s, i) => [s, i]));
-  const doorTex = (s: number) => {
+  /** Panel texture seen from `from`: a secret door wears that side's own wall texture. */
+  const doorTex = (s: number, from: Side) => {
     const sec = map.sectors[s]!;
     const kind = doorKindOf(sec);
+    if (kind === DoorKind.Secret) return from.upper || from.middle || from.lower;
     return kind === DoorKind.Key ? BaseTex.DoorKey + sec.tag : BaseTex.Door;
   };
 
@@ -149,7 +151,7 @@ export function buildLevelMesh(map: MapData): LevelMesh {
       const D = map.sectors[doorSide.sector]!;
       const bottom = { mover: door, move: 1, slide: 1 };
       const top = { mover: door, move: 0, slide: 1 };
-      quad(other.sector, a.x, a.y, b.x, b.y, D.ceil, D.ceil, doorTex(doorSide.sector), bottom, top, true);
+      quad(other.sector, a.x, a.y, b.x, b.y, D.ceil, D.ceil, doorTex(doorSide.sector, other), bottom, top, true);
     }
     if (F.floor !== B.floor) {
       const side: Side = F.floor < B.floor ? ld.front : ld.back;

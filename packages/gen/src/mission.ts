@@ -10,12 +10,13 @@ import type { Rng } from '@proc-fps/core';
  * - the long arc passes the mini boss, and the boss key lies in a dead end behind it, so it
  *   cannot be had without that fight.
  * Loot rooms hang off the cycle behind key doors whose keys are placed where they can
- * be reached first. Dead ends and small detour loops add variety.
+ * be reached first. Dead ends and small detour loops add variety. Secret rooms hang off
+ * ordinary rooms behind secret doors; the level never needs them.
  */
-export type RoomKind = 'start' | 'room' | 'miniboss' | 'boss' | 'loot' | 'exit';
+export type RoomKind = 'start' | 'room' | 'miniboss' | 'boss' | 'loot' | 'exit' | 'secret';
 
 /** See "Doors (decided)" in PROJECT_SUMMARY.md. `open` is a doorway with no door. */
-export type DoorKind = 'open' | 'auto' | 'key';
+export type DoorKind = 'open' | 'auto' | 'key' | 'secret';
 
 export interface MissionNode {
   id: number;
@@ -82,7 +83,7 @@ export function generateMission(rng: Rng): Mission {
   const detours = rng.int(0, 2);
   for (let i = 0; i < detours; i++) {
     const candidates = edges.filter(
-      (e) => e.door !== 'key' && [e.a, e.b].every((n) => nodes[n]!.kind === 'room' || nodes[n]!.kind === 'start') && degree(e.a) < MAX_DEGREE && degree(e.b) < MAX_DEGREE,
+      (e) => (e.door === 'open' || e.door === 'auto') && [e.a, e.b].every((n) => nodes[n]!.kind === 'room' || nodes[n]!.kind === 'start') && degree(e.a) < MAX_DEGREE && degree(e.b) < MAX_DEGREE,
     );
     if (!candidates.length) break;
     const e = rng.pick(candidates);
@@ -113,6 +114,14 @@ export function generateMission(rng: Rng): Mission {
     const h = hosts();
     if (!h.length) break;
     connect(rng.pick(h), add('room'), plain());
+  }
+
+  // Secrets: dead ends behind a secret door, off an ordinary room.
+  const secrets = rng.int(0, 2);
+  for (let i = 0; i < secrets; i++) {
+    const h = hosts();
+    if (!h.length) break;
+    connect(rng.pick(h), add('secret'), 'secret');
   }
 
   return { nodes, edges };
@@ -159,6 +168,19 @@ export function validateMission(m: Mission): string[] {
   const reached = explore(m, start, (e, keys) => e.door !== 'key' || keys.has(e.key!));
   const missing = m.nodes.filter((x) => !reached.has(x.id)).map((x) => x.id);
   if (missing.length) errors.push(`unreachable with keys in play: ${missing.join(', ')}`);
+
+  // Secrets are optional: a dead end behind a secret door, holding no key, and never needed.
+  for (const s of m.nodes.filter((x) => x.kind === 'secret')) {
+    const links = m.edges.filter((e) => e.a === s.id || e.b === s.id);
+    if (links.length !== 1 || links[0]!.door !== 'secret') errors.push(`secret ${s.id} must be a dead end behind a secret door`);
+    if (s.key !== undefined) errors.push(`secret ${s.id} holds a key`);
+  }
+  for (const e of m.edges) {
+    if (e.door === 'secret' && m.nodes[e.a]!.kind !== 'secret' && m.nodes[e.b]!.kind !== 'secret') errors.push(`secret door ${e.a}–${e.b} leads to no secret`);
+  }
+  const withoutSecrets = explore(m, start, (e, keys) => e.door !== 'secret' && (e.door !== 'key' || keys.has(e.key!)));
+  const needed = m.nodes.filter((x) => x.kind !== 'secret' && !withoutSecrets.has(x.id)).map((x) => x.id);
+  if (needed.length) errors.push(`rooms only reachable through a secret: ${needed.join(', ')}`);
 
   const exitLinks = m.edges.filter((e) => e.a === exit || e.b === exit);
   if (exitLinks.length !== 1 || ![exitLinks[0]!.a, exitLinks[0]!.b].includes(boss)) errors.push('exit must connect only to the boss room');

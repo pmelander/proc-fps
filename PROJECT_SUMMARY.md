@@ -27,7 +27,7 @@ This file summarises the decisions made so far, the current state of the code, a
 | Package | Contents |
 |---|---|
 | `core` | `map.ts` (format v0, `hashMap`), `cells.ts` (`CellPlan`: cells → sectors with automatic T-junction splits), `rng.ts` (sfc32 + named forks), `dmath.ts` (deterministic trig), `math.ts` (render-side mat4), `geometry.ts` (sector loops, `SectorLocator`), `builder.ts` (`MapBuilder`, `rect`), `grid.ts` (`CellGrid`, `validateGridAlignment`), `validate.ts`, `constants.ts`, `textures.ts`. `maps/test01.json` is built by `scripts/build-test-maps.ts`. |
-| `gen` | `generate.ts` (v0.5.0: mission → layout → room templates → cell plan → sectors), `mission.ts` (mission graph), `layout.ts` (grid embedding), `rooms.ts` (room templates), `validate.ts` (structural + grid + reachability + traps), `scripts/stats.ts` (headless health check). |
+| `gen` | `generate.ts` (v0.6.0: mission → layout → room templates → cell plan → sectors), `mission.ts` (mission graph), `layout.ts` (grid embedding), `rooms.ts` (room templates), `validate.ts` (structural + grid + reachability + traps), `scripts/stats.ts` (headless health check). |
 | `sim` | `input.ts` (`InputFrame`, quantization), `world.ts`, `state.ts`, `player.ts` (grid movement), `sim.ts`, `replay.ts`. |
 | `render` | `backend.ts` (interface), `webgl2.ts`, `mesh.ts` (map → per-sector mesh), `palette.ts` (64 colours), `shaders.ts`, `renderer.ts` (`LevelRenderer`). |
 | `app` | `main.ts` (loop, interpolation, HUD, compass), `input.ts` (DOM → `InputFrame`), `automap.ts`. |
@@ -78,20 +78,21 @@ npm run gen:stats -- --seeds 10000
 **Working:**
 - Map format and validation, including trap detection: every cell reachable from the start must still be able to reach the exit.
 - The grid-aligned test map, which covers a platform, drop, stairs, and a void pillar.
-- The v0.5 generator: a mission graph (M2 slice 1) embedded on the grid (slice 2) as rooms sized by type, joined by corridors, with loops routed by pathfinding. Rooms use templates (slice 3): hall (pillar rows), platform (or an unclimbable plinth), pit, stairs to a dais, and arena (boss and mini boss); start, exit, and loot rooms stay plain. Floors are flat (one storey) and hazard stripes mark only corridor ends. Connections get doors (slice 4) as the mission says, auto or key, with keys placed on base floor in their rooms.
+- The v0.6 generator: a mission graph (M2 slice 1) embedded on the grid (slice 2) as rooms sized by type, joined by corridors, with loops routed by pathfinding. Rooms use templates (slice 3): hall (pillar rows), platform (or an unclimbable plinth), pit, stairs to a dais, and arena (boss and mini boss); start, exit, and loot rooms stay plain. Floors are flat (one storey) and hazard stripes mark only corridor ends. Connections get doors (slice 4) as the mission says, auto or key, with keys placed on base floor in their rooms. Up to 2 secret rooms per level (slice 5) hang off ordinary rooms behind secret doors.
 - The WebGL2 renderer, which uses per-sector light with distance falloff in 16 bands and renders at 240p before a 64-colour palette post pass with Bayer dithering.
 - Placeholder procedural patterns per texture id, with floor and ceiling tiles aligned to cells.
 - Grid movement, replays (F8 downloads one), the automap (hold Tab; rotates with the look direction, drawn at 240p in the palette), and the HUD compass showing where W goes.
 
 **Verified:**
 - The typecheck is clean.
-- 47 tests pass.
+- 50 tests pass.
 - 2000 seeds produce 0 validation failures (about 12 ms per map including validation).
 - The production build succeeds (about 45 kB JS).
 - Headless Chromium (SwiftShader) renders correctly.
 
 **Not yet verified:** real mouse and keyboard play. Pointer lock can't run headless.
 
+- Secrets (M2 slice 5): a secret door looks like the wall it sits in (same texture, no gap under it), ignores bumping, opens with E, and never shows a prompt. Opening it finds the secret (`secret` event, a notice, and a found/total count on the HUD). Secret areas (`SPECIAL_SECRET_AREA`, id in `tag`) stay off the automap until found. `test02` has one north of the key room.
 - Doors and keys (M2 slice 4): door state and held keys in `SimState`, auto doors that open when walked into, key doors opened with E/Space while holding the key, key pickups, and events (`door`, `locked`, `key`) for the HUD and later sound. The renderer moves door slabs and hides taken keys with per-frame mover offsets on a static mesh. The HUD shows an E or the missing key in the upper right when facing a closed key door. `?map=test02` has both door types.
 
 **Unused but reserved:** `InputFrame.run` (a candidate for a faster step), plus `fire`.
@@ -114,7 +115,8 @@ npm run gen:stats -- --seeds 10000
   - ✅ Slice 2: grid embedding of the graph, flat single-storey floor plans.
   - ✅ Slice 3: room templates (hand-authored archetypes with procedural parameters), emitted through `CellPlan`.
   - ✅ Slice 4: doors and keys in the map format, sim, renderer, HUD, and generator; validation walks the level collecting keys.
-  - Slice 5: secrets.
+  - ✅ Slice 5: secrets: optional dead-end rooms behind secret doors, hidden on the automap until found.
+  - Slice 6: tooling (seed browser, distribution tracking in `gen:stats`).
   - Tooling: a seed browser with map thumbnails, and distribution tracking in `gen:stats`.
 - **M3 — combat:**
   - Grid-bound enemies: one per cell, own step timers, BFS pathfinding.
@@ -136,6 +138,7 @@ Doors live **in cells**: a door is a one-cell sector whose ceiling drops to its 
 |---|---|---|---|
 | Auto | Walking into it (the step waits for it to open) | Most doors | Room-to-room connections, including both sides of the mini boss |
 | Key | Pressing use (E/Space) while holding the matching key | Rare | Loot rooms and the level boss |
+| Secret | Pressing use (E/Space) on what looks like a wall | 0–2 per level | Optional secret rooms |
 
 A third type, a use door that opened with E but needed no key, was tried in slice 4 and dropped: it added a chore without a decision.
 
@@ -155,7 +158,6 @@ Ideas noted during play-testing, not yet scheduled. Each line points at whatever
 
 - **Health.** Nothing tracks it yet. M3 (damage from enemies) and M5 (health placed along the critical path) both assume it. It belongs in sim state so replays cover it.
 - **Floor hazards.** Damage floors. `Sector.special` is already reserved for this, but nothing reads it. Depends on health. Validation must keep the critical path hazard-free, or at least survivable.
-- **Secrets.** `LineFlags.Secret` exists (hide a line on the automap) but is unused. The automap currently draws every line, so it must honour the flag once secrets exist. M2's mission graph already plans for secret areas; they also need a way to be found (a use-to-open wall, or a sector special that counts a discovery).
 - **Elevators and storeys.** Floor plans are flat per storey (done in M2 slice 2 for a single storey); elevators will join storeys. Lifts are the undecided half of the doors question. On the grid, a lift fits as a one-cell sector whose floor moves between two heights, the same moving-sector machinery as doors (M2 slice 4). Validation must treat a lift as a step in both directions only when it can be called from either end.
 - **Catwalks and double-height rooms.** A catwalk bridges a tall room on a second level, and the player can walk under it. The sector model allows one floor and one ceiling per point, but the renderer is true 3D with a depth buffer (unlike Doom's), so the limit is the map format and the grid, not rendering. Plan: *slabs* (3D-floor style) on cells with a top and an underside, which means a `MAP_FORMAT_VERSION` bump; `CellGrid` cells hold a stack of walkable levels; `canStep` moves level to level with the same step and headroom rules, with the level picked by the player's z; reachability and trap search run over (cell, level); the automap dims levels below. The generator then gives tall rooms catwalks joining upper doorways, so rooms can connect on two levels. Schedule after M2 slice 4 (doors), so the grid and movement rule change once. Fully stacked rooms with walls on both levels are a bigger, later step.
 - **Sound synthesis.** Already planned for M4: WebAudio effects in the style of jsfxr and a pattern-based music generator. No hand-made audio files, like the rest of the assets. Sounds are synthesised from a seed (per theme or per level) so they stay reproducible. Playback lives in `app` (WebAudio is a DOM API); the sim only emits events such as step, door, and hit, which keeps it deterministic and replayable.

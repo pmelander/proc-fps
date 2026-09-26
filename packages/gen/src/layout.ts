@@ -46,6 +46,7 @@ const ROOM_SIZE: Record<RoomKind, readonly [number, number]> = {
   miniboss: [5, 7],
   boss: [6, 8],
   loot: [2, 3],
+  secret: [2, 3],
   exit: [2, 3],
 };
 const TREE_CORRIDOR = [1, 4] as const;

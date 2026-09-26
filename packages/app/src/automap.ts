@@ -1,4 +1,4 @@
-import { DoorKind, ThingType, doorKindOf, keyOfThing, type MapData } from '@proc-fps/core';
+import { DoorKind, ThingType, doorKindOf, keyOfThing, secretOf, type MapData } from '@proc-fps/core';
 import { paletteRGBA } from '@proc-fps/render';
 import type { SimState, World } from '@proc-fps/sim';
 
@@ -82,11 +82,19 @@ export function drawAutomap(canvas: HTMLCanvasElement, map: MapData, view: Autom
     const kind = doorKindOf(sec);
     const id = world.doors.findIndex((d) => d.sector === s);
     if (kind === DoorKind.None || (id >= 0 && state.doors[id]! > 0)) return undefined; // open doors vanish
-    return kind === DoorKind.Key ? KEY[sec.tag] : DOOR;
+    return kind === DoorKind.Secret ? WALL : kind === DoorKind.Key ? KEY[sec.tag] : DOOR;
+  };
+  // Unfound secret areas stay off the map; where one meets the open level it reads as wall.
+  const hidden = (s: number) => {
+    const id = secretOf(map.sectors[s]!);
+    return id >= 0 && !(state.secrets & (1 << id));
   };
   for (const ld of map.linedefs) {
+    const hf = hidden(ld.front.sector);
+    const hb = ld.back ? hidden(ld.back.sector) : hf;
+    if (hf && hb) continue;
     let c: number;
-    if (!ld.back) c = WALL;
+    if (!ld.back || hf || hb) c = WALL;
     else {
       const F = map.sectors[ld.front.sector]!;
       const B = map.sectors[ld.back.sector]!;
