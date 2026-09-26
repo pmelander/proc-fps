@@ -56,7 +56,6 @@ M1 is in place: map format, grid-aligned test map, WebGL2 renderer with sector l
 Next:
 - Portal culling using `LevelRenderer.sectorRanges`.
 - Circle-vs-line collision for projectiles (player collision was replaced by the grid).
-- Trap detection in validation: every reachable cell must be able to reach the exit.
 - Enable back-face culling and emit double-sided quads where needed.
 - M2: replace the stub with mission graph → embedding → room grammar → sectorization.
 - A WebGPU backend behind `RenderBackend` when compute is needed.

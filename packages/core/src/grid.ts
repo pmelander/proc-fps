@@ -126,6 +126,15 @@ export class CellGrid {
 
   /** Breadth-first reachability from a cell using `canStep`. */
   reachableFrom(cx: number, cy: number): Uint8Array {
+    return this.search(cx, cy, false);
+  }
+
+  /** Cells that can reach (cx, cy): the same search over reversed `canStep` edges. */
+  reachingTo(cx: number, cy: number): Uint8Array {
+    return this.search(cx, cy, true);
+  }
+
+  private search(cx: number, cy: number, reverse: boolean): Uint8Array {
     const seen = new Uint8Array(this.width * this.height);
     if (!this.walkable(cx, cy)) return seen;
     const queue: number[] = [cx + cy * this.width];
@@ -135,8 +144,12 @@ export class CellGrid {
       const x = i % this.width;
       const y = (i - x) / this.width;
       for (let h = 0 as Heading; h < 4; h = (h + 1) as Heading) {
-        if (!this.canStep(x, y, h)) continue;
-        const j = x + HEADING_DX[h] + (y + HEADING_DY[h]) * this.width;
+        const nx = x + HEADING_DX[h];
+        const ny = y + HEADING_DY[h];
+        // Forward: can we step out to the neighbour? Reverse: can the neighbour step in to us?
+        const ok = reverse ? this.canStep(nx, ny, ((h + 2) % 4) as Heading) : this.canStep(x, y, h);
+        if (!ok) continue;
+        const j = nx + ny * this.width;
         if (!seen[j]) {
           seen[j] = 1;
           queue.push(j);

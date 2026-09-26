@@ -16,7 +16,14 @@ export function validateGenerated(map: MapData): string[] {
   if (!grid.walkable(sx, sy)) errors.push('player start cell is not walkable');
   if (!grid.walkable(ex, ey)) errors.push('exit cell is not walkable');
   if (errors.length) return errors;
-  if (!grid.reachableFrom(sx, sy)[ex + ey * grid.width]) errors.push('exit unreachable from start');
-  // TODO(M2): trap detection — every cell reachable from start must be able to reach the exit.
+  const reachable = grid.reachableFrom(sx, sy);
+  if (!reachable[ex + ey * grid.width]) return ['exit unreachable from start'];
+  // Traps: a cell the player can get into but never get out of towards the exit (e.g. a pit too deep to climb).
+  const toExit = grid.reachingTo(ex, ey);
+  const traps: string[] = [];
+  reachable.forEach((r, i) => {
+    if (r && !toExit[i]) traps.push(`(${i % grid.width}, ${Math.floor(i / grid.width)})`);
+  });
+  if (traps.length) errors.push(`${traps.length} trap cell(s) cannot reach the exit: ${traps.slice(0, 5).join(' ')}`);
   return errors;
 }

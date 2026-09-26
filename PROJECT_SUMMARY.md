@@ -76,7 +76,7 @@ npm run gen:stats -- --seeds 10000
 ## Current state
 
 **Working:**
-- Map format and validation.
+- Map format and validation, including trap detection: every cell reachable from the start must still be able to reach the exit.
 - The grid-aligned test map, which covers a platform, drop, stairs, and a void pillar.
 - The v0.2 stub generator: a chain of rooms plus stepped one-cell corridors, with pillar, platform, and pit features in interior cells.
 - The WebGL2 renderer, which uses per-sector light with distance falloff in 16 bands and renders at 240p before a 64-colour palette post pass with Bayer dithering.
@@ -85,7 +85,7 @@ npm run gen:stats -- --seeds 10000
 
 **Verified:**
 - The typecheck is clean.
-- 31 tests pass.
+- 33 tests pass.
 - 2000 seeds produce 0 validation failures (about 1.4 ms per map).
 - The production build succeeds (about 45 kB JS).
 - Headless Chromium (SwiftShader) renders correctly.
@@ -96,19 +96,18 @@ npm run gen:stats -- --seeds 10000
 
 ## Known gaps (roughly in priority order)
 
-1. **Trap detection in validation.** Every cell reachable from the start must be able to reach the exit. Today a pit you can't climb out of would pass.
-2. **Portal culling.** The mesh is already grouped per sector (`LevelRenderer.sectorRanges`), but everything is drawn in one call.
-3. **Back-face culling** is off. Walls are single quads owned by the visible side.
-4. **Sector lookup** (`SectorLocator`) is O(lines). That's fine now; use the grid or a BSP later.
-5. **Pinch points:** `chainLoops` doesn't support loops touching at a single vertex, so generators must avoid them.
-6. **Middle textures on two-sided lines** (grates, windows) need alpha. Not implemented.
-7. **Sub-cell decorative geometry** needs a Decorative line flag and renderer-only handling.
-8. **Uniforms** are set by name. The WebGPU backend will need a declared uniform-buffer layout.
+1. **Portal culling.** The mesh is already grouped per sector (`LevelRenderer.sectorRanges`), but everything is drawn in one call.
+2. **Back-face culling** is off. Walls are single quads owned by the visible side.
+3. **Sector lookup** (`SectorLocator`) is O(lines). That's fine now; use the grid or a BSP later.
+4. **Pinch points:** `chainLoops` doesn't support loops touching at a single vertex, so generators must avoid them.
+5. **Middle textures on two-sided lines** (grates, windows) need alpha. Not implemented.
+6. **Sub-cell decorative geometry** needs a Decorative line flag and renderer-only handling.
+7. **Uniforms** are set by name. The WebGPU backend will need a declared uniform-buffer layout.
 
 ## Roadmap
 
 - **M2 — real generator:**
-  - A mission graph with start, exit, 2–3 key/door locks, loops, and secrets, using cyclic generation in the style of Dormans.
+  - A mission graph with start, exit, doors, loops, and secrets, using cyclic generation in the style of Dormans. Door types are in Doors below.
   - Grid embedding of the graph.
   - A room grammar: hand-authored archetypes with procedural parameters.
   - Sectorization, followed by validation that covers keys before locks and no traps.
@@ -125,11 +124,22 @@ npm run gen:stats -- --seeds 10000
   - WebAudio sound effects in the style of jsfxr, plus a pattern-based music generator.
 - **M5:** progression, balance tuning (enemy budget by graph depth, ammo and health along the critical path), themes, and polish.
 
+## Doors (decided)
+
+Doors live **in cells**: a door is a one-cell sector whose ceiling drops to its floor, as in Doom. This keeps all geometry on the 128 grid, and the grid treats a door cell as walkable when it is open. There are three types:
+
+| Type | Opens by | Frequency | Used for |
+|---|---|---|---|
+| Standard | Bumping into it (a step into the door waits for it to open) | Most doors | Ordinary room-to-room connections |
+| Use | Pressing use (E/Space), no key needed | Less common | A deliberate breather, e.g. before a mini boss |
+| Locked | Pressing use while holding the matching key | Rare | Loot rooms and the level boss |
+
+The mission graph therefore places keys to guard optional loot and the boss, rather than scattering locks along the critical path. Lifts are still undecided.
+
 ## Open design questions
 
 - **Step feel.** The default is 230 ms. Around 150 ms is snappier, and changing it is one constant.
 - **Run key:** a faster step, or remove it.
-- **Doors and lifts:** do they live on cell edges or in cells?
 - **Diagonal-facing move feel.** The compass helps; consider whether 8-way is ever wanted. The current answer is no.
 
 ## Backlog
