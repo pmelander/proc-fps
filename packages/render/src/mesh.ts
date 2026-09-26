@@ -24,7 +24,7 @@ export const TEX_SCALE = 1 / 64;
  * Mover ids are door ids first, then pickups (keys and health) in thing order. A door's offset is
  * how far its ceiling sits below the open height; a taken pickup's offset sinks its marker out of view.
  */
-export const MAX_MOVERS = 64;
+export const MAX_MOVERS = 128;
 /** Offset that hides a taken pickup: far below the floor and past the far plane. */
 export const HIDDEN_OFFSET = 1e5;
 
@@ -164,18 +164,18 @@ export function buildLevelMesh(map: MapData): LevelMesh {
     // Middle textures on two-sided lines (grates, windows) need alpha: later.
   }
 
-  // Pickups: a small diamond (a key) or box (health) hovering over the floor, sunk out of view once taken.
+  // Pickups (keys, health, ammo): a small diamond hovering over the floor, sunk out of view once taken.
   const locator = new SectorLocator(map);
   let pickups = 0;
   for (const t of map.things) {
     const key = keyOfThing(t.type);
-    if (key < 0 && t.type !== ThingType.Health) continue;
+    if (key < 0 && t.type !== ThingType.Health && t.type !== ThingType.Ammo) continue;
     const s = locator.locate(t.x, t.y);
     const m = { mover: doors.length + pickups++, move: 1, slide: 0 };
     if (s < 0 || m.mover >= MAX_MOVERS) continue;
     const z = map.sectors[s]!.floor + KEY_MARKER_HEIGHT;
     const r = KEY_MARKER_SIZE;
-    const tex = key >= 0 ? BaseTex.Key + key : BaseTex.Health;
+    const tex = key >= 0 ? BaseTex.Key + key : t.type === ThingType.Health ? BaseTex.Health : BaseTex.Ammo;
     const at = (dx: number, dy: number, dz: number) =>
       pushVertex(s, t.x + dx, z + dz, t.y + dy, 0.5 + dx / (2 * r), 0.5 + dz / (2 * r), tex, m, 1);
     const top = at(0, 0, r * 1.4);

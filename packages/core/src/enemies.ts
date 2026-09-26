@@ -1,7 +1,9 @@
-import { EnemyType, STEP_TICKS } from '@proc-fps/core';
+import { STEP_TICKS } from './constants.js';
+import { EnemyType } from './map.js';
 
 /**
- * Enemy stats and behaviour. All in sim units: ticks (60/s), map units, hit points.
+ * Enemy stats and behaviour, shared by the sim (behaviour) and the generator (balance). All in
+ * sim units: ticks (60/s), map units, hit points.
  *
  * Tuning rules (see PROJECT_SUMMARY.md): enemies step slower than the player (STEP_TICKS = 14),
  * a projectile needs longer than one player step to cross a cell so a sidestep dodges it, and

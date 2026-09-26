@@ -82,6 +82,9 @@ export function drawThumbnail(canvas: HTMLCanvasElement, map: MapData, size: num
       ctx.beginPath();
       ctx.arc(x, y, t.type >= 40 ? r * 1.4 : r * 0.7, 0, Math.PI * 2);
       ctx.fill();
+    } else if (t.type === ThingType.Ammo) {
+      ctx.fillStyle = '#e0b040';
+      ctx.fillRect(x - r * 0.7, y - r * 0.5, r * 1.4, r);
     } else if (t.type === ThingType.Health) {
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(x - r * 0.9, y - r * 0.3, r * 1.8, r * 0.6);

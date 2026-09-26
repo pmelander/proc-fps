@@ -27,7 +27,7 @@ This file summarises the decisions made so far, the current state of the code, a
 | Package | Contents |
 |---|---|
 | `core` | `map.ts` (format v0, `hashMap`), `cells.ts` (`CellPlan`: cells → sectors with automatic T-junction splits), `rng.ts` (sfc32 + named forks), `dmath.ts` (deterministic trig), `math.ts` (render-side mat4), `geometry.ts` (sector loops, `SectorLocator`), `builder.ts` (`MapBuilder`, `rect`), `grid.ts` (`CellGrid`, `validateGridAlignment`), `validate.ts`, `constants.ts`, `textures.ts`. `maps/test01.json` is built by `scripts/build-test-maps.ts`. |
-| `gen` | `generate.ts` (v0.8.0: mission → layout → room templates → cell plan → sectors), `mission.ts` (mission graph), `layout.ts` (grid embedding), `rooms.ts` (room templates), `validate.ts` (structural + grid + reachability + traps), `scripts/stats.ts` (headless health check). |
+| `gen` | `generate.ts` (v0.9.0: mission → layout → room templates → cell plan → sectors), `mission.ts` (mission graph), `layout.ts` (grid embedding), `rooms.ts` (room templates), `population.ts` (enemies, health and ammo by level and depth), `validate.ts` (structural + grid + reachability + traps), `scripts/stats.ts` (headless health check). |
 | `sim` | `input.ts` (`InputFrame`, quantization), `world.ts`, `state.ts`, `player.ts` (grid movement), `sim.ts`, `replay.ts`. |
 | `render` | `backend.ts` (interface), `webgl2.ts`, `mesh.ts` (map → per-sector mesh), `palette.ts` (64 colours), `shaders.ts`, `renderer.ts` (`LevelRenderer`). |
 | `app` | `main.ts` (loop, interpolation, HUD, compass), `input.ts` (DOM → `InputFrame`), `automap.ts`. |
@@ -39,7 +39,7 @@ npm install
 npm run dev              # ?seed=anything  or  ?map=test01 / test02 (doors, keys, secret) / test03 (combat);  /browse.html = seed browser;  /sprites.html = enemy sprite sheet
 npm run ci               # typecheck + tests + gen:stats (2000 seeds) + build
 npm run maps:build       # regenerate test map JSON (CI fails if it drifted)
-npm run gen:stats -- --seeds 10000   # health check + distributions (rooms, doors, secrets, templates, attempts, gen time)
+npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions (rooms, doors, secrets, templates, attempts, gen time)
 ```
 
 ## Invariants (don't break these)
@@ -78,20 +78,26 @@ npm run gen:stats -- --seeds 10000   # health check + distributions (rooms, door
 **Working:**
 - Map format and validation, including trap detection: every cell reachable from the start must still be able to reach the exit.
 - The grid-aligned test map, which covers a platform, drop, stairs, and a void pillar.
-- The v0.8 generator (each level also gets a theme): a mission graph (M2 slice 1) embedded on the grid (slice 2) as rooms sized by type, joined by corridors, with loops routed by pathfinding. Rooms use templates (slice 3): hall (pillar rows), platform (or an unclimbable plinth), pit, stairs to a dais, and arena (boss and mini boss); start, exit, and loot rooms stay plain. Floors are flat (one storey) and hazard stripes mark only corridor ends. Connections get doors (slice 4) as the mission says, auto or key, with keys placed on base floor in their rooms. Up to 2 secret rooms per level (slice 5) hang off ordinary rooms behind secret doors.
+- The v0.9 generator (each level also gets a theme, and `generate(seed, { level })` scales its population): a mission graph (M2 slice 1) embedded on the grid (slice 2) as rooms sized by type, joined by corridors, with loops routed by pathfinding. Rooms use templates (slice 3): hall (pillar rows), platform (or an unclimbable plinth), pit, stairs to a dais, and arena (boss and mini boss); start, exit, and loot rooms stay plain. Floors are flat (one storey) and hazard stripes mark only corridor ends. Connections get doors (slice 4) as the mission says, auto or key, with keys placed on base floor in their rooms. Up to 2 secret rooms per level (slice 5) hang off ordinary rooms behind secret doors.
 - The WebGL2 renderer, which uses per-sector light with distance falloff in 16 bands and renders at 240p before a 64-colour palette post pass with Bayer dithering.
 - Placeholder procedural patterns per texture id, with floor and ceiling tiles aligned to cells.
 - Grid movement, replays (F8 downloads one), the automap (hold Tab; rotates with the look direction, drawn at 240p in the palette), and the HUD compass showing where W goes.
 
 **Verified:**
 - The typecheck is clean.
-- 68 tests pass.
+- 71 tests pass.
 - 2000 seeds produce 0 validation failures (about 12 ms per map including validation).
 - The production build succeeds (about 45 kB JS).
 - Headless Chromium (SwiftShader) renders correctly.
 
 **Not yet verified:** real mouse and keyboard play. Pointer lock can't run headless.
 
+- Progression and balance (M5):
+  - Runs: `?run=<id>&level=<n>` plays level n of a run (seed `<id>-<n>`). The level only changes the population, so the same seed at a higher level is the same layout, harder. Finishing a level shows kills, secrets and time, and E moves to the next; dying retries the level. Every level starts fresh (100 health, 40 ammo), so replays need nothing but the map and the input log.
+  - Balance (`gen/src/population.ts`): an enemy budget per ordinary room from its size, the level (`levelDifficulty`: +20% per level) and its depth along the mission graph (rooms near the exit get more, and more brutes); snipers only deep in a level or from level 2; bigger escorts for the mini boss (and, from level 3, the boss). Health: always one in the gate room before the boss, 1–2 in loot and secret rooms, sometimes elsewhere (more often deeper). Ammo: enough boxes to kill every enemy with a 1.5× margin, placed from the start outwards, plus one per loot and secret room.
+  - Ammo: 40 to start, 200 max, 20 per box; each shot spends a round and an empty weapon clicks. Validation checks the level's ammo covers every enemy and that there is health wherever there are enemies.
+  - The world pauses whenever the game does not have the mouse (the start screen and Esc), so nothing attacks before the player starts and every simulated tick is in the replay. `&autoplay` (dev) runs it without the lock.
+  - Tools: `gen:stats -- --level n`; the seed browser has a level field.
 - Procedural content (M4):
   - Textures: every texture id is baked once per level into an atlas (`ATLAS_FS`, one full-screen pass, tileable noise) in the colours of the level's theme (`base`, `tech`, `hell`, `crypt`; `render/src/themes.ts`) with seeded variation. `LEVEL_FS` samples it texel-exact; atlas alpha marks glowing texels (tech strips, pickups), which pulse; slime or lava flows by scrolling.
   - Enemy sprites: small 3D signed-distance models ray-marched once into a sprite atlas (`SPRITE_BAKE_FS`): 5 shapes × 8 directions × 4 frames (walk, walk, attack, dead). The app picks the direction from the enemy's facing (at the player once alert, along its step while walking) and the frame from its state. Eyes are marked in the atlas and glow through the wind-up. `/sprites.html` shows the whole sheet.
@@ -131,7 +137,7 @@ npm run gen:stats -- --seeds 10000   # health check + distributions (rooms, door
   - ✅ Slice 6: tooling: `/browse.html` shows thumbnails and stats for pages of seeds (click to play); `gen:stats` reports distributions through `levelStats`.
 - **M3 — combat:** ✅ complete (generator v0.7.0). Grid-bound enemies with their own step timers and distance-field pathing, wake-up by sight, noise and damage, the idle/alert/chase/windup/pain/dead state machine, free-aim hitscan, dodgeable projectiles (grid collision, since all walls are on the grid), rare telegraphed hitscan snipers, player health, death and the exit. Balance (enemy budget by graph depth, health along the critical path) stays in M5; some levels currently have no health at all.
 - **M4 — procedural content:** ✅ complete (generator v0.8.0). Theme-coloured textures baked to an atlas on the GPU; SDF-modelled 8-direction, 4-frame enemy sprites baked to a sprite atlas; a seeded jsfxr-style sound set with positional playback; a seeded two-layer music generator that follows combat. Still open: per-theme quantization palettes (all themes share the 64-colour palette), and baked sprites for projectiles and pickups.
-- **M5:** progression, balance tuning (enemy budget by graph depth, ammo and health along the critical path), themes, and polish.
+- **M5 — progression and balance:** ✅ complete (generator v0.9.0). Runs of levels with rising difficulty, enemy budgets by level and graph depth, health and ammo along the way, ammo, level stats, and pause. Beyond the roadmap: the Backlog below.
 
 ## Doors (decided)
 

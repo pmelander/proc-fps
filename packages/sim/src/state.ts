@@ -1,14 +1,10 @@
-import { DEG_TO_RAD, ThingType, isEnemyThing, type EnemyType, type Heading } from '@proc-fps/core';
-import { ENEMY_DEFS } from './enemies.js';
+import { DEG_TO_RAD, ENEMY_DEFS, PLAYER_MAX_HEALTH, START_AMMO, ThingType, isEnemyThing, type EnemyType, type Heading } from '@proc-fps/core';
 import type { World } from './world.js';
 
 /** No buffered step. */
 export const NO_QUEUE = -1;
 /** Ticks for a door to open fully (≈ 0.33 s). */
 export const DOOR_OPEN_TICKS = 20;
-export const PLAYER_MAX_HEALTH = 100;
-/** What a health pickup restores (never above the maximum). */
-export const HEALTH_PICKUP = 25;
 
 export interface PlayerState {
   // --- grid movement (authoritative) ---
@@ -45,6 +41,7 @@ export interface PlayerState {
 
   // --- combat ---
   health: number;
+  ammo: number;
   /** Ticks until the weapon can fire again. */
   fireCooldown: number;
 }
@@ -90,6 +87,9 @@ export type SimEvent =
   | { type: 'locked'; door: number; key: number }
   | { type: 'key'; key: number }
   | { type: 'health'; amount: number }
+  | { type: 'ammo'; amount: number }
+  /** Pulled the trigger with no ammo. */
+  | { type: 'empty' }
   | { type: 'secret'; secret: number }
   | { type: 'shot' }
   | { type: 'hurt'; amount: number }
@@ -168,6 +168,7 @@ export function createSimState(world: World): SimState {
       angle,
       pitch: 0,
       health: PLAYER_MAX_HEALTH,
+      ammo: START_AMMO,
       fireCooldown: 0,
     },
     doors: world.doors.map(() => 0),

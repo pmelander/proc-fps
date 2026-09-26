@@ -193,7 +193,7 @@ export class LevelRenderer {
           uViewProj: mat4Mul(proj, view),
           uEye: new Float32Array([cam.x, cam.eyeZ, -cam.y]),
           uTime: time,
-          uMover: { floats: this.movers },
+          uMover: { vec4s: this.movers },
         },
         textures: { uAtlas: this.atlas.color },
       });

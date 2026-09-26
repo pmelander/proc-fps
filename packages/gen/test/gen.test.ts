@@ -60,3 +60,35 @@ describe('key progression', () => {
     expect(validateGenerated(lockedPair(5))).toEqual(['4 cell(s) unreachable even after collecting every reachable key']);
   });
 });
+
+describe('balance', () => {
+  it('keeps the layout for a seed and adds enemies at higher levels', async () => {
+    const { generateDetailed, levelStats } = await import('../src/index.js');
+    let easier = 0;
+    let harder = 0;
+    for (let i = 0; i < 40; i++) {
+      const a = generateDetailed(`b${i}`, { level: 1 });
+      const b = generateDetailed(`b${i}`, { level: 6 });
+      expect(b.layout).toEqual(a.layout);
+      easier += levelStats(a).enemies;
+      harder += levelStats(b).enemies;
+      expect(validateGenerated(b.map)).toEqual([]);
+    }
+    expect(harder).toBeGreaterThan(easier * 1.3);
+  });
+
+  it('rejects a level without enough ammo for its enemies', async () => {
+    const { AMMO_PICKUP } = await import('@proc-fps/core');
+    const plan = new CellPlan();
+    const room = plan.spec({ floor: 0, ceil: 192 });
+    for (let x = 0; x < 8; x++) plan.set(x, 0, room);
+    const b = new MapBuilder();
+    emitCellPlan(b, plan, C);
+    b.thing(ThingType.PlayerStart, C / 2, C / 2);
+    b.thing(ThingType.Exit, 7.5 * C, C / 2);
+    b.thing(ThingType.Health, 1.5 * C, C / 2);
+    b.thing(41, 5.5 * C, C / 2); // the boss: far more hit points than 40 rounds cover
+    expect(validateGenerated(b.build({ name: 'dry' }))).toEqual([expect.stringMatching(/^ammo for 40 shots, enemies need \d+$/)]);
+    expect(AMMO_PICKUP).toBeGreaterThan(0);
+  });
+});

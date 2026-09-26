@@ -1,7 +1,7 @@
 /**
  * Headless generator health check and distribution report. Runs in CI; any invalid map
  * fails the build. The distributions make shifts in level shape visible between versions.
- *   npm run gen:stats -- --seeds 10000
+ *   npm run gen:stats -- --seeds 10000 [--level 3]
  */
 import { GENERATOR_VERSION, generateDetailed, levelStats, validateGenerated, type LayoutFailure, type LevelStats, type RoomTemplate } from '../src/index.js';
 
@@ -10,6 +10,7 @@ const arg = (name: string, def: number) => {
   return i >= 0 ? Number(process.argv[i + 1]) : def;
 };
 const seeds = arg('seeds', 1000);
+const level = arg('level', 1);
 
 const failures: { seed: string; errors: string[] }[] = [];
 const stats: LevelStats[] = [];
@@ -23,7 +24,7 @@ for (let i = 0; i < seeds; i++) {
   const t = performance.now();
   let g;
   try {
-    g = generateDetailed(seed);
+    g = generateDetailed(seed, { level });
   } catch (e) {
     failures.push({ seed, errors: [`threw: ${(e as Error).message}`] });
     continue;
@@ -51,7 +52,7 @@ const histogram = (xs: number[]) => {
 };
 const col = (label: string, text: string) => console.log(`${label.padEnd(12)}${text}`);
 
-console.log(`generator ${GENERATOR_VERSION}: ${seeds} seeds in ${ms.toFixed(0)} ms (${(ms / seeds).toFixed(2)} ms/map incl. validation)`);
+console.log(`generator ${GENERATOR_VERSION}, level ${level}: ${seeds} seeds in ${ms.toFixed(0)} ms (${(ms / seeds).toFixed(2)} ms/map incl. validation)`);
 col('gen ms', summary(times, 1));
 col('sectors', summary(sectors));
 col('linedefs', summary(lines));
@@ -65,6 +66,7 @@ col('loot rooms', histogram(stats.map((s) => s.loot)));
 col('secrets', histogram(stats.map((s) => s.secrets)));
 col('enemies', summary(stats.map((s) => s.enemies)));
 col('health', summary(stats.map((s) => s.health)));
+col('ammo boxes', summary(stats.map((s) => s.ammo)));
 const templateTotal: Record<string, number> = {};
 for (const s of stats) for (const [t, n] of Object.entries(s.templates)) templateTotal[t] = (templateTotal[t] ?? 0) + n;
 const rooms = Object.values(templateTotal).reduce((a, b) => a + b, 0);

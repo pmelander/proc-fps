@@ -4,3 +4,4 @@ export * from './mission.js';
 export * from './layout.js';
 export * from './rooms.js';
 export * from './stats.js';
+export * from './population.js';

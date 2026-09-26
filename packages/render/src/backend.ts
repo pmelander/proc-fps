@@ -75,10 +75,10 @@ export interface TextureDesc {
 
 /**
  * Uniform values by name. Numbers are floats; `{ int }` for integer/sampler-free ints.
- * Float32Array length selects vec2/vec3/vec4/mat4; `{ floats }` is a float[] array uniform.
+ * Float32Array length selects vec2/vec3/vec4/mat4; `{ floats }` is a float[] array uniform, `{ vec4s }` a vec4[] one.
  * (A WebGPU backend will pack these into a uniform buffer by a declared layout.)
  */
-export type UniformValue = number | { int: number } | Float32Array | { floats: Float32Array };
+export type UniformValue = number | { int: number } | Float32Array | { floats: Float32Array } | { vec4s: Float32Array };
 
 export interface DrawCall {
   pipeline: PipelineHandle;

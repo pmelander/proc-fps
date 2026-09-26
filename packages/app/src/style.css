@@ -117,6 +117,27 @@ canvas[hidden] {
 #health.low {
   color: #ff5a4a;
 }
+#ammo {
+  position: fixed;
+  right: 16px;
+  bottom: 12px;
+  font: 700 38px/1 ui-monospace, monospace;
+  color: #f2d06a;
+  text-shadow: 2px 2px 0 #000;
+  pointer-events: none;
+}
+#ammo::after {
+  content: ' AMMO';
+  font-size: 16px;
+  color: #8f8a80;
+}
+#ammo.low {
+  color: #ff5a4a;
+}
+#end .stats {
+  margin: 0 0 12px;
+  color: #c8f0a0;
+}
 /* A blocky gun at the bottom: placeholder until M4 sprites. */
 #gun {
   position: fixed;

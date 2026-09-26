@@ -1,5 +1,4 @@
-import { CELL_SIZE, DoorKind, HEADING_DX, HEADING_DY, dcos, dsin, type Heading } from '@proc-fps/core';
-import { ALERT_TICKS, ENEMY_DEFS, NOISE_CELLS, SIGHT_CELLS, type EnemyDef } from './enemies.js';
+import { ALERT_TICKS, CELL_SIZE, DoorKind, ENEMY_DEFS, HEADING_DX, HEADING_DY, NOISE_CELLS, SIGHT_CELLS, dcos, dsin, type EnemyDef, type Heading } from '@proc-fps/core';
 import { hurtPlayer } from './combat.js';
 import { lineOfSight } from './raycast.js';
 import { DOOR_OPEN_TICKS, type EnemyState, type SimState } from './state.js';

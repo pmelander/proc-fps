@@ -18,6 +18,7 @@ export interface LevelStats {
   templates: Record<RoomTemplate, number>;
   enemies: number;
   health: number;
+  ammo: number;
   /** Layout attempts used, 1 = first try. */
   attempts: number;
 }
@@ -63,6 +64,7 @@ export function levelStats(g: Generated): LevelStats {
     templates,
     enemies: map.things.filter((t) => isEnemyThing(t.type)).length,
     health: map.things.filter((t) => t.type === ThingType.Health).length,
+    ammo: map.things.filter((t) => t.type === ThingType.Ammo).length,
     attempts: g.attempts,
   };
 }

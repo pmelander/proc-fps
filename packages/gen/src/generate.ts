@@ -18,13 +18,14 @@ import {
 } from '@proc-fps/core';
 import { embedMission, type CellRect, type Layout, type LayoutFailure } from './layout.js';
 import { generateMission, type DoorKind as MissionDoor, type Mission, type RoomKind } from './mission.js';
+import { populate } from './population.js';
 import { designRoom, type RoomDesign } from './rooms.js';
 
 /**
  * Bump on ANY change that alters output for an existing seed.
  * seed + GENERATOR_VERSION must always reproduce the same map.
  */
-export const GENERATOR_VERSION = '0.8.0';
+export const GENERATOR_VERSION = '0.9.0';
 
 /** Layout attempts per mission, and missions tried, before giving up on a seed. */
 const LAYOUT_TRIES = 8;
@@ -34,10 +35,6 @@ const STOREY_FLOOR = 0;
 const CORRIDOR_HEIGHT = 128;
 /** Ceiling clearance above a room's highest walkable floor. */
 const ROOM_HEADROOM = 96;
-/** Ordinary rooms get about one enemy per this many cells, at most MAX_ROOM_ENEMIES. */
-const CELLS_PER_ENEMY = 14;
-const MAX_ROOM_ENEMIES = 4;
-const ROOM_HEALTH_CHANCE = 0.3;
 
 export interface Generated {
   map: MapData;
@@ -52,15 +49,22 @@ export interface Generated {
 }
 
 /**
- * M2 pipeline: mission graph → grid embedding → room templates → cell plan → sectors,
- * with doors in corridor cells, keys in their rooms, secret areas marked, and enemies and
- * health placed by room kind.
+ * Pipeline: mission graph → grid embedding → room templates → cell plan → sectors, with doors
+ * in corridor cells, keys in their rooms, secret areas marked, and enemies, health and ammo
+ * balanced by level and depth. The level only changes the population: the same seed at a
+ * higher level is the same layout, harder.
  */
-export function generate(seed: string): MapData {
-  return generateDetailed(seed).map;
+export interface GenerateOptions {
+  /** Position in a run, 1 = first (default). */
+  level?: number;
 }
 
-export function generateDetailed(seed: string): Generated {
+export function generate(seed: string, options: GenerateOptions = {}): MapData {
+  return generateDetailed(seed, options).map;
+}
+
+export function generateDetailed(seed: string, options: GenerateOptions = {}): Generated {
+  const level = Math.max(1, Math.floor(options.level ?? 1));
   const rng = new Rng(seed);
   let attempts = 0;
   const failures: Record<LayoutFailure, number> = { placement: 0, route: 0 };
@@ -73,7 +77,7 @@ export function generateDetailed(seed: string): Generated {
         failures[layout]++;
         continue;
       }
-      return { ...emit(seed, mission, layout, rng), mission, layout, attempts, failures };
+      return { ...emit(seed, mission, layout, rng, level), mission, layout, attempts, failures };
     }
   }
   throw new Error(`seed ${seed}: no layout after ${attempts} attempts`);
@@ -83,7 +87,7 @@ const DOOR_KIND: Record<MissionDoor, DoorKind> = { open: DoorKind.None, auto: Do
 /** Rooms a door belongs next to: it guards them. */
 const GUARDED: readonly RoomKind[] = ['miniboss', 'boss', 'loot'];
 
-function emit(seed: string, mission: Mission, layout: Layout, rng: Rng): { map: MapData; designs: RoomDesign[] } {
+function emit(seed: string, mission: Mission, layout: Layout, rng: Rng, level: number): { map: MapData; designs: RoomDesign[] } {
   const C = CELL_SIZE;
   const deco = rng.fork('deco');
   const theme = rng.fork('theme');
@@ -162,65 +166,11 @@ function emit(seed: string, mission: Mission, layout: Layout, rng: Rng): { map: 
     return design;
   });
 
-  // Population: enemies and health on free base floor, never on a cell in front of a doorway
-  // (entrances stay clear) and never two things on one cell. Start and exit rooms stay empty.
-  const population = rng.fork('population');
+  // Population: enemies, health and ammo, balanced by level and depth (population.ts).
   const occupied = new Set(things.map(([, x, y]) => `${x},${y}`));
   const nearDoor = new Set<string>();
   doorways.forEach((list) => list.forEach(([x, y, h]) => nearDoor.add(`${x - HEADING_DX[h as 0]},${y - HEADING_DY[h as 0]}`)));
-  mission.nodes.forEach((node, id) => {
-    const r = layout.rooms[id]!;
-    const w = r.x1 - r.x0;
-    const h = r.y1 - r.y0;
-    const free: [number, number][] = [];
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const k = `${r.x0 + x},${r.y0 + y}`;
-        if (designs[id]!.cells[x + y * w] === 0 && !occupied.has(k) && !nearDoor.has(k)) free.push([r.x0 + x, r.y0 + y]);
-      }
-    }
-    const put = (type: number, i: number) => {
-      const [[x, y]] = free.splice(i, 1) as [[number, number]];
-      occupied.add(`${x},${y}`);
-      things.push([type, x, y, 0]);
-    };
-    const place = (type: number) => free.length && put(type, population.int(0, free.length - 1));
-    const placeCentral = (type: number) => {
-      if (!free.length) return;
-      const [cx, cy] = [(r.x0 + r.x1 - 1) / 2, (r.y0 + r.y1 - 1) / 2];
-      const dist = ([x, y]: [number, number]) => Math.abs(x - cx) + Math.abs(y - cy);
-      put(type, free.reduce((best, c, i) => (dist(c) < dist(free[best]!) ? i : best), 0));
-    };
-    const enemy = () => {
-      const roll = population.float();
-      return roll < 0.55 ? EnemyType.Grunt : roll < 0.88 ? EnemyType.Brute : EnemyType.Sniper;
-    };
-    switch (node.kind) {
-      case 'room': {
-        const n = Math.max(0, Math.min(MAX_ROOM_ENEMIES, Math.round((w * h) / CELLS_PER_ENEMY + population.range(-0.5, 1))));
-        for (let k = 0; k < n; k++) place(enemy());
-        if (population.chance(ROOM_HEALTH_CHANCE)) place(ThingType.Health);
-        break;
-      }
-      case 'miniboss': {
-        placeCentral(EnemyType.MiniBoss);
-        const escort = population.int(1, 2);
-        for (let k = 0; k < escort; k++) place(EnemyType.Grunt);
-        break;
-      }
-      case 'boss':
-        placeCentral(EnemyType.Boss);
-        break;
-      case 'loot':
-      case 'secret': {
-        const n = population.int(1, 2);
-        for (let k = 0; k < n; k++) place(ThingType.Health);
-        break;
-      }
-      default:
-        break;
-    }
-  });
+  things.push(...populate({ mission, layout, designs, occupied, nearDoor, rng: rng.fork('population'), level }));
 
   for (const c of layout.corridors) {
     const edge = mission.edges[c.edge]!;
@@ -258,5 +208,5 @@ function emit(seed: string, mission: Mission, layout: Layout, rng: Rng): { map: 
   for (const [type, x, y, angle] of things) b.thing(type, (x + 0.5) * C, (y + 0.5) * C, angle);
   // The theme picks the texture set's colours; its own stream, so it never shifts other choices.
   const style = rng.fork('style').pick(THEME_NAMES);
-  return { map: b.build({ name: `gen-${seed}`, seed, generatorVersion: GENERATOR_VERSION, theme: style }), designs };
+  return { map: b.build({ name: `gen-${seed}`, seed, generatorVersion: GENERATOR_VERSION, theme: style, level }), designs };
 }

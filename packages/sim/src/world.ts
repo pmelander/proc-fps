@@ -28,7 +28,7 @@ export interface DoorInfo {
 
 /** Something picked up by walking over it. */
 export interface PickupInfo {
-  kind: 'key' | 'health';
+  kind: 'key' | 'health' | 'ammo';
   /** Key id, for keys. */
   key: number;
   cx: number;
@@ -65,9 +65,9 @@ export function createWorld(map: MapData): World {
   grid.sector.forEach((s, i) => (doorAt[i] = doorOfSector.get(s) ?? -1));
   const pickups = map.things.flatMap((t): PickupInfo[] => {
     const key = keyOfThing(t.type);
-    if (key < 0 && t.type !== ThingType.Health) return [];
+    if (key < 0 && t.type !== ThingType.Health && t.type !== ThingType.Ammo) return [];
     const [cx, cy] = grid.cellOf(t.x, t.y);
-    return [{ kind: key >= 0 ? 'key' : 'health', key, cx, cy }];
+    return [{ kind: key >= 0 ? 'key' : t.type === ThingType.Health ? 'health' : 'ammo', key, cx, cy }];
   });
   const exitThing = map.things.find((t) => t.type === ThingType.Exit);
   const exit = exitThing ? grid.cellOf(exitThing.x, exitThing.y) : null;
@@ -75,7 +75,7 @@ export function createWorld(map: MapData): World {
 }
 
 /** True for pickups that render as markers: the mover order of the level mesh. */
-export const isPickupThing = (type: number): boolean => keyOfThing(type) >= 0 || type === ThingType.Health;
+export const isPickupThing = (type: number): boolean => keyOfThing(type) >= 0 || type === ThingType.Health || type === ThingType.Ammo;
 
 /** Door id at a cell, or -1. */
 export function doorAtCell(world: World, cx: number, cy: number): number {

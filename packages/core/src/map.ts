@@ -81,6 +81,8 @@ export const ThingType = {
   Exit: 2,
   /** Restores health when walked over. */
   Health: 3,
+  /** Refills ammo when walked over. */
+  Ammo: 4,
 } as const;
 
 /** Enemy thing types. Stats and behaviour live in the sim (`ENEMY_DEFS`). */
@@ -151,6 +153,8 @@ export interface MapMeta {
   generatorVersion?: string;
   /** Visual theme id; resolves textures and palette. */
   theme?: string;
+  /** Position in a run (1 = first level); generated difficulty rises with it. */
+  level?: number;
 }
 
 export interface MapData {

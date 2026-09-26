@@ -1,14 +1,9 @@
-import { PLAYER_EYE_HEIGHT, PLAYER_HEIGHT, PLAYER_RADIUS, dcos, dsin } from '@proc-fps/core';
+import { ENEMY_DEFS, FIRE_COOLDOWN, PLAYER_DAMAGE, PLAYER_EYE_HEIGHT, PLAYER_HEIGHT, PLAYER_RADIUS, WEAPON_RANGE, dcos, dsin } from '@proc-fps/core';
 import { alert, makeNoise } from './ai.js';
-import { ENEMY_DEFS } from './enemies.js';
 import { castRay, cellOpen } from './raycast.js';
 import type { SimState } from './state.js';
 import type { World } from './world.js';
 
-/** Player weapon: free-aim hitscan along the view direction. */
-export const FIRE_COOLDOWN = 16;
-export const PLAYER_DAMAGE = 20;
-export const WEAPON_RANGE = 4096;
 const PROJECTILE_RADIUS = 6;
 /** Projectiles expire after this many ticks, hit or not. */
 const PROJECTILE_TTL = 600;
@@ -30,6 +25,11 @@ export function playerFire(world: World, state: SimState, trigger: boolean): voi
   if (p.fireCooldown > 0) p.fireCooldown--;
   if (!trigger || p.fireCooldown > 0) return;
   p.fireCooldown = FIRE_COOLDOWN;
+  if (p.ammo <= 0) {
+    state.events.push({ type: 'empty' });
+    return;
+  }
+  p.ammo--;
   state.events.push({ type: 'shot' });
   makeNoise(world, state);
 

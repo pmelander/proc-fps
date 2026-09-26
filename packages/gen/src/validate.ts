@@ -1,4 +1,18 @@
-import { CellGrid, DoorKind, ThingType, doorKindOf, isEnemyThing, keyOfThing, validateGridAlignment, validateMap, type MapData } from '@proc-fps/core';
+import {
+  AMMO_PICKUP,
+  CellGrid,
+  DoorKind,
+  ENEMY_DEFS,
+  PLAYER_DAMAGE,
+  START_AMMO,
+  ThingType,
+  doorKindOf,
+  isEnemyThing,
+  keyOfThing,
+  validateGridAlignment,
+  validateMap,
+  type MapData,
+} from '@proc-fps/core';
 
 /**
  * Gameplay validation on top of structural checks. Reachability runs on the
@@ -27,6 +41,23 @@ export function validateGenerated(map: MapData): string[] {
   if (traps.length) errors.push(`${traps.length} trap cell(s) cannot reach the exit: ${traps.slice(0, 5).join(' ')}`);
   errors.push(...validateKeys(map, grid, sx, sy, ex, ey, reachable));
   errors.push(...validateThings(map, grid));
+  errors.push(...validateSupplies(map));
+  return errors;
+}
+
+/** Enough ammo to kill every enemy, and some health wherever there are enemies. */
+function validateSupplies(map: MapData): string[] {
+  const errors: string[] = [];
+  let shots = 0;
+  let ammo = START_AMMO;
+  let health = 0;
+  for (const t of map.things) {
+    if (isEnemyThing(t.type)) shots += Math.ceil(ENEMY_DEFS[t.type].hp / PLAYER_DAMAGE);
+    if (t.type === ThingType.Ammo) ammo += AMMO_PICKUP;
+    if (t.type === ThingType.Health) health++;
+  }
+  if (ammo < shots) errors.push(`ammo for ${ammo} shots, enemies need ${shots}`);
+  if (shots > 0 && health === 0) errors.push('enemies but no health');
   return errors;
 }
 

@@ -181,3 +181,18 @@ describe('replays with combat', () => {
     expect(hashState(runReplay(test03, rec.finish()))).toBe(hashState(state));
   });
 });
+
+describe('ammo', () => {
+  it('spends a round per shot, clicks empty, and refills from a box', async () => {
+    const { AMMO_PICKUP, START_AMMO } = await import('../src/index.js');
+    const { state, step } = sim(arena({ w: 4, h: 1, things: [[ThingType.Ammo, 1, 0]] }));
+    step({ fire: true });
+    expect(state.player.ammo).toBe(START_AMMO - 1);
+    state.player.ammo = 0;
+    let clicked = false;
+    for (let i = 0; i < FIRE_COOLDOWN + 1; i++) clicked ||= events(step({ fire: true }), 'empty').length > 0;
+    expect(clicked).toBe(true);
+    step({ move: 1 }, STEP_TICKS + 1);
+    expect(state.player.ammo).toBe(AMMO_PICKUP);
+  });
+});

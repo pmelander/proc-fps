@@ -18,6 +18,8 @@ export const BaseTex = {
   Key: 14,
   /** Health pickup marker. */
   Health: 18,
+  /** Ammo pickup marker. */
+  Ammo: 19,
 } as const;
 
 /** Visual themes: each picks the colours of the baked texture set (render/src/themes.ts). */

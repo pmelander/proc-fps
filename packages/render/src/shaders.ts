@@ -15,8 +15,9 @@ in float aMover;
 in float aMove;
 in float aSlide;
 uniform mat4 uViewProj;
-// Per mover: how far its geometry sits below where the mesh put it (doors, taken pickups).
-uniform float uMover[${MAX_MOVERS}];
+// Per mover: how far its geometry sits below where the mesh put it (doors, taken pickups),
+// packed four to a vec4 to save uniform slots.
+uniform vec4 uMover[${MAX_MOVERS / 4}];
 out vec2 vUV;
 out float vLight;
 flat out int vTex;
@@ -25,7 +26,8 @@ void main() {
   vec3 pos = aPos;
   vec2 uv = aUV;
   if (aMover > 0.5) {
-    float off = uMover[int(aMover - 0.5)];
+    int m = int(aMover - 0.5);
+    float off = uMover[m / 4][m % 4];
     pos.y -= off * aMove;
     uv.y += off * aSlide * ${TEX_SCALE};
   }
@@ -161,6 +163,11 @@ vec4 pattern(int id, vec2 uv) {
     vec2 c = abs(fract(uv) - 0.5);
     float cross = step(min(c.x, c.y), 0.12) * step(max(c.x, c.y), 0.34);
     return vec4(mix(vec3(0.95), vec3(0.9, 0.08, 0.06), cross), 0.6);
+  }
+  if (id == 19) { // ammo pickup: brass shells on olive
+    vec2 f = fract(uv);
+    float shell = step(abs(fract(f.x * 3.0) - 0.5), 0.2) * step(0.2, f.y) * step(f.y, 0.85);
+    return vec4(mix(vec3(0.3, 0.34, 0.16), mix(vec3(0.95, 0.75, 0.25), vec3(0.8, 0.3, 0.1), step(0.72, f.y)), shell), 0.4);
   }
   // Missing texture: loud checker, never silently wrong.
   float c = mod(floor(uv.x * 4.0) + floor(uv.y * 4.0), 2.0);

@@ -27,6 +27,8 @@ import { KEY_COLORS, KEY_NAMES } from './keys.js';
 
 const TEST_MAPS: Record<string, MapData> = { test01: test01 as MapData, test02: test02 as MapData, test03: test03 as MapData };
 const NOTICE_SECONDS = 2.5;
+/** Dev: run the sim without the pointer lock (the in-app preview cannot take it). */
+const AUTOPLAY = new URLSearchParams(location.search).has('autoplay');
 const MAX_FRAME_TIME = 0.25; // avoid spiral of death after tab-out
 const BOB_HEIGHT = 2.5;
 const HEADING_LETTERS = ['E', 'N', 'W', 'S'] as const;
@@ -36,30 +38,62 @@ function bob(p: PlayerState): number {
   return p.stepTick === 0 ? 0 : Math.sin((Math.PI * p.stepTick) / STEP_TICKS) * BOB_HEIGHT;
 }
 
-function loadMap(): MapData {
+/**
+ * Which level to play, from the URL:
+ * - ?run=<id>&level=<n>: level n of a run; its seed is "<id>-<n>" and difficulty rises with n.
+ * - ?seed=<s>[&level=<n>]: one seed (level 1 unless given).
+ * - ?map=<name>: a hand-made test map.
+ * - nothing: a fresh run at level 1.
+ */
+interface Where {
+  run?: string;
+  seed?: string;
+  level: number;
+}
+
+function where(): Where & { map?: string } {
   const params = new URLSearchParams(location.search);
-  const named = params.get('map');
-  if (named) {
-    const m = TEST_MAPS[named];
-    if (!m) throw new Error(`unknown test map "${named}"`);
+  const level = Math.max(1, Number(params.get('level') ?? 1) || 1);
+  const map = params.get('map');
+  if (map) return { map, level };
+  const run = params.get('run');
+  if (run) return { run, level };
+  const seed = params.get('seed');
+  if (seed) return { seed, level };
+  const fresh = newRunId();
+  history.replaceState(null, '', `?${new URLSearchParams({ run: fresh, level: '1' }).toString()}`);
+  return { run: fresh, level: 1 };
+}
+
+/** UI-level randomness only; the sim never sees it. */
+const newRunId = () => Math.random().toString(36).slice(2, 8);
+
+function loadMap(w: Where & { map?: string }): MapData {
+  if (w.map) {
+    const m = TEST_MAPS[w.map];
+    if (!m) throw new Error(`unknown test map "${w.map}"`);
     return m;
   }
-  let seed = params.get('seed');
-  if (!seed) {
-    seed = Math.random().toString(36).slice(2, 10); // UI-level randomness only; the sim never sees it
-    params.set('seed', seed);
-    history.replaceState(null, '', `?${params.toString()}`);
-  }
-  const map = generate(seed);
+  const seed = w.run ? `${w.run}-${w.level}` : w.seed!;
+  const map = generate(seed, { level: w.level });
   const errors = validateGenerated(map);
   if (errors.length) console.warn(`seed ${seed} failed validation:`, errors);
   return map;
 }
 
-function newLevel(): void {
-  const params = new URLSearchParams();
-  params.set('seed', Math.random().toString(36).slice(2, 10));
-  location.search = params.toString();
+/** A fresh run at level 1. */
+function newRun(): void {
+  location.search = new URLSearchParams({ run: newRunId(), level: '1' }).toString();
+}
+
+/** The next level of this run (a single seed becomes a run named after it). */
+function nextLevel(w: Where): void {
+  location.search = new URLSearchParams({ run: w.run ?? w.seed ?? newRunId(), level: String(w.level + 1) }).toString();
+}
+
+function clock(ticks: number): string {
+  const s = Math.floor(ticks / 60);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
 function downloadJSON(name: string, data: unknown): void {
@@ -109,7 +143,7 @@ const SHAPE: Record<number, number> = {
 const PROJECTILE_SIZE = 14;
 /** Events that play a sound with no position (the player's own). */
 const SOUND_OF: Partial<Record<string, SoundId>> = {
-  shot: 'shot', hurt: 'hurt', death: 'death', locked: 'locked', key: 'key', health: 'health', secret: 'secret', exit: 'exit',
+  shot: 'shot', hurt: 'hurt', death: 'death', locked: 'locked', key: 'key', health: 'health', ammo: 'health', empty: 'locked', secret: 'secret', exit: 'exit',
 };
 const FLASH_SECONDS = 0.12;
 
@@ -166,6 +200,7 @@ function main(): void {
   const compassLetter = document.getElementById('compass-letter') as HTMLElement;
   const prompt = document.getElementById('prompt') as HTMLDivElement;
   const health = document.getElementById('health') as HTMLDivElement;
+  const ammo = document.getElementById('ammo') as HTMLDivElement;
   const gun = document.getElementById('gun') as HTMLDivElement;
   const hurtFlash = document.getElementById('hurt') as HTMLDivElement;
   const end = document.getElementById('end') as HTMLDivElement;
@@ -175,7 +210,8 @@ function main(): void {
   let noticeUntil = 0;
   let shownPrompt = '';
 
-  const map = loadMap();
+  const here = where();
+  const map = loadMap(here);
   const world = createWorld(map);
   const state = createSimState(world);
   let prev: PlayerState = clonePlayer(state.player);
@@ -210,13 +246,13 @@ function main(): void {
   addEventListener('keydown', (e) => {
     // After death or the exit, E (or Space) moves on: retry the level, or a new one.
     if ((state.dead || state.won) && (e.code === 'KeyE' || e.code === 'Space')) {
-      if (state.won && map.meta.seed) newLevel();
+      if (state.won && !here.map) nextLevel(here);
       else location.reload();
     }
     if (e.code === 'Tab') automap.hidden = false;
     if (e.code === 'KeyM') audio.toggleMusic();
     if (e.code === 'KeyN') audio.toggleSound();
-    if (e.code === 'F2') newLevel();
+    if (e.code === 'F2') newRun();
     if (e.code === 'F8') downloadJSON(`replay-${map.meta.seed ?? map.meta.name}-${state.tick}.json`, recorder.finish());
   });
   // The automap shows only while Tab is held.
@@ -244,11 +280,14 @@ function main(): void {
     fps = fps * 0.95 + (dt > 0 ? 1 / dt : 0) * 0.05;
 
     acc += dt;
+    // The world runs only while the game has the mouse (Esc pauses), so nothing happens on the
+    // start screen and every simulated tick is in the replay. `&autoplay` (dev) runs it anyway.
+    if (!input.locked && !AUTOPLAY) acc = 0;
     while (acc >= TICK_DT) {
       prev = clonePlayer(state.player);
       prevEnemies = state.enemies.map((e) => ({ ...e }));
       const f = input.sample();
-      if (input.locked) recorder.record(f);
+      recorder.record(f);
       const wasStepping = state.player.stepTick;
       stepSim(world, state, f);
       const listener = { x: state.player.x, y: state.player.y, yaw: state.player.angle };
@@ -271,6 +310,7 @@ function main(): void {
         if (e.type === 'locked') [notice, noticeUntil] = [`Needs the ${KEY_NAMES[e.key]} key`, now + NOTICE_SECONDS];
         if (e.type === 'secret') [notice, noticeUntil] = ['You found a secret!', now + NOTICE_SECONDS];
         if (e.type === 'health') [notice, noticeUntil] = [`+${e.amount} health`, now + NOTICE_SECONDS];
+        if (e.type === 'ammo') [notice, noticeUntil] = [`+${e.amount} ammo`, now + NOTICE_SECONDS];
         if (e.type === 'shot') shotUntil = now + FLASH_SECONDS;
         if (e.type === 'hurt') hurtUntil = now + FLASH_SECONDS * 2;
       }
@@ -293,6 +333,8 @@ function main(): void {
     renderer.render(view, now, buildSprites(world, state, prevEnemies, t, view, spawnAngles));
 
     health.textContent = String(p.health);
+    ammo.textContent = String(p.ammo);
+    ammo.classList.toggle('low', p.ammo <= 10);
     health.classList.toggle('low', p.health <= PLAYER_MAX_HEALTH / 4);
     gun.classList.toggle('firing', now < shotUntil);
     hurtFlash.hidden = now >= hurtUntil;
@@ -300,9 +342,12 @@ function main(): void {
     if (end.dataset.state !== ending) {
       end.dataset.state = ending;
       end.hidden = !ending;
+      const kills = state.enemies.filter((x) => x.mode === 'dead').length;
+      const secrets = world.secrets ? ` · secrets ${popcount(state.secrets)}/${world.secrets}` : '';
+      const stats = `<p class="stats">kills ${kills}/${state.enemies.length}${secrets} · time ${clock(state.tick)}</p>`;
       end.innerHTML = state.dead
-        ? '<p class="title">You died</p><p>Press E to try again.</p>'
-        : `<p class="title">Level complete</p><p>Press E for ${map.meta.seed ? 'the next level' : 'another go'}.</p>`;
+        ? `<p class="title">You died</p>${stats}<p>Press E to try level ${here.level} again.</p>`
+        : `<p class="title">Level ${here.level} complete</p>${stats}<p>Press E for ${here.map ? 'another go' : `level ${here.level + 1}`}.</p>`;
     }
 
     // Compass: where W will take you, relative to where you're looking.
@@ -319,7 +364,7 @@ function main(): void {
     if (!automap.hidden) drawAutomap(automap, map, view, world, state);
     const held = KEY_NAMES.filter((_, k) => state.keys & (1 << k));
     hud.textContent =
-      `${map.meta.seed ? `seed ${map.meta.seed}  gen ${GENERATOR_VERSION}` : `map ${map.meta.name}`}  ${map.meta.theme ?? ''}\n` +
+      `${map.meta.seed ? `level ${here.level}  seed ${map.meta.seed}  gen ${GENERATOR_VERSION}` : `map ${map.meta.name}`}  ${map.meta.theme ?? ''}\n` +
       `${fps.toFixed(0)} fps  tick ${state.tick}  sector ${p.sector}\n` +
       `cell ${p.cx}, ${p.cy}  z ${p.z.toFixed(0)}` +
       (held.length ? `\nkeys: ${held.join(' ')}` : '') +

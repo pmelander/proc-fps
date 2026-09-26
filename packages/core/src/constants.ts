@@ -7,6 +7,18 @@ export const PLAYER_HEIGHT = 72;
  * near plane and bob, so the camera never pokes through the lowest ceiling validation allows.
  */
 export const PLAYER_EYE_HEIGHT = 64;
+/** Player combat and resources: the sim applies them, the generator balances against them. */
+export const PLAYER_MAX_HEALTH = 100;
+/** What a health pickup restores (never above the maximum). */
+export const HEALTH_PICKUP = 25;
+export const START_AMMO = 40;
+export const MAX_AMMO = 200;
+export const AMMO_PICKUP = 20;
+/** Player weapon: free-aim hitscan along the view direction. */
+export const FIRE_COOLDOWN = 16;
+export const PLAYER_DAMAGE = 20;
+export const WEAPON_RANGE = 4096;
+
 /** Max floor rise between adjacent cells the player can step up. Drops are unlimited. */
 export const MAX_STEP = 24;
 
