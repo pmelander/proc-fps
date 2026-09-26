@@ -139,7 +139,35 @@ export function buildTest04(): MapData {
   return b.build({ name: 'test04', theme: 'base' });
 }
 
-const maps: Record<string, () => MapData> = { test01: buildTest01, test02: buildTest02, test03: buildTest03, test04: buildTest04 };
+/**
+ * test05: a catwalk room (cells; y grows north). A 9 × 5 room with its outer ring at floor 0.
+ * Inside (x 1–7, y 1–3): steps down at x 1, 2, 3 (-24, -48, -72), a pit at -96 at x 4, 6, 7, and a
+ * grating catwalk at x 5 (top 0, underside -16) over the pit floor. Start (5, 0) facing north,
+ * right at the catwalk's south end; exit (5, 4) at its north end.
+ */
+export function buildTest05(): MapData {
+  const plan = new CellPlan();
+  const ring = plan.spec({ floor: 0, ceil: 256, light: 192, floorTex: T.FloorTile, ceilTex: T.Ceiling, wallTex: T.Stone });
+  const steps = [-24, -48, -72].map((f) => plan.spec({ floor: f, ceil: 256, light: 176, floorTex: T.Tech, ceilTex: T.Ceiling, wallTex: T.Trim }));
+  const pit = plan.spec({ floor: -96, ceil: 256, light: 160, floorTex: T.FloorTile, ceilTex: T.Ceiling, wallTex: T.Stone });
+  const catwalk = plan.spec({
+    floor: -96, ceil: 256, light: 160, floorTex: T.FloorTile, ceilTex: T.Ceiling, wallTex: T.Stone,
+    slab: { bottom: -16, top: 0, topTex: T.Grate, bottomTex: T.Metal, sideTex: T.Metal },
+  });
+  for (let y = 0; y < 5; y++) {
+    for (let x = 0; x < 9; x++) {
+      const inside = x >= 1 && x <= 7 && y >= 1 && y <= 3;
+      plan.set(x, y, !inside ? ring : x <= 3 ? steps[x - 1]! : x === 5 ? catwalk : pit);
+    }
+  }
+  const b = new MapBuilder();
+  emitCellPlan(b, plan, CELL_SIZE);
+  b.thing(ThingType.PlayerStart, 5.5 * CELL_SIZE, 0.5 * CELL_SIZE, 90);
+  b.thing(ThingType.Exit, 5.5 * CELL_SIZE, 4.5 * CELL_SIZE, 0);
+  return b.build({ name: 'test05', theme: 'base' });
+}
+
+const maps: Record<string, () => MapData> = { test01: buildTest01, test02: buildTest02, test03: buildTest03, test04: buildTest04, test05: buildTest05 };
 
 for (const [name, fn] of Object.entries(maps)) {
   const map = fn();

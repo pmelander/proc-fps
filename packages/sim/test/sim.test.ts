@@ -237,3 +237,39 @@ describe('lifts and hazards (test04)', async () => {
     expect(inPit.player.health).toBe(PLAYER_MAX_HEALTH - HAZARD_DAMAGE * 3);
   });
 });
+
+describe('catwalks (test05)', async () => {
+  const m = (await import('@proc-fps/core/maps/test05.json')).default as MapData;
+  const tap = (f: Partial<InputFrame>, wait = STEP_TICKS) => [...hold(f, 1), ...idle(wait)];
+  const forward = tap({ move: 1 });
+  const turn = (a: number) => hold({ turn: a }, 1);
+  const fall = idle(30); // time to land after a drop
+
+  it('crosses on top of the catwalk, level with the floor around the room', () => {
+    const onTop = run(m, [...forward, ...forward]); // (5, 2), on the catwalk
+    expect(cell(onTop)).toEqual([5, 2]);
+    expect(onTop.player.level).toBe(1);
+    expect(onTop.player.z).toBe(0);
+    const across = run(m, [...forward, ...forward, ...forward, ...forward]);
+    expect(cell(across)).toEqual([5, 4]);
+    expect(across.won).toBe(true);
+  });
+
+  it('walks underneath it after going down the steps', () => {
+    // West along the ring to (0, 0), north to (0, 2), then east down the steps and under the catwalk.
+    const west = [...turn(Math.PI / 2), ...forward, ...forward, ...forward, ...forward, ...forward];
+    const north = [...turn(-Math.PI / 2), ...forward, ...forward];
+    const down = tap({ move: 1 }, STEP_TICKS + 16); // each step down ends in a short fall; the next waits for landing
+    const east = [...turn(-Math.PI / 2), ...down, ...down, ...down, ...down, ...forward, ...fall];
+    const under = run(m, [...west, ...north, ...east]);
+    expect(cell(under)).toEqual([5, 2]);
+    expect(under.player.level).toBe(0);
+    expect(under.player.z).toBe(-96);
+  });
+
+  it('drops off the side into the pit', () => {
+    const dropped = run(m, [...forward, ...forward, ...turn(-Math.PI / 2), ...forward, ...fall]); // east off (5, 2)
+    expect(cell(dropped)).toEqual([6, 2]);
+    expect(dropped.player.z).toBe(-96);
+  });
+});

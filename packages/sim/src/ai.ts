@@ -1,4 +1,4 @@
-import { ALERT_TICKS, CELL_SIZE, DoorKind, ENEMY_DEFS, HEADING_DX, HEADING_DY, NOISE_CELLS, SIGHT_CELLS, dcos, dsin, type EnemyDef, type Heading } from '@proc-fps/core';
+import { ALERT_TICKS, CELL_SIZE, CellGrid, DoorKind, ENEMY_DEFS, HEADING_DX, HEADING_DY, MAX_STEP, NOISE_CELLS, SIGHT_CELLS, dcos, dsin, type EnemyDef, type Heading } from '@proc-fps/core';
 import { hurtPlayer } from './combat.js';
 import { lineOfSight } from './raycast.js';
 import { DOOR_OPEN_TICKS, type EnemyState, type SimState } from './state.js';
@@ -52,8 +52,9 @@ export function stepEnemies(world: World, state: SimState): void {
         }
         const next = nextStep(world, state, e, distance(), occupied);
         if (next === undefined) break;
-        const nx = e.cx + HEADING_DX[next];
-        const ny = e.cy + HEADING_DY[next];
+        const [heading, lands] = next;
+        const nx = e.cx + HEADING_DX[heading];
+        const ny = e.cy + HEADING_DY[heading];
         const door = doorAtCell(world, nx, ny);
         if (door >= 0 && state.doors[door]! < DOOR_OPEN_TICKS) {
           // Only auto doors can be in the path; bump it and wait.
@@ -66,8 +67,10 @@ export function stepEnemies(world: World, state: SimState): void {
         occupied.add(cellKey(nx, ny));
         e.fromCx = e.cx;
         e.fromCy = e.cy;
+        e.fromLevel = e.level;
         e.cx = nx;
         e.cy = ny;
+        e.level = lands;
         e.stepTick = 1;
         break;
       }
@@ -123,15 +126,17 @@ function occupancy(state: SimState): Set<string> {
 }
 
 /**
- * Path distance in cells from every cell to the player's cell, following `canStep` in reverse.
- * Key and secret doors that are not open are walls; auto doors are passable (bumped open).
+ * Path distance in steps from every (cell, level) state (index cell × LEVELS + level) to the
+ * player's, following steps in reverse. Key and secret doors that are not open are walls; auto
+ * doors are passable (bumped open).
  */
 export function distanceField(world: World, state: SimState): Int32Array {
   const g = world.grid;
-  const dist = new Int32Array(g.width * g.height).fill(-1);
+  const L = CellGrid.LEVELS;
+  const dist = new Int32Array(g.width * g.height * L).fill(-1);
   const p = state.player;
-  const start = p.cx + p.cy * g.width;
   if (!g.inBounds(p.cx, p.cy)) return dist;
+  const start = (p.cx + p.cy * g.width) * L + p.level;
   dist[start] = 0;
   const queue = [start];
   const shut = (x: number, y: number) => {
@@ -140,35 +145,42 @@ export function distanceField(world: World, state: SimState): Int32Array {
     return door >= 0 && world.doors[door]!.kind !== DoorKind.Auto && state.doors[door]! < DOOR_OPEN_TICKS;
   };
   for (let qi = 0; qi < queue.length; qi++) {
-    const c = queue[qi]!;
+    const st = queue[qi]!;
+    const l = st % L;
+    const c = (st - l) / L;
     const x = c % g.width;
     const y = (c - x) / g.width;
     for (let h = 0; h < 4; h++) {
       const nx = x + HEADING_DX[h as Heading];
       const ny = y + HEADING_DY[h as Heading];
-      const n = nx + ny * g.width;
-      if (!g.inBounds(nx, ny) || dist[n] !== -1 || shut(nx, ny)) continue;
-      if (!g.canStep(nx, ny, ((h + 2) % 4) as Heading)) continue; // can the neighbour step towards us?
-      dist[n] = dist[c]! + 1;
-      queue.push(n);
+      if (!g.inBounds(nx, ny) || shut(nx, ny)) continue;
+      // Every level of the neighbour whose step towards us lands on our level.
+      for (let ln = 0; ln < g.levels(nx, ny); ln++) {
+        const n = (nx + ny * g.width) * L + ln;
+        if (dist[n] !== -1 || g.stepTarget(nx, ny, ln, ((h + 2) % 4) as Heading) !== l) continue;
+        dist[n] = dist[st]! + 1;
+        queue.push(n);
+      }
     }
   }
   return dist;
 }
 
-/** Heading of the free neighbour that gets closest to the player, or undefined to wait. */
-function nextStep(world: World, state: SimState, e: EnemyState, dist: Int32Array, occupied: Set<string>): Heading | undefined {
+/** The free neighbour step (heading and landing level) that gets closest to the player, or undefined to wait. */
+function nextStep(world: World, state: SimState, e: EnemyState, dist: Int32Array, occupied: Set<string>): [Heading, number] | undefined {
   const g = world.grid;
-  const here = dist[e.cx + e.cy * g.width]!;
-  let best: Heading | undefined;
+  const L = CellGrid.LEVELS;
+  const here = dist[(e.cx + e.cy * g.width) * L + e.level]!;
+  let best: [Heading, number] | undefined;
   let bestD = here < 0 ? Infinity : here;
   for (let h = 0 as Heading; h < 4; h = (h + 1) as Heading) {
     const nx = e.cx + HEADING_DX[h];
     const ny = e.cy + HEADING_DY[h];
-    if (!g.inBounds(nx, ny)) continue;
-    const d = dist[nx + ny * g.width]!;
-    if (d < 0 || d >= bestD || occupied.has(cellKey(nx, ny)) || !g.canStep(e.cx, e.cy, h)) continue;
-    best = h;
+    const lands = g.stepTarget(e.cx, e.cy, e.level, h);
+    if (lands < 0 || occupied.has(cellKey(nx, ny))) continue;
+    const d = dist[(nx + ny * g.width) * L + lands]!;
+    if (d < 0 || d >= bestD) continue;
+    best = [h, lands];
     bestD = d;
   }
   return best;
@@ -178,15 +190,15 @@ function updatePose(world: World, e: EnemyState, def: EnemyDef): void {
   const g = world.grid;
   const [tx, ty] = g.center(e.cx, e.cy);
   if (e.stepTick === 0) {
-    [e.x, e.y, e.z] = [tx, ty, g.floorAt(e.cx, e.cy)];
+    [e.x, e.y, e.z] = [tx, ty, g.floorAt(e.cx, e.cy, e.level)];
     return;
   }
   const t = e.stepTick / def.stepTicks;
   const [fx, fy] = g.center(e.fromCx, e.fromCy);
-  const fz = g.floorAt(e.fromCx, e.fromCy);
+  const fz = g.floorAt(e.fromCx, e.fromCy, e.fromLevel);
   e.x = fx + (tx - fx) * t;
   e.y = fy + (ty - fy) * t;
-  e.z = fz + (g.floorAt(e.cx, e.cy) - fz) * t;
+  e.z = fz + (g.floorAt(e.cx, e.cy, e.level) - fz) * t;
 }
 
 function sees(world: World, state: SimState, e: EnemyState, def: EnemyDef, cells: number): boolean {
@@ -202,7 +214,8 @@ function adjacent(e: EnemyState, x: number, y: number): boolean {
 }
 
 function canAttack(world: World, state: SimState, e: EnemyState, def: EnemyDef): boolean {
-  if (def.attack === 'melee') return adjacent(e, state.player.cx, state.player.cy);
+  // Melee needs the player next to it at about the same height (not on the catwalk above).
+  if (def.attack === 'melee') return adjacent(e, state.player.cx, state.player.cy) && Math.abs(state.player.z - e.z) <= MAX_STEP * 2;
   return sees(world, state, e, def, def.range);
 }
 
@@ -211,7 +224,7 @@ function attack(world: World, state: SimState, e: EnemyState, def: EnemyDef, ind
   state.events.push({ type: 'attack', enemy: index });
   if (def.attack === 'melee') {
     // Lands only if the player is still next to it: stepping away during the wind-up dodges.
-    if (adjacent(e, p.cx, p.cy)) hurtPlayer(state, def.damage);
+    if (adjacent(e, p.cx, p.cy) && Math.abs(p.z - e.z) <= MAX_STEP * 2) hurtPlayer(state, def.damage);
     return;
   }
   if (def.attack === 'hitscan') {

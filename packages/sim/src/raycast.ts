@@ -91,6 +91,19 @@ export function castRay(
       hit = ((zOut < floor ? floor : ceil) - z) / dz; // floor or ceiling inside the cell
       return false;
     }
+    // A slab (catwalk) inside the cell: inside it at the edge, or crossing its underside or top.
+    const slab = world.map.sectors[world.grid.sectorAt(cx, cy)]!.slab;
+    if (slab) {
+      if (zIn >= slab.bottom && zIn <= slab.top) {
+        hit = tIn * range;
+        return false;
+      }
+      const plane = zIn < slab.bottom && zOut > slab.bottom ? slab.bottom : zIn > slab.top && zOut < slab.top ? slab.top : undefined;
+      if (plane !== undefined) {
+        hit = (plane - z) / dz;
+        return false;
+      }
+    }
     return true;
   });
   return hit;

@@ -18,10 +18,10 @@ export function liftHeight(world: World, state: SimState, lift: number): number 
   return info.bottom + ((info.top - info.bottom) * state.lifts[lift]!.pos) / info.travel;
 }
 
-/** A cell's floor height right now (lifts move). */
-export function floorNow(world: World, state: SimState, cx: number, cy: number): number {
-  const lift = liftAtCell(world, cx, cy);
-  return lift >= 0 ? liftHeight(world, state, lift) : world.grid.floorAt(cx, cy);
+/** A cell level's floor height right now (lifts move; they have one level). */
+export function floorNow(world: World, state: SimState, cx: number, cy: number, level = 0): number {
+  const lift = level === 0 ? liftAtCell(world, cx, cy) : -1;
+  return lift >= 0 ? liftHeight(world, state, lift) : world.grid.floorAt(cx, cy, level);
 }
 
 export function liftMoving(world: World, state: SimState, lift: number): boolean {
@@ -50,7 +50,7 @@ export function stepLifts(world: World, state: SimState): void {
       s.wait = 0;
       return;
     }
-    const aboard = p.stepTick === 0 && info.cells.includes(p.cx + p.cy * world.grid.width);
+    const aboard = p.stepTick === 0 && p.level === 0 && info.cells.includes(p.cx + p.cy * world.grid.width);
     if (!aboard) {
       s.wait = 0;
     } else if (++s.wait >= LIFT_WAIT) {

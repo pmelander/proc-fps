@@ -21,6 +21,7 @@ const EXIT = pal(6, 6); // toxic
 const THING = pal(4, 6); // steel
 const PLAYER = pal(7, 7); // bone
 const DOOR = pal(0, 6); // gray
+const CATWALK = pal(4, 5); // steel
 /** Key ids 0–3: blue, red, yellow, green, as near as the palette gets. */
 const KEY = [pal(4, 7), pal(3, 6), pal(5, 7), pal(6, 7)];
 
@@ -100,6 +101,7 @@ export function drawAutomap(canvas: HTMLCanvasElement, map: MapData, view: Autom
       const B = map.sectors[ld.back.sector]!;
       const door = doorColor(ld.front.sector) ?? doorColor(ld.back.sector);
       if (door !== undefined) c = door;
+      else if (!!F.slab !== !!B.slab) c = CATWALK;
       else if (F.floor !== B.floor) c = FLOOR_STEP;
       else if (F.ceil !== B.ceil) c = CEIL_STEP;
       else continue;

@@ -19,6 +19,7 @@ export function validateMap(map: MapData): string[] {
     if (s.light < 0 || s.light > 255) errors.push(`sector ${i}: light ${s.light} out of range`);
     const door = doorKindOf(s);
     if (door !== DoorKind.None && s.ceil - s.floor < PLAYER_HEIGHT) errors.push(`sector ${i}: door opening lower than the player`);
+    if (s.slab && !(s.floor < s.slab.bottom && s.slab.bottom < s.slab.top && s.slab.top < s.ceil)) errors.push(`sector ${i}: slab must sit between floor and ceiling, bottom below top`);
     if (isLift(s) && (s.tag <= s.floor || s.ceil - s.tag < PLAYER_HEIGHT)) errors.push(`sector ${i}: lift top ${s.tag} must be above its floor with headroom below the ceiling`);
     if (door === DoorKind.Key && (s.tag < 0 || s.tag >= MAX_KEYS)) errors.push(`sector ${i}: key door key ${s.tag} out of range`);
   });

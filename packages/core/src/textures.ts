@@ -20,6 +20,8 @@ export const BaseTex = {
   Health: 18,
   /** Lift platforms and their sides: a steel deck with a warning border. */
   Lift: 20,
+  /** Catwalk tops: steel grating. */
+  Grate: 21,
 } as const;
 
 /** Visual themes: each picks the colours of the baked texture set (render/src/themes.ts). */

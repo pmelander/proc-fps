@@ -11,7 +11,7 @@ import type { RoomKind } from './mission.js';
  * unless it is deliberately out of reach, like a plinth. Templates also avoid regions that
  * touch themselves only at a corner, which the cell-plan emitter rejects.
  */
-export type RoomTemplate = 'plain' | 'hall' | 'platform' | 'pit' | 'stairs' | 'arena';
+export type RoomTemplate = 'plain' | 'hall' | 'platform' | 'pit' | 'stairs' | 'arena' | 'catwalk';
 
 export interface RoomRegion {
   /** Floor offset from the room's base floor. */
@@ -20,6 +20,8 @@ export interface RoomRegion {
   floorTex?: TextureId;
   /** Sector special bits (e.g. SPECIAL_DAMAGE for a hazard pit). */
   special?: number;
+  /** A slab across the region, relative to the room's base floor (a catwalk). */
+  slab?: { bottom: number; top: number };
   wallTex?: TextureId;
   lightDelta: number;
 }
@@ -35,6 +37,7 @@ export interface RoomDesign {
 
 const SOLID = -1;
 const HAZARD_PIT_CHANCE = 0.5;
+const CATWALK_HAZARD_CHANCE = 0.3;
 const STEP = 16;
 const BASE: RoomRegion = { rise: 0, lightDelta: 0 };
 
@@ -45,6 +48,7 @@ const ROOM_WEIGHTS: readonly (readonly [RoomTemplate, number])[] = [
   ['platform', 2],
   ['pit', 1.5],
   ['stairs', 2],
+  ['catwalk', 3],
 ];
 
 export function designRoom(kind: RoomKind, w: number, h: number, rng: Rng): RoomDesign {
@@ -57,6 +61,7 @@ export function designRoom(kind: RoomKind, w: number, h: number, rng: Rng): Room
     pit: iw >= 1 && ih >= 1,
     stairs: Math.max(iw, ih) >= 3 && Math.min(iw, ih) >= 1,
     arena: iw >= 4 && ih >= 4,
+    catwalk: Math.max(iw, ih) >= 5 && Math.min(iw, ih) >= 2,
   };
   let template: RoomTemplate = 'plain';
   if (kind === 'boss' || kind === 'miniboss') template = fits.arena ? 'arena' : fits.hall ? 'hall' : 'plain';
@@ -114,6 +119,28 @@ export function designRoom(kind: RoomKind, w: number, h: number, rng: Rng): Room
       for (let t = 0; t < len; t++) {
         const region = 1 + Math.min(t, steps); // columns 0..steps-1 are steps, the rest is the dais
         const pos = upward ? t : len - 1 - t;
+        if (alongX) fill(pos, 0, pos + 1, ih, region);
+        else fill(0, pos, iw, pos + 1, region);
+      }
+      break;
+    }
+    case 'catwalk': {
+      // A double-height room: the interior sinks to a pit reached by three steps down from one
+      // end, and a grating catwalk crosses it at floor level from ring to ring. Cross on top, or go
+      // down and walk underneath (80 units of headroom). Sometimes the pit is a lava hazard.
+      const alongX = iw >= ih;
+      const len = alongX ? iw : ih;
+      const hazard = rng.chance(CATWALK_HAZARD_CHANCE);
+      const bottomOfPit = -96;
+      const pitRegion = hazard ? { floorTex: T.Slime, special: SPECIAL_DAMAGE, lightDelta: 16 } : { floorTex: T.FloorTile, lightDelta: -24 };
+      for (let i = 1; i <= 3; i++) regions.push({ rise: -24 * i, floorTex: T.Tech, wallTex: T.Trim, lightDelta: -8 * i });
+      regions.push({ rise: bottomOfPit, wallTex: T.Stone, ...pitRegion }); // region 4: the pit
+      regions.push({ rise: bottomOfPit, wallTex: T.Stone, ...pitRegion, slab: { bottom: -16, top: 0 } }); // region 5: under the catwalk
+      const down = rng.chance(0.5); // which end the steps are at
+      const bridge = rng.int(4, len - 1); // the catwalk's column, past the steps and one pit column
+      for (let t = 0; t < len; t++) {
+        const region = t < 3 ? 1 + t : t === bridge ? 5 : 4;
+        const pos = down ? t : len - 1 - t;
         if (alongX) fill(pos, 0, pos + 1, ih, region);
         else fill(0, pos, iw, pos + 1, region);
       }

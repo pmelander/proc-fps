@@ -48,7 +48,7 @@ export function levelStats(g: Generated): LevelStats {
     else if (kind === DoorKind.Key) doors.key++;
     else if (kind === DoorKind.Secret) doors.secret++;
   }
-  const templates: Record<RoomTemplate, number> = { plain: 0, hall: 0, platform: 0, pit: 0, stairs: 0, arena: 0 };
+  const templates: Record<RoomTemplate, number> = { plain: 0, hall: 0, platform: 0, pit: 0, stairs: 0, arena: 0, catwalk: 0 };
   for (const d of designs) templates[d.template]++;
   const count = (kind: string) => mission.nodes.filter((n) => n.kind === kind).length;
   return {

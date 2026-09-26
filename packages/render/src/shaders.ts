@@ -165,6 +165,13 @@ vec4 pattern(int id, vec2 uv) {
     float cross = step(min(c.x, c.y), 0.12) * step(max(c.x, c.y), 0.34);
     return vec4(mix(vec3(0.95), vec3(0.9, 0.08, 0.06), cross), 0.6);
   }
+  if (id == 21) { // grate: steel bars over darkness, a frame every cell
+    vec2 f = fract(uv * 0.5);
+    float bars = step(0.35, fract(uv.x * 4.0));
+    float frame = 1.0 - edge(f, 0.06);
+    vec3 steel = uMetal * (0.85 + 0.3 * fbm(uv, 4.0));
+    return vec4(mix(mix(vec3(0.03), steel, bars), steel * 1.15, frame), 0.0);
+  }
   if (id == 20) { // lift: diamond-plate steel inside a yellow chevron border, a glowing seam
     vec2 f = fract(uv * 0.5);
     vec2 d = fract(uv * 6.0) - 0.5;

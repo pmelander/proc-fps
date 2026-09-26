@@ -29,13 +29,17 @@ export function validateGenerated(map: MapData): string[] {
   if (errors.length) return errors;
   const reachable = grid.reachableFrom(sx, sy);
   if (!reachable[ex + ey * grid.width]) return ['exit unreachable from start'];
-  // Traps: a cell the player can get into but never get out of towards the exit (e.g. a pit too deep to climb).
-  const toExit = grid.reachingTo(ex, ey);
-  const traps: string[] = [];
-  reachable.forEach((r, i) => {
-    if (r && !toExit[i]) traps.push(`(${i % grid.width}, ${Math.floor(i / grid.width)})`);
+  // Traps: a cell (on any level) the player can get into but never get out of towards the exit,
+  // e.g. a pit too deep to climb. Checked per (cell, level): a catwalk above a pit is its own place.
+  const L = CellGrid.LEVELS;
+  const into = grid.reachStates(sx, sy, 0, false);
+  const toExit = grid.reachStates(ex, ey, 0, true);
+  const traps = new Set<string>();
+  into.forEach((r, st) => {
+    const i = Math.floor(st / L);
+    if (r && !toExit[st]) traps.add(`(${i % grid.width}, ${Math.floor(i / grid.width)})`);
   });
-  if (traps.length) errors.push(`${traps.length} trap cell(s) cannot reach the exit: ${traps.slice(0, 5).join(' ')}`);
+  if (traps.size) errors.push(`${traps.size} trap cell(s) cannot reach the exit: ${[...traps].slice(0, 5).join(' ')}`);
   errors.push(...validateKeys(map, grid, sx, sy, ex, ey, reachable));
   errors.push(...validateThings(map, grid));
   errors.push(...validateSupplies(map));

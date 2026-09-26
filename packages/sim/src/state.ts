@@ -13,6 +13,9 @@ export interface PlayerState {
   cy: number;
   fromCx: number;
   fromCy: number;
+  /** Level of the destination cell (0 = floor, 1 = on a catwalk) and of the cell left. */
+  level: number;
+  fromLevel: number;
   /** 0 = idle, 1..STEP_TICKS = progress through the current step. */
   stepTick: number;
   /** Absolute heading buffered by a key press mid-step, or NO_QUEUE. */
@@ -56,6 +59,8 @@ export interface EnemyState {
   cy: number;
   fromCx: number;
   fromCy: number;
+  level: number;
+  fromLevel: number;
   /** 0 = idle, 1..stepTicks = progress through the current step. */
   stepTick: number;
   x: number;
@@ -151,7 +156,7 @@ export function createSimState(world: World): SimState {
     const [ex, ey] = world.grid.cellOf(t.x, t.y);
     const [px, py] = world.grid.center(ex, ey);
     return [{
-      type: t.type, cx: ex, cy: ey, fromCx: ex, fromCy: ey, stepTick: 0,
+      type: t.type, cx: ex, cy: ey, fromCx: ex, fromCy: ey, level: 0, fromLevel: 0, stepTick: 0,
       x: px, y: py, z: world.grid.floorAt(ex, ey),
       hp: ENEMY_DEFS[t.type].hp, mode: 'idle', timer: 0, cooldown: 0,
     }];
@@ -163,6 +168,8 @@ export function createSimState(world: World): SimState {
       cy,
       fromCx: cx,
       fromCy: cy,
+      level: 0,
+      fromLevel: 0,
       stepTick: 0,
       queued: NO_QUEUE,
       heading: headingFromAngle(angle),

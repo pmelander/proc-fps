@@ -109,6 +109,8 @@ export function buildLevelMesh(map: MapData): LevelMesh {
         // A door's ceiling is the moving slab.
         [sec.ceil, sec.ceilTex, door === undefined ? STILL : { mover: door, move: 1, slide: 0 }],
       ];
+      // A slab (catwalk): its top and its underside.
+      if (sec.slab) planes.push([sec.slab.top, sec.slab.topTex, STILL], [sec.slab.bottom, sec.slab.bottomTex, STILL]);
       for (const [h, tex, m] of planes) {
         const base = ids.map((vi) => {
           const p = map.vertices[vi]!;
@@ -171,6 +173,16 @@ export function buildLevelMesh(map: MapData): LevelMesh {
       const bottom = { mover: door, move: 1, slide: 1 };
       const top = { mover: door, move: 0, slide: 1 };
       quad(other.sector, a.x, a.y, b.x, b.y, D.ceil, D.ceil, doorTex(doorSide.sector, other), bottom, top, true);
+    }
+    // Slab edges, seen from the neighbour, except where the neighbour's own floor rises to cover them.
+    for (const [slabSide, other] of [
+      [ld.front, ld.back],
+      [ld.back, ld.front],
+    ] as const) {
+      const slab = map.sectors[slabSide.sector]!.slab;
+      const O = map.sectors[other.sector]!;
+      if (!slab || O.floor >= slab.top || (O.slab && O.slab.top === slab.top && O.slab.bottom === slab.bottom)) continue;
+      quad(other.sector, a.x, a.y, b.x, b.y, Math.max(slab.bottom, O.floor), slab.top, slab.sideTex);
     }
     if (F.floor !== B.floor && !liftEdge) {
       const side: Side = F.floor < B.floor ? ld.front : ld.back;

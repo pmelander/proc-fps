@@ -15,7 +15,7 @@
  *   walked in the direction implied by the side. Outer loops are CCW, holes CW.
  */
 
-export const MAP_FORMAT_VERSION = 0 as const;
+export const MAP_FORMAT_VERSION = 1 as const;
 
 /** Texture ids are small integers resolved by a theme/texture set. 0 = none. */
 export type TextureId = number;
@@ -50,6 +50,19 @@ export const LineFlags = {
   Secret: 1 << 1,
 } as const;
 
+/**
+ * A slab: a horizontal block inside a sector from `bottom` to `top` (a catwalk, a bridge).
+ * The sector's cells then have two walkable levels: its floor, under the slab, and the slab's top.
+ * Added in format 1.
+ */
+export interface Slab {
+  bottom: number;
+  top: number;
+  topTex: TextureId;
+  bottomTex: TextureId;
+  sideTex: TextureId;
+}
+
 export interface Sector {
   floor: number;
   ceil: number;
@@ -65,6 +78,8 @@ export interface Sector {
    * reserved (flicker…).
    */
   special: number;
+  /** A catwalk or bridge across the sector (format 1). */
+  slab?: Slab;
 }
 
 export interface Thing {

@@ -26,7 +26,7 @@ import { designRoom, type RoomDesign } from './rooms.js';
  * Bump on ANY change that alters output for an existing seed.
  * seed + GENERATOR_VERSION must always reproduce the same map.
  */
-export const GENERATOR_VERSION = '0.11.0';
+export const GENERATOR_VERSION = '0.12.0';
 
 /** Layout attempts per mission, and missions tried, before giving up on a seed. */
 const LAYOUT_TRIES = 8;
@@ -160,6 +160,9 @@ function emit(seed: string, mission: Mission, layout: Layout, rng: Rng, level: n
         wallTex: reg.wallTex ?? wallTex,
         ...secretArea(secretId.get(id)),
         special: (reg.special ?? 0) | (secretId.has(id) ? SPECIAL_SECRET_AREA : 0),
+        ...(reg.slab
+          ? { slab: { bottom: floorOf(id) + reg.slab.bottom, top: floorOf(id) + reg.slab.top, topTex: T.Grate, bottomTex: T.Metal, sideTex: T.Metal } }
+          : {}),
       }),
     );
     for (let y = 0; y < h; y++) {

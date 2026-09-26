@@ -21,6 +21,6 @@ describe('room templates', () => {
         }
       }
     }
-    expect([...seen].sort()).toEqual(['arena', 'hall', 'pit', 'plain', 'platform', 'stairs']);
+    expect([...seen].sort()).toEqual(['arena', 'catwalk', 'hall', 'pit', 'plain', 'platform', 'stairs']);
   });
 });

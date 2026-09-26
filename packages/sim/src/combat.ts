@@ -145,6 +145,7 @@ export function stepProjectiles(world: World, state: SimState): void {
     if (!cellOpen(world, state, cx, cy)) return false;
     const sec = world.map.sectors[g.sectorAt(cx, cy)]!;
     if (q.z < floorNow(world, state, cx, cy) || q.z > sec.ceil) return false;
+    if (sec.slab && q.z >= sec.slab.bottom && q.z <= sec.slab.top) return false;
     return ++q.ttl <= PROJECTILE_TTL;
   });
 }

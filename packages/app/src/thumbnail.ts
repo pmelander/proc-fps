@@ -104,6 +104,7 @@ function sectorColor(s: Sector): string {
   if (door === DoorKind.Key) return KEY_COLORS[s.tag] ?? '#ffffff';
   if (door === DoorKind.Secret) return SECRET;
   if (isLift(s)) return '#40d8e0';
+  if (s.slab) return '#8aa0b4';
   if (isDamaging(s)) return '#ff7a20';
   // Brighter when higher: platforms and stairs pop, pits sink.
   const l = Math.max(18, Math.min(92, 48 + s.floor * 0.7));

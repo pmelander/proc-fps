@@ -46,6 +46,7 @@ export class MapBuilder {
       ceilTex: spec.ceilTex ?? 0,
       tag: spec.tag ?? 0,
       special: spec.special ?? 0,
+      ...(spec.slab ? { slab: { ...spec.slab } } : {}),
     });
     const tex = spec.wallTex ?? 0;
     this.addLoop(s, orient(outer, true), tex);

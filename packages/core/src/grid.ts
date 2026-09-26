@@ -81,15 +81,30 @@ export class CellGrid {
     return this.inBounds(cx, cy) ? this.sector[cx + cy * this.width]! : -1;
   }
 
-  walkable(cx: number, cy: number): boolean {
+  /** Walkable levels a cell can have: 0 = its floor, 1 = the top of its slab (a catwalk). */
+  static readonly LEVELS = 2;
+
+  /** How many levels the cell has: 0 (solid), 1, or 2 with a slab. */
+  levels(cx: number, cy: number): number {
     const s = this.sectorAt(cx, cy);
-    if (s < 0) return false;
-    const sec = this.map.sectors[s]!;
-    return sec.ceil - sec.floor >= PLAYER_HEIGHT;
+    return s < 0 ? 0 : this.map.sectors[s]!.slab ? 2 : 1;
   }
 
-  floorAt(cx: number, cy: number): number {
-    return this.map.sectors[this.sectorAt(cx, cy)]?.floor ?? 0;
+  /** The floor and ceiling a mover on `level` stands between: under a slab, its underside is the ceiling. */
+  span(cx: number, cy: number, level = 0): readonly [number, number] | undefined {
+    const sec = this.map.sectors[this.sectorAt(cx, cy)];
+    if (!sec) return undefined;
+    if (!sec.slab) return level === 0 ? [sec.floor, sec.ceil] : undefined;
+    return level === 0 ? [sec.floor, sec.slab.bottom] : level === 1 ? [sec.slab.top, sec.ceil] : undefined;
+  }
+
+  walkable(cx: number, cy: number, level = 0): boolean {
+    const sp = this.span(cx, cy, level);
+    return !!sp && sp[1] - sp[0] >= PLAYER_HEIGHT;
+  }
+
+  floorAt(cx: number, cy: number, level = 0): number {
+    return this.span(cx, cy, level)?.[0] ?? 0;
   }
 
   cellOf(x: number, y: number): [number, number] {
@@ -100,21 +115,42 @@ export class CellGrid {
     return [this.originX + (cx + 0.5) * this.cellSize, this.originY + (cy + 0.5) * this.cellSize];
   }
 
-  /** Can a mover step from (ax, ay) to the adjacent cell in direction `h`? Same rules for player and AI. */
-  canStep(ax: number, ay: number, h: Heading): boolean {
+  /**
+   * The level a mover on (ax, ay, level) lands on when it steps in direction `h`, or -1 if it
+   * cannot. Same rules for player and AI: rise at most MAX_STEP, room for PLAYER_HEIGHT through
+   * the opening. With a choice it takes the highest floor, so a mover walks onto a catwalk rather
+   * than dropping through it.
+   */
+  stepTarget(ax: number, ay: number, level: number, h: Heading): number {
     const bx = ax + HEADING_DX[h];
     const by = ay + HEADING_DY[h];
-    if (!this.walkable(ax, ay) || !this.walkable(bx, by)) return false;
-    if (this.edgeBlocked(ax, ay, h)) return false;
-    const from = this.map.sectors[this.sectorAt(ax, ay)]!;
-    const to = this.map.sectors[this.sectorAt(bx, by)]!;
-    // A lift stands wherever it can be called: the end nearest the other cell's floor.
-    const fromFloor = isLift(from) && !isLift(to) ? liftFloorNear(from, to.floor) : from.floor;
-    const toFloor = isLift(to) && !isLift(from) ? liftFloorNear(to, fromFloor) : to.floor;
-    if (toFloor - fromFloor > MAX_STEP) return false;
-    // Must fit through the opening while crossing the shared edge.
-    if (Math.min(from.ceil, to.ceil) - Math.max(fromFloor, toFloor) < PLAYER_HEIGHT) return false;
-    return true;
+    if (!this.walkable(ax, ay, level) || this.edgeBlocked(ax, ay, h)) return -1;
+    const fromSec = this.map.sectors[this.sectorAt(ax, ay)]!;
+    const toSec = this.map.sectors[this.sectorAt(bx, by)];
+    if (!toSec) return -1;
+    const [fromFloor0, fromCeil] = this.span(ax, ay, level)!;
+    let best = -1;
+    let bestFloor = -Infinity;
+    for (let lb = 0; lb < this.levels(bx, by); lb++) {
+      if (!this.walkable(bx, by, lb)) continue;
+      const [toFloor0, toCeil] = this.span(bx, by, lb)!;
+      // A lift stands wherever it can be called: the end nearest the other cell's floor.
+      const fromFloor = isLift(fromSec) && !isLift(toSec) && level === 0 ? liftFloorNear(fromSec, toFloor0) : fromFloor0;
+      const toFloor = isLift(toSec) && !isLift(fromSec) && lb === 0 ? liftFloorNear(toSec, fromFloor) : toFloor0;
+      if (toFloor - fromFloor > MAX_STEP) continue;
+      // Must fit through the opening while crossing the shared edge.
+      if (Math.min(fromCeil, toCeil) - Math.max(fromFloor, toFloor) < PLAYER_HEIGHT) continue;
+      if (toFloor > bestFloor) {
+        best = lb;
+        bestFloor = toFloor;
+      }
+    }
+    return best;
+  }
+
+  /** Can a mover on `level` step from (ax, ay) to the adjacent cell in direction `h`? */
+  canStep(ax: number, ay: number, h: Heading, level = 0): boolean {
+    return this.stepTarget(ax, ay, level, h) >= 0;
   }
 
   private edgeBlocked(cx: number, cy: number, h: Heading): boolean {
@@ -127,39 +163,61 @@ export class CellGrid {
     }
   }
 
-  /** Breadth-first reachability from a cell using `canStep`. Cells marked in `blocked` are never entered. */
-  reachableFrom(cx: number, cy: number, blocked?: Uint8Array): Uint8Array {
-    return this.search(cx, cy, false, blocked);
+  /** Cells reachable (on any level) from a cell's level. Cells marked in `blocked` are never entered. */
+  reachableFrom(cx: number, cy: number, blocked?: Uint8Array, level = 0): Uint8Array {
+    return this.cellsOf(this.reachStates(cx, cy, level, false, blocked));
   }
 
-  /** Cells that can reach (cx, cy): the same search over reversed `canStep` edges. */
-  reachingTo(cx: number, cy: number): Uint8Array {
-    return this.search(cx, cy, true);
+  /** Cells from which (cx, cy, level) can be reached: the same search over reversed steps. */
+  reachingTo(cx: number, cy: number, level = 0): Uint8Array {
+    return this.cellsOf(this.reachStates(cx, cy, level, true));
   }
 
-  private search(cx: number, cy: number, reverse: boolean, blocked?: Uint8Array): Uint8Array {
-    const seen = new Uint8Array(this.width * this.height);
-    if (!this.walkable(cx, cy)) return seen;
-    const queue: number[] = [cx + cy * this.width];
+  /**
+   * Breadth-first search over (cell, level) states, indexed cell × LEVELS + level. Forward: where
+   * a mover can go from here; reverse: from where it can come here.
+   */
+  reachStates(cx: number, cy: number, level: number, reverse: boolean, blocked?: Uint8Array): Uint8Array {
+    const L = CellGrid.LEVELS;
+    const seen = new Uint8Array(this.width * this.height * L);
+    if (!this.walkable(cx, cy, level)) return seen;
+    const queue: number[] = [(cx + cy * this.width) * L + level];
     seen[queue[0]!] = 1;
+    const visit = (state: number) => {
+      if (!seen[state] && !blocked?.[Math.floor(state / L)]) {
+        seen[state] = 1;
+        queue.push(state);
+      }
+    };
     for (let qi = 0; qi < queue.length; qi++) {
-      const i = queue[qi]!;
+      const st = queue[qi]!;
+      const l = st % L;
+      const i = (st - l) / L;
       const x = i % this.width;
       const y = (i - x) / this.width;
       for (let h = 0 as Heading; h < 4; h = (h + 1) as Heading) {
         const nx = x + HEADING_DX[h];
         const ny = y + HEADING_DY[h];
-        // Forward: can we step out to the neighbour? Reverse: can the neighbour step in to us?
-        const ok = reverse ? this.canStep(nx, ny, ((h + 2) % 4) as Heading) : this.canStep(x, y, h);
-        if (!ok) continue;
-        const j = nx + ny * this.width;
-        if (!seen[j] && !blocked?.[j]) {
-          seen[j] = 1;
-          queue.push(j);
+        if (!this.inBounds(nx, ny)) continue;
+        const n = nx + ny * this.width;
+        if (!reverse) {
+          const lb = this.stepTarget(x, y, l, h);
+          if (lb >= 0) visit(n * L + lb);
+        } else {
+          // Every level of the neighbour whose step towards us lands on our level.
+          const back = ((h + 2) % 4) as Heading;
+          for (let ln = 0; ln < this.levels(nx, ny); ln++) if (this.stepTarget(nx, ny, ln, back) === l) visit(n * L + ln);
         }
       }
     }
     return seen;
+  }
+
+  private cellsOf(states: Uint8Array): Uint8Array {
+    const L = CellGrid.LEVELS;
+    const cells = new Uint8Array(states.length / L);
+    for (let i = 0; i < states.length; i++) if (states[i]) cells[Math.floor(i / L)] = 1;
+    return cells;
   }
 }
 

@@ -22,6 +22,7 @@ import test01 from '@proc-fps/core/maps/test01.json';
 import test02 from '@proc-fps/core/maps/test02.json';
 import test03 from '@proc-fps/core/maps/test03.json';
 import test04 from '@proc-fps/core/maps/test04.json';
+import test05 from '@proc-fps/core/maps/test05.json';
 import { AudioEngine } from './audio/engine.js';
 import type { SoundId } from './audio/sounds.js';
 import { drawAutomap } from './automap.js';
@@ -30,7 +31,7 @@ import { Weapon } from './weapon.js';
 import { InputSampler } from './input.js';
 import { KEY_COLORS, KEY_NAMES } from './keys.js';
 
-const TEST_MAPS: Record<string, MapData> = { test01: test01 as MapData, test02: test02 as MapData, test03: test03 as MapData, test04: test04 as MapData };
+const TEST_MAPS: Record<string, MapData> = { test01: test01 as MapData, test02: test02 as MapData, test03: test03 as MapData, test04: test04 as MapData, test05: test05 as MapData };
 const NOTICE_SECONDS = 2.5;
 /** Dev: run the sim without the pointer lock (the in-app preview cannot take it). */
 const AUTOPLAY = new URLSearchParams(location.search).has('autoplay');

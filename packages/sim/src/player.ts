@@ -12,12 +12,13 @@ const QUARTER_PI = Math.PI / 4;
 /** What the sim tells movement about the world as it is now: doors, lifts, enemies. */
 export interface MoveGate {
   /**
-   * Can a step from (cx, cy) in heading h start now? 'go'; 'wait' when a door or lift is on its
-   * way (the step goes ahead once it is ready); 'no'. `fresh` = the key was pressed this tick.
+   * Can a step from (cx, cy) on `level` in heading h start now? The level it lands on; 'wait' when
+   * a door or lift is on its way (the step goes ahead once it is ready); 'no'. `fresh` = the key
+   * was pressed this tick.
    */
-  tryStep(cx: number, cy: number, h: Heading, fresh: boolean): 'go' | 'wait' | 'no';
-  /** A cell's floor height right now (lifts move). */
-  floorAt(cx: number, cy: number): number;
+  tryStep(cx: number, cy: number, level: number, h: Heading, fresh: boolean): number | 'wait' | 'no';
+  /** A cell level's floor height right now (lifts move). */
+  floorAt(cx: number, cy: number, level: number): number;
   /** Whoever stands on this cell rides it. */
   isLift(cx: number, cy: number): boolean;
 }
@@ -53,10 +54,12 @@ export function stepPlayer(world: World, p: PlayerState, input: InputFrame, gate
     const fresh = (movePressed || strafePressed) && intent !== NO_QUEUE;
     const dir = fresh ? intent : p.queued !== NO_QUEUE ? p.queued : intent;
     p.queued = NO_QUEUE;
-    const verdict = dir === NO_QUEUE ? 'no' : gate.tryStep(p.cx, p.cy, dir as Heading, fresh);
-    if (verdict === 'go') {
+    const verdict = dir === NO_QUEUE ? 'no' : gate.tryStep(p.cx, p.cy, p.level, dir as Heading, fresh);
+    if (typeof verdict === 'number') {
       p.fromCx = p.cx;
       p.fromCy = p.cy;
+      p.fromLevel = p.level;
+      p.level = verdict;
       p.cx += [1, 0, -1, 0][dir]!;
       p.cy += [0, 1, 0, -1][dir]!;
       p.stepTick = 1;
@@ -88,7 +91,7 @@ function smoothstep(t: number): number {
 function updatePose(world: World, p: PlayerState, gate: MoveGate): void {
   const g = world.grid;
   const [tx, ty] = g.center(p.cx, p.cy);
-  const toFloor = gate.floorAt(p.cx, p.cy);
+  const toFloor = gate.floorAt(p.cx, p.cy, p.level);
 
   if (p.stepTick === 0) {
     p.x = tx;
@@ -99,7 +102,7 @@ function updatePose(world: World, p: PlayerState, gate: MoveGate): void {
     const t = p.stepTick / STEP_TICKS;
     const e = smoothstep(t);
     const [fx, fy] = g.center(p.fromCx, p.fromCy);
-    const fromFloor = gate.floorAt(p.fromCx, p.fromCy);
+    const fromFloor = gate.floorAt(p.fromCx, p.fromCy, p.fromLevel);
     p.x = fx + (tx - fx) * e;
     p.y = fy + (ty - fy) * e;
     if (toFloor > fromFloor) {

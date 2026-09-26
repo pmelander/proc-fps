@@ -1,5 +1,5 @@
 {
-  "version": 0,
+  "version": 1,
   "meta": {"name":"test04","theme":"base"},
   "vertices": [
     {"x":0,"y":0},

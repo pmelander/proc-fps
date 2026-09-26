@@ -54,10 +54,11 @@ export function stepSim(world: World, state: SimState, input: InputFrame): void 
   const enemyIn = (cx: number, cy: number) =>
     state.enemies.some((e) => e.mode !== 'dead' && ((e.cx === cx && e.cy === cy) || (e.stepTick > 0 && e.fromCx === cx && e.fromCy === cy)));
   const gate: MoveGate = {
-    floorAt: (cx, cy) => floorNow(world, state, cx, cy),
+    floorAt: (cx, cy, level) => floorNow(world, state, cx, cy, level),
     isLift: (cx, cy) => liftAtCell(world, cx, cy) >= 0,
-    tryStep: (cx, cy, h, fresh) => {
-      if (!world.grid.canStep(cx, cy, h)) return 'no';
+    tryStep: (cx, cy, level, h, fresh) => {
+      const lands = world.grid.stepTarget(cx, cy, level, h);
+      if (lands < 0) return 'no';
       const nx = cx + HEADING_DX[h];
       const ny = cy + HEADING_DY[h];
       if (enemyIn(nx, ny)) return 'no';
@@ -78,13 +79,13 @@ export function stepSim(world: World, state: SimState, input: InputFrame): void 
       const to = liftAtCell(world, nx, ny);
       if (from >= 0 && liftMoving(world, state, from)) return 'no';
       if (to >= 0 && liftMoving(world, state, to)) return 'wait';
-      const here = floorNow(world, state, cx, cy);
-      const there = floorNow(world, state, nx, ny);
+      const here = floorNow(world, state, cx, cy, level);
+      const there = floorNow(world, state, nx, ny, lands);
       if (to >= 0 && Math.abs(there - here) > MAX_STEP) {
         callLift(world, state, to, here);
         return 'wait';
       }
-      return there - here > MAX_STEP ? 'no' : 'go';
+      return there - here > MAX_STEP ? 'no' : lands;
     },
   };
   stepPlayer(world, p, q, gate);
@@ -114,7 +115,7 @@ export function stepSim(world: World, state: SimState, input: InputFrame): void 
 
   // Damaging floors: standing on one hurts every HAZARD_TICKS (the first tick on it counts).
   const sector = world.map.sectors[world.grid.sectorAt(cx, cy)];
-  if (sector && isDamaging(sector) && p.onGround && p.z <= sector.floor) {
+  if (sector && isDamaging(sector) && p.level === 0 && p.onGround && p.z <= sector.floor) {
     if (p.hazardTicks++ % HAZARD_TICKS === 0) hurtPlayer(state, HAZARD_DAMAGE);
   } else {
     p.hazardTicks = 0;
