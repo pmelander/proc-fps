@@ -140,7 +140,11 @@ export class LevelRenderer {
    */
   bakeSprites(aspects: readonly number[], looks: readonly EnemyLook[] = BASELINE_LOOKS): void {
     this.backend.beginPass({ target: this.spriteAtlas, clearColor: [0, 0, 0, 0] });
-    this.backend.draw({ pipeline: this.spriteBakePipeline, first: 0, count: 3, uniforms: lookUniforms(looks, aspects) });
+    // One shape row per draw: each stays short enough for the GPU watchdog on slow machines.
+    const uniforms = lookUniforms(looks, aspects);
+    for (let row = 0; row < SPRITE_ROWS; row++) {
+      this.backend.draw({ pipeline: this.spriteBakePipeline, first: 0, count: 3, uniforms: { ...uniforms, uRow: { int: row } } });
+    }
     this.backend.endPass();
   }
 

@@ -431,6 +431,12 @@ export const SPRITE_PLAN_VEC4S = 5;
  * Model space: y up, height 1 = the sprite's height, facing +z, +x on the model's left, so a
  * camera turning counter-clockwise around it moves towards +x. Output alpha: 0 = empty,
  * 0.5 = body, 1 = eye (glows in SPRITE_FS).
+ *
+ * Written for fast compiles on Direct3D (ANGLE, so Firefox and Chrome on Windows), whose compiler
+ * inlines every call and unrolls every loop it can: the shared parts are evaluated once after the
+ * silhouette, normals come from one model call in a loop, and loop bounds start at `Z` (a zero the
+ * compiler cannot see through) so loops stay loops. Baked one shape row per draw (`uRow`), so no
+ * single draw runs long enough to trip the GPU watchdog.
  */
 export const SPRITE_BAKE_FS = /* glsl */ `#version 300 es
 precision highp float;
@@ -440,6 +446,8 @@ uniform float uAspect[${SPRITE_ROWS}];
 // 1 (horn pairs, horn length, back spikes, eyes), 2 (skin rgb, pattern), 3 (accent rgb, pattern
 // scale), 4 (extra arm pair, tail length, bulk, unused).
 uniform vec4 uPlan[${SPRITE_ROWS * SPRITE_PLAN_VEC4S}];
+// The shape row this draw bakes.
+uniform int uRow;
 out vec4 outColor;
 
 float sphere(vec3 p, vec3 c, float r) { return length(p - c) - r; }
@@ -463,16 +471,18 @@ vec2 pick(vec2 a, vec2 b) { return a.x < b.x ? a : b; }
 // The plan of the shape being baked.
 vec4 P0, P1, P4;
 float gAspect;
+// Zero, from a uniform: loops counting from it are not unrolled.
+int Z;
 
 // Horn pairs on a head (centre hc, radius hr): the first pair sweeps up, the second curls out low.
 float horns(vec3 p, vec3 hc, float hr, float scale) {
   float d = 1e9;
   int pairs = int(P1.x + 0.5);
   float len = P1.y * scale;
-  for (int k = 0; k < 2; k++) {
+  for (int k = Z; k < 2; k++) {
     if (k >= pairs) break;
     float fk = float(k);
-    for (int s = -1; s <= 1; s += 2) {
+    for (int s = Z - 1; s <= 1; s += 2) {
       float sx = float(s);
       vec3 root = hc + vec3(sx * hr * (0.55 + 0.3 * fk), hr * (0.55 - 0.5 * fk), -hr * 0.15);
       vec3 mid = root + vec3(sx * len * (0.4 + 0.35 * fk), len * (0.65 - 0.55 * fk), -len * 0.25);
@@ -499,7 +509,7 @@ float eyes(vec3 p, vec3 hc, float hr, float size) {
 float spikes(vec3 p, vec3 a, vec3 b, float len) {
   int n = int(P1.z + 0.5);
   float d = 1e9;
-  for (int i = 0; i < 6; i++) {
+  for (int i = Z; i < 6; i++) {
     if (i >= n) break;
     vec3 r = mix(a, b, n == 1 ? 0.5 : float(i) / float(n - 1));
     d = min(d, capsule(p, r, r + vec3(0.0, len * 0.45, -len), 0.015));
@@ -520,13 +530,13 @@ float tail(vec3 p, vec3 root, float swing) {
 float extraArms(vec3 p, vec3 shoulder, float swing, bool attack, inout float bone) {
   if (P4.x < 0.5) return 1e9;
   float d = 1e9;
-  for (int s = -1; s <= 1; s += 2) {
+  for (int s = Z - 1; s <= 1; s += 2) {
     float sx = float(s);
     vec3 sh = vec3(shoulder.x * sx, shoulder.y, shoulder.z);
     vec3 el = sh + vec3(0.07 * sx, -0.1, 0.07);
     vec3 h = el + vec3(-0.02 * sx, attack ? 0.1 : -0.06, 0.13 + swing * sx);
     d = min(d, min(capsule(p, sh, el, 0.032), capsule(p, el, h, 0.026)));
-    for (int i = -1; i <= 1; i++) bone = min(bone, capsule(p, h, h + vec3(float(i) * 0.015, -0.02, 0.05), 0.008));
+    for (int i = Z - 1; i <= 1; i++) bone = min(bone, capsule(p, h, h + vec3(float(i) * 0.015, -0.02, 0.05), 0.008));
   }
   return d;
 }
@@ -538,12 +548,14 @@ vec2 body(vec3 p, int shape, int frame) {
   float headS = P0.z;
   float jaw = P0.w;
   float skin;
-  float eye = 1e9;
   float bone = 1e9;
   float flesh = 1e9;
+  // Where the shared parts attach, set by each silhouette.
+  vec3 hc, hornC, eyeC, spikeA, spikeB, tailRoot, shoulder2;
+  float hr, hornScale, eyeSize, spikeLen;
   if (shape == 0) { // grunt: a hunched shambler with lopsided shoulders, claws and a gaping jaw
-    vec3 hc = vec3(0.0, 0.8, 0.15);
-    float hr = 0.075 * headS;
+    hc = vec3(0.0, 0.8, 0.15);
+    hr = 0.075 * headS;
     skin = capsule(p, vec3(0.0, 0.44, 0.0), vec3(0.0, 0.72, 0.08), 0.13);
     skin = smin(skin, sphere(p, vec3(0.0, 0.52, 0.05), 0.12), 0.05);
     skin = smin(skin, sphere(p, vec3(0.11, 0.75, -0.02), 0.095), 0.04);
@@ -553,7 +565,7 @@ vec2 body(vec3 p, int shape, int frame) {
     skin = smin(skin, rbox(p, hc + vec3(0.0, -0.055 * headS, 0.03 * headS), vec3(0.058, 0.025, 0.05) * headS * vec3(jaw, 1.0, 1.0), 0.02), 0.02);
     skin = max(skin, -sphere(p, mouth, 0.04 * headS * jaw)); // the open mouth
     flesh = sphere(p, mouth - vec3(0.0, 0.0, 0.035 * headS), 0.03 * headS * jaw);
-    for (int i = -2; i <= 2; i++) bone = min(bone, sphere(p, mouth + vec3(float(i) * 0.018 * jaw * headS, 0.02 * headS, -0.02 * headS), 0.011));
+    for (int i = Z - 2; i <= 2; i++) bone = min(bone, sphere(p, mouth + vec3(float(i) * 0.018 * jaw * headS, 0.02 * headS, -0.02 * headS), 0.011));
     // Arms to the knees, the right one thrown forward to attack, three claws each.
     vec3 rs = vec3(0.14, 0.73, 0.02);
     vec3 ls = vec3(-0.14, 0.71, 0.02);
@@ -563,7 +575,7 @@ vec2 body(vec3 p, int shape, int frame) {
     vec3 le = ls + (vec3(-0.21, 0.54, 0.05 + swing * 0.5) - ls) * heft;
     skin = min(skin, min(capsule(p, rs, re, 0.045), capsule(p, re, rh, 0.04)));
     skin = min(skin, min(capsule(p, ls, le, 0.045), capsule(p, le, lh, 0.04)));
-    for (int i = -1; i <= 1; i++) {
+    for (int i = Z - 1; i <= 1; i++) {
       bone = min(bone, capsule(p, rh, rh + vec3(float(i) * 0.02, -0.06, 0.03), 0.009));
       bone = min(bone, capsule(p, lh, lh + vec3(float(i) * 0.02, -0.06, 0.03), 0.009));
     }
@@ -571,13 +583,14 @@ vec2 body(vec3 p, int shape, int frame) {
     skin = min(skin, min(capsule(p, vec3(0.07, 0.44, 0.0), vec3(0.09, 0.24, 0.06 + swing), 0.05), capsule(p, vec3(0.09, 0.24, 0.06 + swing), vec3(0.09, 0.02, swing), 0.045)));
     skin = min(skin, min(capsule(p, vec3(-0.07, 0.44, 0.0), vec3(-0.09, 0.24, 0.06 - swing), 0.05), capsule(p, vec3(-0.09, 0.24, 0.06 - swing), vec3(-0.09, 0.02, -swing), 0.045)));
     // Ribs showing through.
-    for (int i = 0; i < 3; i++) flesh = min(flesh, capsule(p, vec3(-0.09, 0.56 + float(i) * 0.045, 0.14), vec3(0.09, 0.56 + float(i) * 0.045, 0.14), 0.008));
-    skin = min(skin, min(tail(p, vec3(0.0, 0.42, -0.1), swing), extraArms(p, vec3(0.13, 0.6, 0.05), swing, attack, bone)));
-    bone = min(bone, min(horns(p, hc, hr, 1.0), spikes(p, vec3(0.0, 0.5, -0.1), vec3(0.0, 0.74, -0.03), 0.07)));
-    eye = eyes(p, hc, hr, 1.0);
+    for (int i = Z; i < 3; i++) flesh = min(flesh, capsule(p, vec3(-0.09, 0.56 + float(i) * 0.045, 0.14), vec3(0.09, 0.56 + float(i) * 0.045, 0.14), 0.008));
+    tailRoot = vec3(0.0, 0.42, -0.1);
+    shoulder2 = vec3(0.13, 0.6, 0.05);
+    hornC = hc; eyeC = hc; hornScale = 1.0; eyeSize = 1.0;
+    spikeA = vec3(0.0, 0.5, -0.1); spikeB = vec3(0.0, 0.74, -0.03); spikeLen = 0.07;
   } else if (shape == 1 || shape == 3) { // brute / mini boss: a hulk with a hump, tusks, huge fists
-    vec3 hc = vec3(0.0, 0.7, 0.17);
-    float hr = 0.075 * headS;
+    hc = vec3(0.0, 0.7, 0.17);
+    hr = 0.075 * headS;
     skin = rbox(p, vec3(0.0, 0.52, 0.0), vec3(0.23, 0.19, 0.15), 0.1);
     skin = smin(skin, sphere(p, vec3(0.0, 0.7, -0.07), 0.17), 0.06); // back hump
     skin = smin(skin, sphere(p, hc, hr), 0.04); // head sunk into the chest
@@ -593,43 +606,49 @@ vec2 body(vec3 p, int shape, int frame) {
     skin = min(skin, min(capsule(p, vec3(0.09, 0.36, 0.0), vec3(0.11, 0.03, swing), 0.07), capsule(p, vec3(-0.09, 0.36, 0.0), vec3(-0.11, 0.03, -swing), 0.07)));
     flesh = min(flesh, sphere(p, vec3(0.12, 0.5, 0.15), 0.05)); // a raw wound
     if (shape == 3) bone = min(bone, min(capsule(p, vec3(0.24, 0.76, 0.0), vec3(0.34, 0.9, -0.02), 0.03), capsule(p, vec3(-0.24, 0.76, 0.0), vec3(-0.34, 0.9, -0.02), 0.03))); // shoulder spurs
-    skin = min(skin, min(tail(p, vec3(0.0, 0.4, -0.14), swing), extraArms(p, vec3(0.24, 0.48, 0.08), swing, attack, bone)));
-    bone = min(bone, min(horns(p, hc, hr, 1.2), spikes(p, vec3(0.0, 0.64, -0.2), vec3(0.0, 0.82, -0.14), 0.1)));
-    eye = eyes(p, hc, hr, 0.9);
+    tailRoot = vec3(0.0, 0.4, -0.14);
+    shoulder2 = vec3(0.24, 0.48, 0.08);
+    hornC = hc; eyeC = hc; hornScale = 1.2; eyeSize = 0.9;
+    spikeA = vec3(0.0, 0.64, -0.2); spikeB = vec3(0.0, 0.82, -0.14); spikeLen = 0.1;
   } else if (shape == 2) { // sniper: a gaunt stalker, long skull, big eyes, a bone rifle
-    vec3 hc = vec3(0.0, 0.9, 0.03);
-    float hr = 0.062 * headS;
+    hc = vec3(0.0, 0.9, 0.03);
+    hr = 0.062 * headS;
     skin = capsule(p, vec3(0.0, 0.48, 0.0), vec3(0.0, 0.8, 0.04), 0.08);
     skin = smin(skin, min(sphere(p, vec3(0.1, 0.8, 0.0), 0.06), sphere(p, vec3(-0.1, 0.8, 0.0), 0.06)), 0.04); // bony shoulders
     skin = smin(skin, capsule(p, hc + vec3(0.0, -0.03, 0.01), hc + vec3(0.0, 0.07, -0.1) * headS, hr), 0.03); // long skull
     skin = max(skin, -rbox(p, hc + vec3(0.0, -0.045, 0.06) * headS, vec3(0.03 * jaw, 0.008, 0.03), 0.004)); // a slit mouth
-    for (int i = 0; i < 4; i++) flesh = min(flesh, capsule(p, vec3(-0.06, 0.55 + float(i) * 0.05, 0.075), vec3(0.06, 0.55 + float(i) * 0.05, 0.075), 0.007));
+    for (int i = Z; i < 4; i++) flesh = min(flesh, capsule(p, vec3(-0.06, 0.55 + float(i) * 0.05, 0.075), vec3(0.06, 0.55 + float(i) * 0.05, 0.075), 0.007));
     skin = min(skin, min(capsule(p, vec3(0.05, 0.47, 0.0), vec3(0.06, 0.24, -0.05 + swing), 0.035), capsule(p, vec3(0.06, 0.24, -0.05 + swing), vec3(0.05, 0.02, swing), 0.03)));
     skin = min(skin, min(capsule(p, vec3(-0.05, 0.47, 0.0), vec3(-0.06, 0.24, -0.05 - swing), 0.035), capsule(p, vec3(-0.06, 0.24, -0.05 - swing), vec3(-0.05, 0.02, -swing), 0.03)));
     bone = capsule(p, vec3(0.07, 0.72, -0.06), vec3(0.06, attack ? 0.82 : 0.7, 0.34), 0.026); // rifle
     skin = min(skin, capsule(p, vec3(0.1, 0.78, 0.0), vec3(0.07, 0.72, 0.16), 0.03 * heft));
-    skin = min(skin, min(tail(p, vec3(0.0, 0.45, -0.06), swing), extraArms(p, vec3(0.08, 0.66, 0.02), swing, attack, bone)));
-    bone = min(bone, min(horns(p, hc, hr, 0.8), spikes(p, vec3(0.0, 0.55, -0.07), vec3(0.0, 0.82, -0.05), 0.05)));
-    eye = eyes(p, hc, hr, 1.5);
+    tailRoot = vec3(0.0, 0.45, -0.06);
+    shoulder2 = vec3(0.08, 0.66, 0.02);
+    hornC = hc; eyeC = hc; hornScale = 0.8; eyeSize = 1.5;
+    spikeA = vec3(0.0, 0.55, -0.07); spikeB = vec3(0.0, 0.82, -0.05); spikeLen = 0.05;
   } else { // boss: a lumpy mass with a toothed maw, horns and many eyes
-    vec3 hc = vec3(0.0, 0.56, 0.0);
-    float hr = 0.34;
+    hc = vec3(0.0, 0.56, 0.0);
+    hr = 0.34;
     skin = sphere(p, vec3(0.0, 0.46, 0.0), 0.34);
     skin = smin(skin, sphere(p, vec3(0.16, 0.66, -0.05), 0.16 * headS), 0.08);
     skin = smin(skin, sphere(p, vec3(-0.18, 0.6, -0.02), 0.14 * headS), 0.08);
     skin = max(skin, -rbox(p, vec3(0.0, 0.42, 0.33), vec3(0.16 * jaw, 0.06, 0.08), 0.04)); // the maw
     flesh = rbox(p, vec3(0.0, 0.42, 0.27), vec3(0.14 * jaw, 0.05, 0.03), 0.03);
-    for (int i = -4; i <= 4; i++) {
+    for (int i = Z - 4; i <= 4; i++) {
       float x = float(i) * 0.04 * jaw;
       if (abs(x) > 0.15 * jaw) continue;
       bone = min(bone, capsule(p, vec3(x, 0.48, 0.3), vec3(x, 0.44, 0.31), 0.012));
       bone = min(bone, capsule(p, vec3(x + 0.02, 0.36, 0.3), vec3(x + 0.02, 0.4, 0.31), 0.012));
     }
     skin = min(skin, min(capsule(p, vec3(0.16, 0.18, 0.0), vec3(0.18, 0.02, swing), 0.09 * heft), capsule(p, vec3(-0.16, 0.18, 0.0), vec3(-0.18, 0.02, -swing), 0.09 * heft)));
-    skin = min(skin, min(tail(p, vec3(0.0, 0.3, -0.3), swing), extraArms(p, vec3(0.28, 0.4, 0.15), swing, attack, bone)));
-    bone = min(bone, min(horns(p, hc + vec3(0.0, 0.0, attack ? 0.05 : 0.0), hr, 1.8), spikes(p, vec3(0.0, 0.5, -0.32), vec3(0.0, 0.78, -0.12), 0.12)));
-    eye = eyes(p, hc + vec3(0.0, 0.06, -0.05), hr, 0.5);
+    tailRoot = vec3(0.0, 0.3, -0.3);
+    shoulder2 = vec3(0.28, 0.4, 0.15);
+    hornC = hc + vec3(0.0, 0.0, attack ? 0.05 : 0.0); eyeC = hc + vec3(0.0, 0.06, -0.05); hornScale = 1.8; eyeSize = 0.5;
+    spikeA = vec3(0.0, 0.5, -0.32); spikeB = vec3(0.0, 0.78, -0.12); spikeLen = 0.12;
   }
+  skin = min(skin, min(tail(p, tailRoot, swing), extraArms(p, shoulder2, swing, attack, bone)));
+  bone = min(bone, min(horns(p, hornC, hr, hornScale), spikes(p, spikeA, spikeB, spikeLen)));
+  float eye = eyes(p, eyeC, hr, eyeSize);
   return pick(pick(vec2(skin, 0.0), vec2(eye, 1.0)), pick(vec2(bone, 2.0), vec2(flesh, 3.0)));
 }
 
@@ -662,10 +681,12 @@ void main() {
   ivec2 px = ivec2(gl_FragCoord.xy);
   ivec2 tile = px / ${SPRITE_TILE};
   int shape = tile.y;
+  if (shape != uRow) discard;
   int dir = tile.x / ${SPRITE_FRAMES};
   int frame = tile.x % ${SPRITE_FRAMES};
   vec2 uv = (vec2(px % ${SPRITE_TILE}) + 0.5) / ${SPRITE_TILE}.0;
   gAspect = uAspect[shape];
+  Z = int(min(gAspect, 0.0));
   int base = shape * ${SPRITE_PLAN_VEC4S};
   P0 = uPlan[base];
   P1 = uPlan[base + 1];
@@ -681,7 +702,7 @@ void main() {
   vec2 hit = vec2(1e9, 0.0);
   vec3 sp = ro;
   int f = frame == 3 ? 0 : frame;
-  for (int i = 0; i < 96; i++) {
+  for (int i = Z; i < 80; i++) {
     sp = toModel(ro + fwd * t, frame);
     hit = model(sp, shape, f);
     if (hit.x < 0.002 || t > 3.0) break;
@@ -696,11 +717,12 @@ void main() {
     return;
   }
   // Shade with the SDF gradient and a light from above and in front.
-  vec2 e = vec2(0.002, 0.0);
-  vec3 n = normalize(vec3(
-    model(sp + e.xyy, shape, f).x - model(sp - e.xyy, shape, f).x,
-    model(sp + e.yxy, shape, f).x - model(sp - e.yxy, shape, f).x,
-    model(sp + e.yyx, shape, f).x - model(sp - e.yyx, shape, f).x));
+  vec3 n = vec3(0.0);
+  for (int i = Z; i < 4; i++) {
+    vec3 k = 0.5773 * (2.0 * vec3(float(((i + 3) >> 1) & 1), float((i >> 1) & 1), float(i & 1)) - 1.0);
+    n += k * model(sp + k * 0.002, shape, f).x;
+  }
+  n = normalize(n);
   vec3 light = normalize(-fwd + vec3(0.3, 0.9, 0.0));
   float diff = 0.35 + 0.75 * max(dot(n, light), 0.0);
   // Skin in the plan's colours: mottled, banded, spotted or pale-bellied; yellowed bone; wet raw flesh.
