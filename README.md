@@ -47,7 +47,7 @@ npm run ci             # typecheck + tests + generator health + build
 - A linedef's front side is on the **left** of v1→v2. Sector outer loops are CCW and holes are CW.
 - All geometry is axis-aligned and on the 128-unit cell lattice, and things sit at cell centres (`validateGridAlignment`). Sub-cell decorative geometry will need a Decorative line flag.
 - Adjacent sectors must share identical edges, so split T-junctions with `rect(..., { east: [...] })`.
-- Units are Doom-like: cell 128, player height 56, max step 24.
+- Units are Doom-like: cell 128, player height 72, eye 64, max step 24.
 
 ## Status
 

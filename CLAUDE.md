@@ -57,4 +57,4 @@ core MapBuilder ────┴─> MapData ─ validate ─┤
 - All geometry is axis-aligned on the 128 lattice, and things sit at cell centres (`validateGridAlignment`).
 - Adjacent sectors must share identical edges. Split T-junctions with `rect(..., { east: [...] })`. Loops that touch at a single vertex are unsupported (`chainLoops`).
 - `MapBuilder` merges shared edges into two-sided lines. A wall takes its texture from the side it is seen from, so a platform riser needs `setSideTextures` to override the surrounding room's `lower` texture.
-- Units: cell 128, player height 56, eye 41, max step 24.
+- Units: cell 128, player height 72, eye 64, max step 24. Taller than Doom's 56/41, which only read right through Doom's 1.2 vertical pixel stretch. Openings must be at least `PLAYER_HEIGHT` tall.

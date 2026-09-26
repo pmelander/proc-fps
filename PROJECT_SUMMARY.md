@@ -58,7 +58,7 @@ npm run gen:stats -- --seeds 10000
 - A linedef's front side is on the **left** of v1→v2 (Doom uses the right). Sector outer loops are CCW and holes are CW.
 - All geometry is axis-aligned on the 128 lattice, and things sit at cell centres. Adjacent sectors must share identical edges, so split T-junctions via `rect(..., { east: [...] })`.
 - `MapBuilder` merges shared edges into two-sided lines automatically. A wall's texture comes from the side it's seen from; for example, a platform riser uses the surrounding room's `lower` texture, so override it with `setSideTextures`.
-- Units are Doom-like: cell 128, player height 56, eye 41, max step 24.
+- Units are Doom-like: cell 128, player height 72, eye 64, max step 24. The player is taller than Doom's 56/41 because square pixels lose Doom's 1.2 vertical stretch; at 41 the camera felt too close to the floor.
 - Heading 0/1/2/3 = E/N/W/S, which equals map angle h × 90°.
 
 ## Movement model (implemented)

@@ -1,7 +1,12 @@
 /** Gameplay dimensions shared by sim (movement) and gen (validation). Doom-like units. */
 export const PLAYER_RADIUS = 16;
-export const PLAYER_HEIGHT = 56;
-export const PLAYER_EYE_HEIGHT = 41;
+export const PLAYER_HEIGHT = 72;
+/**
+ * Camera only (render-side). Doom's 41/56 read taller than it was because of its 1.2 vertical pixel
+ * stretch; with square pixels the player needs more height. Keep it below PLAYER_HEIGHT minus the
+ * near plane and bob, so the camera never pokes through the lowest ceiling validation allows.
+ */
+export const PLAYER_EYE_HEIGHT = 64;
 /** Max floor rise between adjacent cells the player can step up. Drops are unlimited. */
 export const MAX_STEP = 24;
 
