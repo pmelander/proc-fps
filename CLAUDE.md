@@ -35,7 +35,7 @@ core MapBuilder ────┴─> MapData ─ validate ─┤
 ```
 
 - **core**: map format v0 and `hashMap`, `Rng` (sfc32 with named forks), deterministic trig (`dsin`/`dcos`), `MapBuilder` + `rect`, sector loop geometry and `SectorLocator`, and `CellGrid`. `CellGrid` is derived from the sector map and is the single movement truth: `canStep` is shared by the sim, the generator validation, and future AI.
-- **gen**: `generate.ts` is currently a stub (`GENERATOR_VERSION = '0.2.0-stub'`). `validateGenerated` layers gameplay checks (grid alignment, reachability, traps) on top of core's structural `validateMap`.
+- **gen**: `generate.ts` is currently a stub (`GENERATOR_VERSION = '0.2.0-stub'`). `mission.ts` is the M2 mission graph (rooms and door types, built as Dormans-style cycles, with `validateMission` checking the key and mini-boss progression); it is not wired into `generate` yet. `validateGenerated` layers gameplay checks (grid alignment, reachability, traps) on top of core's structural `validateMap`.
 - **sim**: fixed-step state machine. `InputFrame`s go in, `PlayerState` comes out. `ReplayRecorder` and `runReplay` store a map hash plus the input log, and `hashState` pins behaviour in tests.
 - **render**: `RenderBackend` interface with the WebGL2 implementation behind it. The mesh is grouped per sector (`LevelRenderer.sectorRanges`, reserved for portal culling). The scene renders at low resolution, then a 64-colour palette post pass applies Bayer dithering.
 - **app**: browser shell only. It holds the loop with tick interpolation, DOM input → `InputFrame`, the HUD compass, and the automap (hold Tab; look direction up). F8 downloads the current replay.
