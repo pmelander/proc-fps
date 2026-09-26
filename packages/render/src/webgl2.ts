@@ -296,6 +296,7 @@ export class WebGL2Backend implements RenderBackend {
         case 16: gl.uniformMatrix4fv(loc, false, v); break;
         default: throw new Error(`uniform ${name}: unsupported Float32Array length ${v.length}`);
       }
-    } else gl.uniform1i(loc, v.int);
+    } else if ('floats' in v) gl.uniform1fv(loc, v.floats);
+    else gl.uniform1i(loc, v.int);
   }
 }

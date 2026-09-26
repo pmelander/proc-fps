@@ -1,5 +1,6 @@
-import { ThingType, type MapData } from '@proc-fps/core';
+import { DoorKind, ThingType, doorKindOf, keyOfThing, type MapData } from '@proc-fps/core';
 import { paletteRGBA } from '@proc-fps/render';
+import type { SimState, World } from '@proc-fps/sim';
 
 /** Matches the 3D view's low-res height so the map has the same chunky pixels. */
 const ROWS = 240;
@@ -19,6 +20,9 @@ const CEIL_STEP = pal(1, 4); // brown
 const EXIT = pal(6, 6); // toxic
 const THING = pal(4, 6); // steel
 const PLAYER = pal(7, 7); // bone
+const DOOR = pal(0, 6); // gray
+/** Key ids 0–3: blue, red, yellow, green, as near as the palette gets. */
+const KEY = [pal(4, 7), pal(3, 6), pal(5, 7), pal(6, 7)];
 
 export interface AutomapView {
   x: number;
@@ -30,7 +34,7 @@ export interface AutomapView {
 let image: ImageData | undefined;
 
 /** Look-direction-up automap, rasterised at low res with 1-px lines and scaled up pixelated. */
-export function drawAutomap(canvas: HTMLCanvasElement, map: MapData, view: AutomapView): void {
+export function drawAutomap(canvas: HTMLCanvasElement, map: MapData, view: AutomapView, world: World, state: SimState): void {
   const h = ROWS;
   const w = Math.max(1, Math.round((ROWS * canvas.clientWidth) / Math.max(1, canvas.clientHeight)));
   if (canvas.width !== w || canvas.height !== h) {
@@ -73,13 +77,22 @@ export function drawAutomap(canvas: HTMLCanvasElement, map: MapData, view: Autom
     }
   };
 
+  const doorColor = (s: number): number | undefined => {
+    const sec = map.sectors[s]!;
+    const kind = doorKindOf(sec);
+    const id = world.doors.findIndex((d) => d.sector === s);
+    if (kind === DoorKind.None || (id >= 0 && state.doors[id]! > 0)) return undefined; // open doors vanish
+    return kind === DoorKind.Key ? KEY[sec.tag] : DOOR;
+  };
   for (const ld of map.linedefs) {
     let c: number;
     if (!ld.back) c = WALL;
     else {
       const F = map.sectors[ld.front.sector]!;
       const B = map.sectors[ld.back.sector]!;
-      if (F.floor !== B.floor) c = FLOOR_STEP;
+      const door = doorColor(ld.front.sector) ?? doorColor(ld.back.sector);
+      if (door !== undefined) c = door;
+      else if (F.floor !== B.floor) c = FLOOR_STEP;
       else if (F.ceil !== B.ceil) c = CEIL_STEP;
       else continue;
     }
@@ -88,10 +101,14 @@ export function drawAutomap(canvas: HTMLCanvasElement, map: MapData, view: Autom
     line(sx(a.x, a.y), sy(a.x, a.y), sx(b.x, b.y), sy(b.x, b.y), c);
   }
 
+  let keyIndex = 0;
   for (const t of map.things) {
+    const key = keyOfThing(t.type);
+    if (key >= 0 && state.taken & (1 << keyIndex++)) continue;
     const x = sx(t.x, t.y);
     const y = sy(t.x, t.y);
-    for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) plot(x + i, y + j, t.type === ThingType.Exit ? EXIT : THING);
+    const c = key >= 0 ? KEY[key]! : t.type === ThingType.Exit ? EXIT : THING;
+    for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) plot(x + i, y + j, c);
   }
 
   // Player chevron, always pointing up.

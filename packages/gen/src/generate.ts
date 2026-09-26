@@ -1,13 +1,13 @@
-import { BaseTex as T, CELL_SIZE, CellPlan, HEADING_DX, HEADING_DY, MapBuilder, Rng, ThingType, emitCellPlan, type MapData, type TextureId } from '@proc-fps/core';
+import { BaseTex as T, CELL_SIZE, CellPlan, DoorKind, HEADING_DX, HEADING_DY, MapBuilder, Rng, ThingType, emitCellPlan, keyThing, type MapData, type TextureId } from '@proc-fps/core';
 import { embedMission, type CellRect, type Layout, type LayoutFailure } from './layout.js';
-import { generateMission, type Mission } from './mission.js';
+import { generateMission, type DoorKind as MissionDoor, type Mission, type RoomKind } from './mission.js';
 import { designRoom, type RoomDesign } from './rooms.js';
 
 /**
  * Bump on ANY change that alters output for an existing seed.
  * seed + GENERATOR_VERSION must always reproduce the same map.
  */
-export const GENERATOR_VERSION = '0.4.0';
+export const GENERATOR_VERSION = '0.5.0';
 
 /** Layout attempts per mission, and missions tried, before giving up on a seed. */
 const LAYOUT_TRIES = 8;
@@ -31,8 +31,8 @@ export interface Generated {
 }
 
 /**
- * M2 pipeline: mission graph → grid embedding → room templates → cell plan → sectors.
- * Doors and keys (slice 4) are still to come, so every connection is an open doorway.
+ * M2 pipeline: mission graph → grid embedding → room templates → cell plan → sectors,
+ * with doors in corridor cells and keys in their rooms.
  */
 export function generate(seed: string): MapData {
   return generateDetailed(seed).map;
@@ -56,6 +56,10 @@ export function generateDetailed(seed: string): Generated {
   }
   throw new Error(`seed ${seed}: no layout after ${attempts} attempts`);
 }
+
+const DOOR_KIND: Record<MissionDoor, DoorKind> = { open: DoorKind.None, auto: DoorKind.Auto, key: DoorKind.Key };
+/** Rooms a door belongs next to: it guards them. */
+const GUARDED: readonly RoomKind[] = ['miniboss', 'boss', 'loot'];
 
 function emit(seed: string, mission: Mission, layout: Layout, rng: Rng): { map: MapData; designs: RoomDesign[] } {
   const C = CELL_SIZE;
@@ -116,6 +120,18 @@ function emit(seed: string, mission: Mission, layout: Layout, rng: Rng): { map: 
       things.push([ThingType.PlayerStart, sx, sy, heading * 90]);
     }
     if (node.kind === 'exit') things.push([ThingType.Exit, cx, cy, 0]);
+    if (node.key !== undefined) {
+      // On base floor, as near the centre as the template allows (the outer ring always is).
+      let best: [number, number] = [cx, cy];
+      let bestD = Infinity;
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const d = Math.abs(r.x0 + x - cx) + Math.abs(r.y0 + y - cy);
+          if (design.cells[x + y * w] === 0 && d < bestD) [best, bestD] = [[r.x0 + x, r.y0 + y], d];
+        }
+      }
+      things.push([keyThing(node.key), best[0], best[1], 0]);
+    }
     return design;
   });
 
@@ -126,6 +142,23 @@ function emit(seed: string, mission: Mission, layout: Layout, rng: Rng): { map: 
     const ends = spec(T.Trim);
     const middle = spec(T.Tech);
     c.cells.forEach(([x, y], k) => plan.set(x, y, k === 0 || k === c.cells.length - 1 ? ends : middle));
+
+    // The door goes in the corridor cell next to the room it guards (the b end otherwise).
+    const edge = mission.edges[c.edge]!;
+    const kind = DOOR_KIND[edge.door];
+    if (kind === DoorKind.None) continue;
+    const atA = GUARDED.includes(mission.nodes[edge.a]!.kind) && !GUARDED.includes(mission.nodes[edge.b]!.kind);
+    const [dx, dy] = c.cells[atA ? 0 : c.cells.length - 1]!;
+    plan.set(dx, dy, plan.spec({
+      floor: STOREY_FLOOR,
+      ceil: STOREY_FLOOR + CORRIDOR_HEIGHT,
+      light: 144,
+      floorTex: T.Trim,
+      ceilTex: T.Ceiling,
+      wallTex: T.Metal,
+      special: kind,
+      tag: edge.key ?? 0,
+    }));
   }
 
   const b = new MapBuilder();

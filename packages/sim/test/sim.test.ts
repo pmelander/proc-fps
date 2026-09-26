@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { STEP_TICKS, type MapData } from '@proc-fps/core';
 import { generate } from '@proc-fps/gen';
 import test01 from '@proc-fps/core/maps/test01.json';
+import test02 from '@proc-fps/core/maps/test02.json';
 import {
+  DOOR_OPEN_TICKS,
   EMPTY_INPUT,
   NO_QUEUE,
   ReplayRecorder,
   createSimState,
   createWorld,
+  doorAtCell,
   hashState,
   runReplay,
   stepSim,
@@ -136,5 +139,51 @@ describe('replays', () => {
   it('refuse to run on a different map', () => {
     const rec = new ReplayRecorder(map);
     expect(() => runReplay(generate('other'), rec.finish())).toThrow(/recorded on map/);
+  });
+});
+
+describe('doors and keys (test02)', () => {
+  const m = test02 as MapData;
+  const world = createWorld(m);
+  const tap = (f: Partial<InputFrame>, wait = STEP_TICKS) => [...hold(f, 1), ...idle(wait)];
+  const forward = tap({ move: 1 });
+  const turn = (a: number) => hold({ turn: a }, 1);
+  const through = tap({ move: 1 }, DOOR_OPEN_TICKS + STEP_TICKS + 2); // a tap into an auto door waits for it
+  const auto = doorAtCell(world, 4, 1);
+  const keyDoor = doorAtCell(world, 6, 3);
+  // Start (0,1) facing east; three taps reach (3,1), next to the first auto door.
+  const toAutoDoor = [...forward, ...forward, ...forward];
+  // Through it, then to (6,1) below the key door.
+  const toHall = [...toAutoDoor, ...through, ...forward, ...forward];
+
+  it('opens an auto door when walked into, then finishes the step', () => {
+    const waiting = run(m, [...toAutoDoor, ...tap({ move: 1 }, 5)]);
+    expect(cell(waiting)).toEqual([3, 1]);
+    expect(waiting.doors[auto]).toBeGreaterThan(0);
+    expect(waiting.doors[auto]).toBeLessThan(DOOR_OPEN_TICKS);
+    const passed = run(m, [...toAutoDoor, ...through]);
+    expect(cell(passed)).toEqual([4, 1]);
+    expect(passed.doors[auto]).toBe(DOOR_OPEN_TICKS);
+  });
+
+  it('refuses a key door without its key and opens it with E once the key is held', () => {
+    const facingLock = [...toHall, ...turn(Math.PI / 2), ...forward]; // (6,2) facing north
+    const refused = run(m, [...facingLock, ...hold({ use: true }, 1)]);
+    expect(refused.events).toEqual([{ type: 'locked', door: keyDoor, key: 0 }]);
+    expect(run(m, [...facingLock, ...tap({ use: true }, DOOR_OPEN_TICKS)]).doors[keyDoor]).toBe(0);
+    const bumped = run(m, [...facingLock, ...hold({ move: 1 }, 40)]);
+    expect(cell(bumped)).toEqual([6, 2]);
+    expect(bumped.doors[keyDoor]).toBe(0);
+
+    const withKey = run(m, [
+      ...toHall, ...forward, // (7,1)
+      ...through, ...forward, ...forward, // through the second auto door to the key at (10,1)
+      ...turn(Math.PI), ...forward, ...forward, ...forward, ...forward, // back west to (6,1)
+      ...turn(-Math.PI / 2), ...forward, // north to (6,2)
+      ...tap({ use: true }, DOOR_OPEN_TICKS), ...forward, ...forward, // through the lock into the exit room
+    ]);
+    expect(withKey.keys).toBe(1);
+    expect(withKey.taken).toBe(1);
+    expect(cell(withKey)).toEqual([6, 4]);
   });
 });

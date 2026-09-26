@@ -1,3 +1,4 @@
+import { MAX_MOVERS, TEX_SCALE } from './mesh.js';
 import { PALETTE_SIZE } from './palette.js';
 
 /**
@@ -10,17 +11,29 @@ in vec3 aPos;
 in vec2 aUV;
 in float aLight;
 in float aTex;
+in float aMover;
+in float aMove;
+in float aSlide;
 uniform mat4 uViewProj;
+// Per mover: how far its geometry sits below where the mesh put it (doors, taken pickups).
+uniform float uMover[${MAX_MOVERS}];
 out vec2 vUV;
 out float vLight;
 flat out int vTex;
 out vec3 vWorld;
 void main() {
-  vUV = aUV;
+  vec3 pos = aPos;
+  vec2 uv = aUV;
+  if (aMover > 0.5) {
+    float off = uMover[int(aMover - 0.5)];
+    pos.y -= off * aMove;
+    uv.y += off * aSlide * ${TEX_SCALE};
+  }
+  vUV = uv;
   vLight = aLight;
   vTex = int(aTex + 0.5);
-  vWorld = aPos;
-  gl_Position = uViewProj * vec4(aPos, 1.0);
+  vWorld = pos;
+  gl_Position = uViewProj * vec4(pos, 1.0);
 }`;
 
 export const LEVEL_FS = /* glsl */ `#version 300 es
@@ -41,6 +54,10 @@ float noise(vec2 p) {
 }
 float fbm(vec2 p) { return 0.5 * noise(p) + 0.25 * noise(p * 2.1) + 0.125 * noise(p * 4.3); }
 float edge(vec2 f, float w) { vec2 e = min(f, 1.0 - f); return step(w, min(e.x, e.y)); }
+// Key colours by key id: blue, red, yellow, green. Matches KEY_COLORS in app.
+vec3 keyColor(int k) {
+  return k == 0 ? vec3(0.25, 0.45, 1.0) : k == 1 ? vec3(1.0, 0.22, 0.15) : k == 2 ? vec3(1.0, 0.85, 0.2) : vec3(0.25, 0.9, 0.3);
+}
 
 vec3 pattern(int id, vec2 uv) {
   if (id == 1) { // stone blocks
@@ -82,6 +99,21 @@ vec3 pattern(int id, vec2 uv) {
   if (id == 7) { // slime
     float n = fbm(uv * 3.0 + vec2(uTime * 0.15, uTime * 0.07));
     return vec3(0.1, 0.55, 0.12) * (0.4 + 1.0 * n);
+  }
+  if (id == 8 || (id >= 10 && id <= 13)) { // doors: heavy panel; key doors trimmed in their key's colour
+    vec2 f = fract(uv * vec2(1.0, 0.5));
+    float frame = 1.0 - edge(f, 0.08);
+    float seam = step(abs(f.x - 0.5), 0.015);
+    float bolts = step(length(fract(uv * vec2(2.0, 1.0)) - 0.5), 0.08);
+    vec3 plate = vec3(0.3, 0.29, 0.27) * (0.75 + 0.3 * fbm(uv * vec2(6.0, 12.0)));
+    vec3 trim = id >= 10 ? keyColor(id - 10) : vec3(0.45, 0.42, 0.38);
+    vec3 c = mix(plate, trim, frame);
+    c = mix(c, vec3(0.06), seam);
+    if (id >= 10) c = mix(c, trim, step(abs(f.y - 0.5), 0.05));
+    return c + bolts * 0.12;
+  }
+  if (id >= 14 && id <= 17) { // key pickups: bright, slowly pulsing
+    return keyColor(id - 14) * (1.1 + 0.25 * sin(uTime * 4.0) - 0.4 * uv.y);
   }
   // Missing texture: loud checker, never silently wrong.
   float c = mod(floor(uv.x * 4.0) + floor(uv.y * 4.0), 2.0);

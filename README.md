@@ -6,7 +6,7 @@ Movement is grid-based with free look: the mouse aims freely, and WASD steps one
 
 ```
 npm install
-npm run dev            # http://localhost:5173/?seed=anything  or  ?map=test01
+npm run dev            # http://localhost:5173/?seed=anything  or  ?map=test01 / test02
 npm run ci             # typecheck + tests + generator health + build
 ```
 

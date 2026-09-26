@@ -1,6 +1,6 @@
 import { mat4Mul, mat4Perspective, viewFromMapCamera, type MapData } from '@proc-fps/core';
 import type { BufferHandle, PipelineHandle, RenderBackend, RenderTargetHandle, TextureHandle } from './backend.js';
-import { LEVEL_LAYOUT, buildLevelMesh, type SectorRange } from './mesh.js';
+import { LEVEL_LAYOUT, MAX_MOVERS, buildLevelMesh, type SectorRange } from './mesh.js';
 import { PALETTE_SIZE, paletteRGBA } from './palette.js';
 import { LEVEL_FS, LEVEL_VS, POST_FS, POST_VS } from './shaders.js';
 
@@ -41,6 +41,8 @@ export class LevelRenderer {
   private ib: BufferHandle | null = null;
   private indexCount = 0;
   sectorRanges: SectorRange[] = [];
+  /** Per-mover offsets for this frame (door ids, then key pickups); see `mesh.ts`. */
+  readonly movers = new Float32Array(MAX_MOVERS);
 
   constructor(private readonly backend: RenderBackend, opts: Partial<RendererOptions> = {}) {
     this.opts = { ...DEFAULTS, ...opts };
@@ -101,6 +103,7 @@ export class LevelRenderer {
           uViewProj: mat4Mul(proj, view),
           uEye: new Float32Array([cam.x, cam.eyeZ, -cam.y]),
           uTime: time,
+          uMover: { floats: this.movers },
         },
       });
     }

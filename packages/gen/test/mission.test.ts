@@ -30,7 +30,7 @@ describe('mission graph', () => {
 });
 
 describe('validateMission', () => {
-  // start – gate =locked=> boss – exit, with the mini boss behind use doors holding the boss key.
+  // start – gate =key=> boss – exit, with the boss key in a dead end behind the mini boss.
   const base = (): Mission => ({
     nodes: [
       { id: 0, kind: 'start' },
@@ -42,10 +42,10 @@ describe('validateMission', () => {
     ],
     edges: [
       { a: 0, b: 1, door: 'open' },
-      { a: 0, b: 2, door: 'use' },
+      { a: 0, b: 2, door: 'auto' },
       { a: 2, b: 3, door: 'open' },
-      { a: 1, b: 4, door: 'locked', key: BOSS_KEY },
-      { a: 4, b: 5, door: 'standard' },
+      { a: 1, b: 4, door: 'key', key: BOSS_KEY },
+      { a: 4, b: 5, door: 'auto' },
     ],
   });
 
@@ -58,12 +58,6 @@ describe('validateMission', () => {
     delete m.nodes[3]!.key;
     m.nodes[4]!.key = BOSS_KEY;
     expect(validateMission(m)).toContain('unreachable with keys in play: 4, 5');
-  });
-
-  it('rejects a mini boss that can be walked around', () => {
-    const m = base();
-    m.edges[1]!.door = 'standard';
-    expect(validateMission(m)).toContain('mini boss reachable without passing a use door');
   });
 
   it('rejects a boss key reachable without the mini boss', () => {

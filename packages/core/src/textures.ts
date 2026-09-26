@@ -11,4 +11,9 @@ export const BaseTex = {
   Ceiling: 5,
   Trim: 6,
   Slime: 7,
+  /** Door panels: auto doors use Door, key doors DoorKey + their key id. */
+  Door: 8,
+  DoorKey: 10,
+  /** Key pickup markers: Key + key id. */
+  Key: 14,
 } as const;

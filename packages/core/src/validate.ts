@@ -1,6 +1,6 @@
 import { PLAYER_HEIGHT } from './constants.js';
 import { SectorLocator, sectorPolygons } from './geometry.js';
-import { MAP_FORMAT_VERSION, ThingType, type MapData } from './map.js';
+import { DoorKind, MAP_FORMAT_VERSION, MAX_KEYS, ThingType, doorKindOf, type MapData } from './map.js';
 
 /**
  * Structural validation shared by every map source. Returns a list of problems;
@@ -17,6 +17,9 @@ export function validateMap(map: MapData): string[] {
   map.sectors.forEach((s, i) => {
     if (!(s.ceil > s.floor)) errors.push(`sector ${i}: ceiling ${s.ceil} not above floor ${s.floor}`);
     if (s.light < 0 || s.light > 255) errors.push(`sector ${i}: light ${s.light} out of range`);
+    const door = doorKindOf(s);
+    if (door !== DoorKind.None && s.ceil - s.floor < PLAYER_HEIGHT) errors.push(`sector ${i}: door opening lower than the player`);
+    if (door === DoorKind.Key && (s.tag < 0 || s.tag >= MAX_KEYS)) errors.push(`sector ${i}: key door key ${s.tag} out of range`);
   });
 
   const seen = new Set<string>();

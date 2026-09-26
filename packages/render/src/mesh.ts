@@ -1,9 +1,9 @@
 import earcut from 'earcut';
-import { sectorPolygons, type MapData, type Side } from '@proc-fps/core';
+import { BaseTex, DoorKind, SectorLocator, doorKindOf, doorSectors, keyOfThing, sectorPolygons, type MapData, type Side } from '@proc-fps/core';
 import type { VertexLayout } from './backend.js';
 
-/** pos(3) uv(2) light(1) tex(1) */
-export const LEVEL_FLOATS_PER_VERTEX = 7;
+/** pos(3) uv(2) light(1) tex(1) mover(1) move(1) slide(1) */
+export const LEVEL_FLOATS_PER_VERTEX = 10;
 export const LEVEL_LAYOUT: VertexLayout = {
   stride: LEVEL_FLOATS_PER_VERTEX * 4,
   attributes: [
@@ -11,10 +11,33 @@ export const LEVEL_LAYOUT: VertexLayout = {
     { name: 'aUV', components: 2, offset: 12 },
     { name: 'aLight', components: 1, offset: 20 },
     { name: 'aTex', components: 1, offset: 24 },
+    { name: 'aMover', components: 1, offset: 28 },
+    { name: 'aMove', components: 1, offset: 32 },
+    { name: 'aSlide', components: 1, offset: 36 },
   ],
 };
 
-const TEX_SCALE = 1 / 64;
+export const TEX_SCALE = 1 / 64;
+
+/**
+ * Movers: geometry the static mesh shifts down by a per-frame offset (a uniform array).
+ * Mover ids are door ids first, then key pickups in thing order. A door's offset is how far
+ * its ceiling sits below the open height; a taken key's offset sinks its marker out of view.
+ */
+export const MAX_MOVERS = 64;
+/** Offset that hides a taken pickup: far below the floor and past the far plane. */
+export const HIDDEN_OFFSET = 1e5;
+
+const KEY_MARKER_SIZE = 10;
+const KEY_MARKER_HEIGHT = 32;
+
+/** Vertex movement: which mover, whether position follows it, whether the texture slides with it. */
+interface Motion {
+  mover: number;
+  move: number;
+  slide: number;
+}
+const STILL: Motion = { mover: -1, move: 0, slide: 0 };
 
 export interface SectorRange {
   first: number;
@@ -29,18 +52,29 @@ export interface LevelMesh {
    * contiguous so portal culling can draw only visible sectors.
    */
   sectors: SectorRange[];
+  /** Mover counts: doors, then key pickups. */
+  doors: number;
+  keys: number;
 }
 
 /** Pure function: map → GPU-ready geometry. Runs in Node for tests. */
 export function buildLevelMesh(map: MapData): LevelMesh {
   const perSector = map.sectors.map(() => ({ v: [] as number[], i: [] as number[] }));
   const light = (s: number) => map.sectors[s]!.light / 255;
+  const doors = doorSectors(map);
+  if (doors.length > MAX_MOVERS) throw new Error(`${doors.length} doors exceed MAX_MOVERS`);
+  const doorOf = new Map(doors.map((s, i) => [s, i]));
+  const doorTex = (s: number) => {
+    const sec = map.sectors[s]!;
+    const kind = doorKindOf(sec);
+    return kind === DoorKind.Key ? BaseTex.DoorKey + sec.tag : BaseTex.Door;
+  };
 
-  const pushVertex = (s: number, x: number, h: number, y: number, u: number, v: number, tex: number): number => {
+  const pushVertex = (s: number, x: number, h: number, y: number, u: number, v: number, tex: number, m: Motion = STILL, lit = light(s)): number => {
     const bucket = perSector[s]!;
     const idx = bucket.v.length / LEVEL_FLOATS_PER_VERTEX;
     // World: X = map.x, Y = height, Z = -map.y
-    bucket.v.push(x, h, -y, u, v, light(s), tex);
+    bucket.v.push(x, h, -y, u, v, lit, tex, m.mover + 1, m.move, m.slide);
     return idx;
   };
 
@@ -62,13 +96,16 @@ export function buildLevelMesh(map: MapData): LevelMesh {
         }
       }
       const tris = earcut(flat, holeStarts.length ? holeStarts : undefined, 2);
-      for (const [h, tex] of [
-        [sec.floor, sec.floorTex],
-        [sec.ceil, sec.ceilTex],
-      ] as const) {
+      const door = doorOf.get(s);
+      const planes: [number, number, Motion][] = [
+        [sec.floor, sec.floorTex, STILL],
+        // A door's ceiling is the moving slab.
+        [sec.ceil, sec.ceilTex, door === undefined ? STILL : { mover: door, move: 1, slide: 0 }],
+      ];
+      for (const [h, tex, m] of planes) {
         const base = ids.map((vi) => {
           const p = map.vertices[vi]!;
-          return pushVertex(s, p.x, h, p.y, p.x * TEX_SCALE, p.y * TEX_SCALE, tex);
+          return pushVertex(s, p.x, h, p.y, p.x * TEX_SCALE, p.y * TEX_SCALE, tex, m);
         });
         for (const t of tris) perSector[s]!.i.push(base[t]!);
       }
@@ -77,13 +114,16 @@ export function buildLevelMesh(map: MapData): LevelMesh {
 
   // Walls. Face culling is off in M1, so each quad is emitted once, owned by the
   // sector it is visible from.
-  const quad = (s: number, ax: number, ay: number, bx: number, by: number, lo: number, hi: number, tex: number) => {
-    if (hi <= lo) return;
+  const quad = (
+    s: number, ax: number, ay: number, bx: number, by: number, lo: number, hi: number, tex: number,
+    bottom = STILL, top = STILL, always = false,
+  ) => {
+    if (hi <= lo && !always) return;
     const len = Math.sqrt((bx - ax) ** 2 + (by - ay) ** 2) * TEX_SCALE;
-    const a0 = pushVertex(s, ax, lo, ay, 0, lo * TEX_SCALE, tex);
-    const b0 = pushVertex(s, bx, lo, by, len, lo * TEX_SCALE, tex);
-    const b1 = pushVertex(s, bx, hi, by, len, hi * TEX_SCALE, tex);
-    const a1 = pushVertex(s, ax, hi, ay, 0, hi * TEX_SCALE, tex);
+    const a0 = pushVertex(s, ax, lo, ay, 0, lo * TEX_SCALE, tex, bottom);
+    const b0 = pushVertex(s, bx, lo, by, len, lo * TEX_SCALE, tex, bottom);
+    const b1 = pushVertex(s, bx, hi, by, len, hi * TEX_SCALE, tex, top);
+    const a1 = pushVertex(s, ax, hi, ay, 0, hi * TEX_SCALE, tex, top);
     perSector[s]!.i.push(a0, b0, b1, a0, b1, a1);
   };
 
@@ -92,10 +132,25 @@ export function buildLevelMesh(map: MapData): LevelMesh {
     const b = map.vertices[ld.v2]!;
     const F = map.sectors[ld.front.sector]!;
     if (!ld.back) {
-      quad(ld.front.sector, a.x, a.y, b.x, b.y, F.floor, F.ceil, ld.front.middle || ld.front.lower);
+      // Inside a door cell the walls' tops follow the lowering ceiling.
+      const door = doorOf.get(ld.front.sector);
+      const top = door === undefined ? STILL : { mover: door, move: 1, slide: 0 };
+      quad(ld.front.sector, a.x, a.y, b.x, b.y, F.floor, F.ceil, ld.front.middle || ld.front.lower, STILL, top);
       continue;
     }
     const B = map.sectors[ld.back.sector]!;
+    // Door panel, seen from the neighbour: hangs from the door's open ceiling and slides down to its floor.
+    for (const [doorSide, other] of [
+      [ld.front, ld.back],
+      [ld.back, ld.front],
+    ] as const) {
+      const door = doorOf.get(doorSide.sector);
+      if (door === undefined || doorOf.has(other.sector)) continue;
+      const D = map.sectors[doorSide.sector]!;
+      const bottom = { mover: door, move: 1, slide: 1 };
+      const top = { mover: door, move: 0, slide: 1 };
+      quad(other.sector, a.x, a.y, b.x, b.y, D.ceil, D.ceil, doorTex(doorSide.sector), bottom, top, true);
+    }
     if (F.floor !== B.floor) {
       const side: Side = F.floor < B.floor ? ld.front : ld.back;
       quad(side.sector, a.x, a.y, b.x, b.y, Math.min(F.floor, B.floor), Math.max(F.floor, B.floor), side.lower);
@@ -105,6 +160,26 @@ export function buildLevelMesh(map: MapData): LevelMesh {
       quad(side.sector, a.x, a.y, b.x, b.y, Math.min(F.ceil, B.ceil), Math.max(F.ceil, B.ceil), side.upper);
     }
     // Middle textures on two-sided lines (grates, windows) need alpha: later.
+  }
+
+  // Key pickups: a small diamond hovering over the floor, sunk out of view once taken.
+  const locator = new SectorLocator(map);
+  let keys = 0;
+  for (const t of map.things) {
+    const key = keyOfThing(t.type);
+    if (key < 0) continue;
+    const s = locator.locate(t.x, t.y);
+    const m = { mover: doors.length + keys++, move: 1, slide: 0 };
+    if (s < 0 || m.mover >= MAX_MOVERS) continue;
+    const z = map.sectors[s]!.floor + KEY_MARKER_HEIGHT;
+    const r = KEY_MARKER_SIZE;
+    const tex = BaseTex.Key + key;
+    const at = (dx: number, dy: number, dz: number) =>
+      pushVertex(s, t.x + dx, z + dz, t.y + dy, 0.5 + dx / (2 * r), 0.5 + dz / (2 * r), tex, m, 1);
+    const top = at(0, 0, r * 1.4);
+    const bot = at(0, 0, -r * 1.4);
+    const ring = [at(r, 0, 0), at(0, r, 0), at(-r, 0, 0), at(0, -r, 0)];
+    for (let k = 0; k < 4; k++) perSector[s]!.i.push(top, ring[k]!, ring[(k + 1) % 4]!, bot, ring[(k + 1) % 4]!, ring[k]!);
   }
 
   // Concatenate buckets, rebasing indices.
@@ -123,5 +198,5 @@ export function buildLevelMesh(map: MapData): LevelMesh {
     vo += b.v.length;
     io += b.i.length;
   }
-  return { vertices, indices, sectors };
+  return { vertices, indices, sectors, doors: doors.length, keys };
 }

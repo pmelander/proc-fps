@@ -3,6 +3,8 @@ import type { World } from './world.js';
 
 /** No buffered step. */
 export const NO_QUEUE = -1;
+/** Ticks for a door to open fully (≈ 0.33 s). */
+export const DOOR_OPEN_TICKS = 20;
 
 export interface PlayerState {
   // --- grid movement (authoritative) ---
@@ -22,6 +24,8 @@ export interface PlayerState {
   /** Previous tick's input signs, for press-edge detection. */
   prevMove: number;
   prevStrafe: number;
+  /** Previous tick's use button, for press-edge detection. */
+  prevUse: boolean;
 
   // --- derived pose (for rendering, projectiles, AI line of sight) ---
   x: number;
@@ -36,9 +40,26 @@ export interface PlayerState {
   pitch: number;
 }
 
+/** Things that happened this tick, for the HUD and (later) sound. Cleared every tick. */
+export type SimEvent =
+  | { type: 'door'; door: number }
+  /** Tried a key door without its key. */
+  | { type: 'locked'; door: number; key: number }
+  | { type: 'key'; key: number };
+
 export interface SimState {
   tick: number;
   player: PlayerState;
+  /**
+   * Per door id: 0 = closed, 1 … DOOR_OPEN_TICKS - 1 = opening, DOOR_OPEN_TICKS = open.
+   * Doors stay open once opened.
+   */
+  doors: number[];
+  /** Bitmask of key ids held. */
+  keys: number;
+  /** Bitmask over `world.keys`: pickups already taken. */
+  taken: number;
+  events: SimEvent[];
 }
 
 export function headingFromAngle(angle: number): Heading {
@@ -65,6 +86,7 @@ export function createSimState(world: World): SimState {
       lastAxis: 0,
       prevMove: 0,
       prevStrafe: 0,
+      prevUse: false,
       x,
       y,
       z: world.grid.floorAt(cx, cy),
@@ -74,7 +96,16 @@ export function createSimState(world: World): SimState {
       angle,
       pitch: 0,
     },
+    doors: world.doors.map(() => 0),
+    keys: 0,
+    taken: 0,
+    events: [],
   };
+}
+
+/** How far a door's ceiling sits below its open height, in map units: travel when closed, 0 when open. */
+export function doorOffset(world: World, state: SimState, door: number): number {
+  return world.doors[door]!.travel * (1 - state.doors[door]! / DOOR_OPEN_TICKS);
 }
 
 export function clonePlayer(p: PlayerState): PlayerState {

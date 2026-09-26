@@ -124,9 +124,9 @@ export class CellGrid {
     }
   }
 
-  /** Breadth-first reachability from a cell using `canStep`. */
-  reachableFrom(cx: number, cy: number): Uint8Array {
-    return this.search(cx, cy, false);
+  /** Breadth-first reachability from a cell using `canStep`. Cells marked in `blocked` are never entered. */
+  reachableFrom(cx: number, cy: number, blocked?: Uint8Array): Uint8Array {
+    return this.search(cx, cy, false, blocked);
   }
 
   /** Cells that can reach (cx, cy): the same search over reversed `canStep` edges. */
@@ -134,7 +134,7 @@ export class CellGrid {
     return this.search(cx, cy, true);
   }
 
-  private search(cx: number, cy: number, reverse: boolean): Uint8Array {
+  private search(cx: number, cy: number, reverse: boolean, blocked?: Uint8Array): Uint8Array {
     const seen = new Uint8Array(this.width * this.height);
     if (!this.walkable(cx, cy)) return seen;
     const queue: number[] = [cx + cy * this.width];
@@ -150,7 +150,7 @@ export class CellGrid {
         const ok = reverse ? this.canStep(nx, ny, ((h + 2) % 4) as Heading) : this.canStep(x, y, h);
         if (!ok) continue;
         const j = nx + ny * this.width;
-        if (!seen[j]) {
+        if (!seen[j] && !blocked?.[j]) {
           seen[j] = 1;
           queue.push(j);
         }

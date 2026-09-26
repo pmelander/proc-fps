@@ -58,7 +58,10 @@ export interface Sector {
   floorTex: TextureId;
   ceilTex: TextureId;
   tag: number;
-  /** Bitfield for sector specials (damage floors, secrets, flicker…). Reserved. */
+  /**
+   * Bitfield for sector specials. Bits 0–1: door kind (see DoorKind); a key door's key id
+   * is the sector's `tag`. Other bits reserved (damage floors, secrets, flicker…).
+   */
   special: number;
 }
 
@@ -76,6 +79,38 @@ export const ThingType = {
   PlayerStart: 1,
   Exit: 2,
 } as const;
+
+/** Key things are KEY_THING_BASE + key id, for key ids 0 … MAX_KEYS - 1. */
+export const KEY_THING_BASE = 16;
+export const MAX_KEYS = 4;
+export const keyThing = (key: number): number => KEY_THING_BASE + key;
+/** Key id carried by a thing type, or -1. */
+export function keyOfThing(type: number): number {
+  const k = type - KEY_THING_BASE;
+  return k >= 0 && k < MAX_KEYS ? k : -1;
+}
+
+/**
+ * Doors are one-cell sectors, stored open (ceiling at its full height); the sim starts them
+ * closed and lowers the ceiling to the floor. See "Doors (decided)" in PROJECT_SUMMARY.md.
+ */
+export const DoorKind = {
+  None: 0,
+  /** Opens when walked into. */
+  Auto: 1,
+  /** Opens with the use key (E/Space) while holding key `tag`. */
+  Key: 2,
+} as const;
+export type DoorKind = (typeof DoorKind)[keyof typeof DoorKind];
+export const SPECIAL_DOOR_MASK = 3;
+export const doorKindOf = (s: Sector): DoorKind => (s.special & SPECIAL_DOOR_MASK) as DoorKind;
+
+/** Door sectors in index order. A door's position in this list is its door id (sim state, renderer). */
+export function doorSectors(map: MapData): number[] {
+  const out: number[] = [];
+  map.sectors.forEach((s, i) => doorKindOf(s) !== DoorKind.None && out.push(i));
+  return out;
+}
 
 export interface MapMeta {
   name: string;

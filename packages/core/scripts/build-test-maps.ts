@@ -4,7 +4,20 @@
  */
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { BaseTex as T, CELL_SIZE, MapBuilder, ThingType, rect, validateGridAlignment, validateMap, type MapData } from '../src/index.js';
+import {
+  BaseTex as T,
+  CELL_SIZE,
+  CellPlan,
+  DoorKind,
+  MapBuilder,
+  ThingType,
+  emitCellPlan,
+  keyThing,
+  rect,
+  validateGridAlignment,
+  validateMap,
+  type MapData,
+} from '../src/index.js';
 
 /**
  * test01 (128-unit cells). Walking east from the start along row 2:
@@ -41,7 +54,37 @@ export function buildTest01(): MapData {
   return b.build({ name: 'test01', theme: 'base' });
 }
 
-const maps: Record<string, () => MapData> = { test01: buildTest01 };
+/**
+ * test02: both door types (cells; y grows north).
+ *   Start room A (0–3, 0–2) → auto door (4, 1) → hall B (5–7, 0–2)
+ *   B → auto door (8, 1) → side room C (9–11, 0–2), blue key at (10, 1)
+ *   B → blue key door (6, 3) → exit room D (5–7, 4–6), exit at (6, 5)
+ */
+export function buildTest02(): MapData {
+  const plan = new CellPlan();
+  const room = (x0: number, y0: number, x1: number, y1: number, light: number, floorTex: number) => {
+    const spec = plan.spec({ floor: 0, ceil: 192, light, floorTex, ceilTex: T.Ceiling, wallTex: T.Stone });
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) plan.set(x, y, spec);
+  };
+  const door = (x: number, y: number, kind: DoorKind, tag = 0) =>
+    plan.set(x, y, plan.spec({ floor: 0, ceil: 128, light: 160, floorTex: T.Trim, ceilTex: T.Ceiling, wallTex: T.Metal, special: kind, tag }));
+  room(0, 0, 4, 3, 176, T.FloorTile);
+  room(5, 0, 8, 3, 144, T.Tech);
+  room(9, 0, 12, 3, 208, T.FloorTile);
+  room(5, 4, 8, 7, 224, T.Slime);
+  door(4, 1, DoorKind.Auto);
+  door(8, 1, DoorKind.Auto);
+  door(6, 3, DoorKind.Key, 0);
+  const b = new MapBuilder();
+  emitCellPlan(b, plan, CELL_SIZE);
+  const C = CELL_SIZE;
+  b.thing(ThingType.PlayerStart, 0.5 * C, 1.5 * C, 0);
+  b.thing(keyThing(0), 10.5 * C, 1.5 * C, 0);
+  b.thing(ThingType.Exit, 6.5 * C, 5.5 * C, 0);
+  return b.build({ name: 'test02', theme: 'base' });
+}
+
+const maps: Record<string, () => MapData> = { test01: buildTest01, test02: buildTest02 };
 
 for (const [name, fn] of Object.entries(maps)) {
   const map = fn();

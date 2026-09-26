@@ -8,14 +8,26 @@ const GRAVITY = 0.34; // units/tick², Doom's 1/tic² rescaled to 60 Hz
 const HALF_PI = Math.PI / 2;
 const QUARTER_PI = Math.PI / 4;
 
+/** Door rules the player's movement consults; implemented by the sim over its door state. */
+export interface DoorGate {
+  /** A closed or still-opening door fills this cell. */
+  blocked(cx: number, cy: number): boolean;
+  /**
+   * The player walked into a blocked cell. Returns true when the door there is opening, so the
+   * step should wait for it. `fresh` = the key was pressed this tick (not merely held).
+   */
+  bump(cx: number, cy: number, fresh: boolean): boolean;
+}
+
 /**
  * Grid movement with free look:
  * - Yaw/pitch are continuous and never affect position.
  * - WASD steps one cell relative to the yaw snapped to a cardinal (with hysteresis).
  * - A press during a step is buffered (one deep, resolved at press time).
  * - Holding a key repeats steps seamlessly.
+ * - Walking into an auto door opens it; the step waits and goes ahead once it is open.
  */
-export function stepPlayer(world: World, p: PlayerState, input: InputFrame): void {
+export function stepPlayer(world: World, p: PlayerState, input: InputFrame, gate: DoorGate): void {
   p.angle = wrapAngle(p.angle + input.turn);
   p.pitch = clamp(p.pitch + input.look, -MAX_PITCH, MAX_PITCH);
   updateHeading(p);
@@ -34,14 +46,22 @@ export function stepPlayer(world: World, p: PlayerState, input: InputFrame): voi
   if (p.stepTick >= STEP_TICKS) p.stepTick = 0; // arrived last tick
   if (p.stepTick > 0) p.stepTick++;
   else if (p.onGround) {
-    const dir = p.queued !== NO_QUEUE ? p.queued : intent;
+    // A fresh press beats a step still waiting on a door.
+    const fresh = (movePressed || strafePressed) && intent !== NO_QUEUE;
+    const dir = fresh ? intent : p.queued !== NO_QUEUE ? p.queued : intent;
     p.queued = NO_QUEUE;
     if (dir !== NO_QUEUE && world.grid.canStep(p.cx, p.cy, dir as Heading)) {
-      p.fromCx = p.cx;
-      p.fromCy = p.cy;
-      p.cx += [1, 0, -1, 0][dir]!;
-      p.cy += [0, 1, 0, -1][dir]!;
-      p.stepTick = 1;
+      const nx = p.cx + [1, 0, -1, 0][dir]!;
+      const ny = p.cy + [0, 1, 0, -1][dir]!;
+      if (!gate.blocked(nx, ny)) {
+        p.fromCx = p.cx;
+        p.fromCy = p.cy;
+        p.cx = nx;
+        p.cy = ny;
+        p.stepTick = 1;
+      } else if (gate.bump(nx, ny, fresh)) {
+        p.queued = dir;
+      }
     }
   }
 

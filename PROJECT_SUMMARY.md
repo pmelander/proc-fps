@@ -27,7 +27,7 @@ This file summarises the decisions made so far, the current state of the code, a
 | Package | Contents |
 |---|---|
 | `core` | `map.ts` (format v0, `hashMap`), `cells.ts` (`CellPlan`: cells → sectors with automatic T-junction splits), `rng.ts` (sfc32 + named forks), `dmath.ts` (deterministic trig), `math.ts` (render-side mat4), `geometry.ts` (sector loops, `SectorLocator`), `builder.ts` (`MapBuilder`, `rect`), `grid.ts` (`CellGrid`, `validateGridAlignment`), `validate.ts`, `constants.ts`, `textures.ts`. `maps/test01.json` is built by `scripts/build-test-maps.ts`. |
-| `gen` | `generate.ts` (v0.4.0: mission → layout → room templates → cell plan → sectors), `mission.ts` (mission graph), `layout.ts` (grid embedding), `rooms.ts` (room templates), `validate.ts` (structural + grid + reachability + traps), `scripts/stats.ts` (headless health check). |
+| `gen` | `generate.ts` (v0.5.0: mission → layout → room templates → cell plan → sectors), `mission.ts` (mission graph), `layout.ts` (grid embedding), `rooms.ts` (room templates), `validate.ts` (structural + grid + reachability + traps), `scripts/stats.ts` (headless health check). |
 | `sim` | `input.ts` (`InputFrame`, quantization), `world.ts`, `state.ts`, `player.ts` (grid movement), `sim.ts`, `replay.ts`. |
 | `render` | `backend.ts` (interface), `webgl2.ts`, `mesh.ts` (map → per-sector mesh), `palette.ts` (64 colours), `shaders.ts`, `renderer.ts` (`LevelRenderer`). |
 | `app` | `main.ts` (loop, interpolation, HUD, compass), `input.ts` (DOM → `InputFrame`), `automap.ts`. |
@@ -36,7 +36,7 @@ Commands:
 
 ```
 npm install
-npm run dev              # ?seed=anything  or  ?map=test01
+npm run dev              # ?seed=anything  or  ?map=test01 / test02 (doors and keys)
 npm run ci               # typecheck + tests + gen:stats (2000 seeds) + build
 npm run maps:build       # regenerate test map JSON (CI fails if it drifted)
 npm run gen:stats -- --seeds 10000
@@ -78,21 +78,23 @@ npm run gen:stats -- --seeds 10000
 **Working:**
 - Map format and validation, including trap detection: every cell reachable from the start must still be able to reach the exit.
 - The grid-aligned test map, which covers a platform, drop, stairs, and a void pillar.
-- The v0.4 generator: a mission graph (M2 slice 1) embedded on the grid (slice 2) as rooms sized by type, joined by corridors, with loops routed by pathfinding. Rooms use templates (slice 3): hall (pillar rows), platform (or an unclimbable plinth), pit, stairs to a dais, and arena (boss and mini boss); start, exit, and loot rooms stay plain. Floors are flat (one storey), hazard stripes mark only corridor ends, and every connection is an open doorway until doors land (slice 4).
+- The v0.5 generator: a mission graph (M2 slice 1) embedded on the grid (slice 2) as rooms sized by type, joined by corridors, with loops routed by pathfinding. Rooms use templates (slice 3): hall (pillar rows), platform (or an unclimbable plinth), pit, stairs to a dais, and arena (boss and mini boss); start, exit, and loot rooms stay plain. Floors are flat (one storey) and hazard stripes mark only corridor ends. Connections get doors (slice 4) as the mission says, auto or key, with keys placed on base floor in their rooms.
 - The WebGL2 renderer, which uses per-sector light with distance falloff in 16 bands and renders at 240p before a 64-colour palette post pass with Bayer dithering.
 - Placeholder procedural patterns per texture id, with floor and ceiling tiles aligned to cells.
 - Grid movement, replays (F8 downloads one), the automap (hold Tab; rotates with the look direction, drawn at 240p in the palette), and the HUD compass showing where W goes.
 
 **Verified:**
 - The typecheck is clean.
-- 44 tests pass.
+- 47 tests pass.
 - 2000 seeds produce 0 validation failures (about 12 ms per map including validation).
 - The production build succeeds (about 45 kB JS).
 - Headless Chromium (SwiftShader) renders correctly.
 
 **Not yet verified:** real mouse and keyboard play. Pointer lock can't run headless.
 
-**Unused but reserved:** `InputFrame.run` (a candidate for a faster step), plus `fire` and `use`.
+- Doors and keys (M2 slice 4): door state and held keys in `SimState`, auto doors that open when walked into, key doors opened with E/Space while holding the key, key pickups, and events (`door`, `locked`, `key`) for the HUD and later sound. The renderer moves door slabs and hides taken keys with per-frame mover offsets on a static mesh. The HUD shows an E or the missing key in the upper right when facing a closed key door. `?map=test02` has both door types.
+
+**Unused but reserved:** `InputFrame.run` (a candidate for a faster step), plus `fire`.
 
 ## Known gaps (roughly in priority order)
 
@@ -111,7 +113,8 @@ npm run gen:stats -- --seeds 10000
   - ✅ Slice 1: a mission graph with start, exit, doors, and loops, using cyclic generation in the style of Dormans. Door types are in Doors below.
   - ✅ Slice 2: grid embedding of the graph, flat single-storey floor plans.
   - ✅ Slice 3: room templates (hand-authored archetypes with procedural parameters), emitted through `CellPlan`.
-  - Sectorization, followed by validation that covers keys before locks and no traps.
+  - ✅ Slice 4: doors and keys in the map format, sim, renderer, HUD, and generator; validation walks the level collecting keys.
+  - Slice 5: secrets.
   - Tooling: a seed browser with map thumbnails, and distribution tracking in `gen:stats`.
 - **M3 — combat:**
   - Grid-bound enemies: one per cell, own step timers, BFS pathfinding.
@@ -127,15 +130,18 @@ npm run gen:stats -- --seeds 10000
 
 ## Doors (decided)
 
-Doors live **in cells**: a door is a one-cell sector whose ceiling drops to its floor, as in Doom. This keeps all geometry on the 128 grid, and the grid treats a door cell as walkable when it is open. There are three types:
+Doors live **in cells**: a door is a one-cell sector whose ceiling drops to its floor, as in Doom. This keeps all geometry on the 128 grid, and the grid treats a door cell as walkable when it is open. There are two types:
 
 | Type | Opens by | Frequency | Used for |
 |---|---|---|---|
-| Standard | Bumping into it (a step into the door waits for it to open) | Most doors | Ordinary room-to-room connections |
-| Use | Pressing use (E/Space), no key needed | Less common | A deliberate breather, e.g. before a mini boss |
-| Locked | Pressing use while holding the matching key | Rare | Loot rooms and the level boss |
+| Auto | Walking into it (the step waits for it to open) | Most doors | Room-to-room connections, including both sides of the mini boss |
+| Key | Pressing use (E/Space) while holding the matching key | Rare | Loot rooms and the level boss |
 
-The mission graph therefore places keys to guard optional loot and the boss, rather than scattering locks along the critical path. Lifts are still undecided.
+A third type, a use door that opened with E but needed no key, was tried in slice 4 and dropped: it added a chore without a decision.
+
+The mission graph therefore places keys to guard optional loot and the boss, rather than scattering locks along the critical path. Doors stay open once opened. When the player faces a closed key door, the HUD shows an E in the upper right if they hold the key, and the missing key otherwise. Lifts are still undecided.
+
+In the map format a door is a one-cell sector with its kind in `Sector.special` (`DoorKind.Auto` or `DoorKind.Key`) and a key door's key id in `tag`; keys are things `KEY_THING_BASE + id`. Doors are stored open and start closed in the sim, so a map's geometry is always the open level.
 
 ## Open design questions
 

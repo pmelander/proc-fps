@@ -1,12 +1,28 @@
-import { PLAYER_EYE_HEIGHT, STEP_TICKS, TICK_DT, type MapData } from '@proc-fps/core';
+import { DoorKind, HEADING_DX, HEADING_DY, PLAYER_EYE_HEIGHT, STEP_TICKS, TICK_DT, type MapData } from '@proc-fps/core';
 import { GENERATOR_VERSION, generate, validateGenerated } from '@proc-fps/gen';
-import { LevelRenderer, WebGL2Backend } from '@proc-fps/render';
-import { ReplayRecorder, clonePlayer, createSimState, createWorld, stepSim, type PlayerState } from '@proc-fps/sim';
+import { HIDDEN_OFFSET, LevelRenderer, WebGL2Backend } from '@proc-fps/render';
+import {
+  ReplayRecorder,
+  clonePlayer,
+  createSimState,
+  createWorld,
+  doorAtCell,
+  doorOffset,
+  stepSim,
+  type PlayerState,
+  type SimState,
+  type World,
+} from '@proc-fps/sim';
 import test01 from '@proc-fps/core/maps/test01.json';
+import test02 from '@proc-fps/core/maps/test02.json';
 import { drawAutomap } from './automap.js';
 import { InputSampler } from './input.js';
 
-const TEST_MAPS: Record<string, MapData> = { test01: test01 as MapData };
+const TEST_MAPS: Record<string, MapData> = { test01: test01 as MapData, test02: test02 as MapData };
+/** Key ids 0–3. Matches keyColor() in the level shader. */
+const KEY_NAMES = ['blue', 'red', 'yellow', 'green'] as const;
+const KEY_COLORS = ['#4073ff', '#ff3826', '#ffd933', '#40e64d'] as const;
+const NOTICE_SECONDS = 2.5;
 const MAX_FRAME_TIME = 0.25; // avoid spiral of death after tab-out
 const BOB_HEIGHT = 2.5;
 const HEADING_LETTERS = ['E', 'N', 'W', 'S'] as const;
@@ -59,6 +75,20 @@ function lerpAngle(a: number, b: number, t: number): number {
   return a + d * t;
 }
 
+/** A closed key door ahead: E when the player holds its key, the missing key otherwise. Auto doors need no prompt. */
+function doorPrompt(world: World, state: SimState): { kind: 'use' } | { kind: 'key'; key: number } | null {
+  const p = state.player;
+  if (p.stepTick !== 0) return null;
+  const door = doorAtCell(world, p.cx + HEADING_DX[p.heading], p.cy + HEADING_DY[p.heading]);
+  if (door < 0 || state.doors[door] !== 0) return null;
+  const info = world.doors[door]!;
+  if (info.kind === DoorKind.Key) return state.keys & (1 << info.key) ? { kind: 'use' } : { kind: 'key', key: info.key };
+  return null;
+}
+
+const KEY_ICON = (color: string) =>
+  `<svg viewBox="0 0 16 16" width="36" height="36" shape-rendering="crispEdges"><path fill="${color}" d="M3 5h5v2h6v2h-2v2h-2V9H8v2H3zM5 7v2h1V7z"/></svg>`;
+
 function main(): void {
   const canvas = document.getElementById('view') as HTMLCanvasElement;
   const automap = document.getElementById('automap') as HTMLCanvasElement;
@@ -66,6 +96,10 @@ function main(): void {
   const start = document.getElementById('start') as HTMLDivElement;
   const compassArrow = document.getElementById('compass-arrow') as HTMLSpanElement;
   const compassLetter = document.getElementById('compass-letter') as HTMLElement;
+  const prompt = document.getElementById('prompt') as HTMLDivElement;
+  let notice = '';
+  let noticeUntil = 0;
+  let shownPrompt = '';
 
   const map = loadMap();
   const world = createWorld(map);
@@ -116,8 +150,14 @@ function main(): void {
       const f = input.sample();
       if (input.locked) recorder.record(f);
       stepSim(world, state, f);
+      for (const e of state.events) {
+        if (e.type === 'key') [notice, noticeUntil] = [`Picked up the ${KEY_NAMES[e.key]} key`, now + NOTICE_SECONDS];
+        if (e.type === 'locked') [notice, noticeUntil] = [`Needs the ${KEY_NAMES[e.key]} key`, now + NOTICE_SECONDS];
+      }
       acc -= TICK_DT;
     }
+    world.doors.forEach((_, i) => (renderer.movers[i] = doorOffset(world, state, i)));
+    world.keys.forEach((_, i) => (renderer.movers[world.doors.length + i] = state.taken & (1 << i) ? HIDDEN_OFFSET : 0));
 
     const t = acc / TICK_DT;
     const p = state.player;
@@ -134,11 +174,21 @@ function main(): void {
     compassArrow.style.transform = `rotate(${((view.yaw - (p.heading * Math.PI) / 2) * 180) / Math.PI}deg)`;
     compassLetter.textContent = HEADING_LETTERS[p.heading];
 
-    if (!automap.hidden) drawAutomap(automap, map, view);
+    const want = doorPrompt(world, state);
+    const promptHtml = !want ? '' : want.kind === 'use' ? '<span class="keycap">E</span>' : KEY_ICON(KEY_COLORS[want.key]!);
+    if (promptHtml !== shownPrompt) {
+      prompt.innerHTML = shownPrompt = promptHtml;
+      prompt.hidden = !promptHtml;
+    }
+
+    if (!automap.hidden) drawAutomap(automap, map, view, world, state);
+    const held = KEY_NAMES.filter((_, k) => state.keys & (1 << k));
     hud.textContent =
       `${map.meta.seed ? `seed ${map.meta.seed}  gen ${GENERATOR_VERSION}` : `map ${map.meta.name}`}\n` +
       `${fps.toFixed(0)} fps  tick ${state.tick}  sector ${p.sector}\n` +
-      `cell ${p.cx}, ${p.cy}  z ${p.z.toFixed(0)}`;
+      `cell ${p.cx}, ${p.cy}  z ${p.z.toFixed(0)}` +
+      (held.length ? `\nkeys: ${held.join(' ')}` : '') +
+      (now < noticeUntil ? `\n${notice}` : '');
 
     requestAnimationFrame(frame);
   };

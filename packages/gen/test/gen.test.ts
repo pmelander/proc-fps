@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CELL_SIZE as C, MAX_STEP, MapBuilder, ThingType, rect } from '@proc-fps/core';
+import { CELL_SIZE as C, CellPlan, DoorKind, MAX_STEP, MapBuilder, ThingType, emitCellPlan, keyThing, rect } from '@proc-fps/core';
 import { generate, validateGenerated } from '../src/index.js';
 
 describe('generator', () => {
@@ -34,5 +34,29 @@ describe('trap detection', () => {
   });
   it('accepts a pit you can climb out of', () => {
     expect(validateGenerated(roomWithPit(MAX_STEP))).toEqual([]);
+  });
+});
+
+describe('key progression', () => {
+  /** Room A (0–2) | key door (3) | room B (4–6), one row; the key goes in `keyAt`. */
+  const lockedPair = (keyAt: number) => {
+    const plan = new CellPlan();
+    const room = plan.spec({ floor: 0, ceil: 192 });
+    const door = plan.spec({ floor: 0, ceil: 128, special: DoorKind.Key, tag: 0 });
+    for (const x of [0, 1, 2, 4, 5, 6]) plan.set(x, 0, room);
+    plan.set(3, 0, door);
+    const b = new MapBuilder();
+    emitCellPlan(b, plan, C);
+    b.thing(ThingType.PlayerStart, C / 2, C / 2);
+    b.thing(ThingType.Exit, 1.5 * C, C / 2);
+    b.thing(keyThing(0), (keyAt + 0.5) * C, C / 2);
+    return b.build({ name: 'keys' });
+  };
+
+  it('accepts a key reachable before its door', () => {
+    expect(validateGenerated(lockedPair(2))).toEqual([]);
+  });
+  it('rejects a key behind its own door', () => {
+    expect(validateGenerated(lockedPair(5))).toEqual(['4 cell(s) unreachable even after collecting every reachable key']);
   });
 });
