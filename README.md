@@ -15,7 +15,7 @@ npm run ci             # typecheck + tests + generator health + build
 | Package | Role | DOM? |
 |---|---|---|
 | `core` | Map format v0, seeded RNG, deterministic trig, geometry, `MapBuilder`, validation | no |
-| `gen` | Level generator (currently a stub) + gameplay validation + `gen:stats` | no |
+| `gen` | Level generator (mission graph → grid layout → sectors) + gameplay validation + `gen:stats` | no |
 | `sim` | Fixed-step deterministic simulation, input frames, replays | no |
 | `render` | `RenderBackend` interface, WebGL2 backend, level mesh builder, palette post pass | yes (backend only) |
 | `app` | Browser shell: loop, input, HUD, automap | yes |
@@ -57,7 +57,7 @@ Next:
 - Portal culling using `LevelRenderer.sectorRanges`.
 - Circle-vs-line collision for projectiles (player collision was replaced by the grid).
 - Enable back-face culling and emit double-sided quads where needed.
-- M2: replace the stub with mission graph → embedding → room grammar → sectorization.
+- M2: room grammar, doors and keys, secrets, and generator tooling (mission graph and grid layout are done).
 - A WebGPU backend behind `RenderBackend` when compute is needed.
 
 Press F8 in-game to download the current replay. Drop it into a sim test to pin a bug.

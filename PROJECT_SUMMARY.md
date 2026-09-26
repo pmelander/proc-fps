@@ -27,7 +27,7 @@ This file summarises the decisions made so far, the current state of the code, a
 | Package | Contents |
 |---|---|
 | `core` | `map.ts` (format v0, `hashMap`), `rng.ts` (sfc32 + named forks), `dmath.ts` (deterministic trig), `math.ts` (render-side mat4), `geometry.ts` (sector loops, `SectorLocator`), `builder.ts` (`MapBuilder`, `rect`), `grid.ts` (`CellGrid`, `validateGridAlignment`), `validate.ts`, `constants.ts`, `textures.ts`. `maps/test01.json` is built by `scripts/build-test-maps.ts`. |
-| `gen` | `generate.ts` (v0.2.0 stub), `mission.ts` (mission graph for M2, not wired into `generate` yet), `validate.ts` (structural + grid + reachability + traps), `scripts/stats.ts` (headless health check). |
+| `gen` | `generate.ts` (v0.3.0: mission → layout → sectors), `mission.ts` (mission graph), `layout.ts` (grid embedding), `validate.ts` (structural + grid + reachability + traps), `scripts/stats.ts` (headless health check). |
 | `sim` | `input.ts` (`InputFrame`, quantization), `world.ts`, `state.ts`, `player.ts` (grid movement), `sim.ts`, `replay.ts`. |
 | `render` | `backend.ts` (interface), `webgl2.ts`, `mesh.ts` (map → per-sector mesh), `palette.ts` (64 colours), `shaders.ts`, `renderer.ts` (`LevelRenderer`). |
 | `app` | `main.ts` (loop, interpolation, HUD, compass), `input.ts` (DOM → `InputFrame`), `automap.ts`. |
@@ -78,15 +78,15 @@ npm run gen:stats -- --seeds 10000
 **Working:**
 - Map format and validation, including trap detection: every cell reachable from the start must still be able to reach the exit.
 - The grid-aligned test map, which covers a platform, drop, stairs, and a void pillar.
-- The v0.2 stub generator: a chain of rooms plus stepped one-cell corridors, with pillar, platform, and pit features in interior cells.
+- The v0.3 generator: a mission graph (M2 slice 1) embedded on the grid (slice 2) as rooms sized by type, joined by corridors, with loops routed by pathfinding. Floors are flat (one storey), hazard stripes mark only corridor ends, every connection is an open doorway until doors land (slice 4), and rooms still get one pillar, platform, or pit until room templates land (slice 3).
 - The WebGL2 renderer, which uses per-sector light with distance falloff in 16 bands and renders at 240p before a 64-colour palette post pass with Bayer dithering.
 - Placeholder procedural patterns per texture id, with floor and ceiling tiles aligned to cells.
 - Grid movement, replays (F8 downloads one), the automap (hold Tab; rotates with the look direction, drawn at 240p in the palette), and the HUD compass showing where W goes.
 
 **Verified:**
 - The typecheck is clean.
-- 33 tests pass.
-- 2000 seeds produce 0 validation failures (about 1.4 ms per map).
+- 40 tests pass.
+- 2000 seeds produce 0 validation failures (about 12 ms per map including validation).
 - The production build succeeds (about 45 kB JS).
 - Headless Chromium (SwiftShader) renders correctly.
 
@@ -107,8 +107,9 @@ npm run gen:stats -- --seeds 10000
 ## Roadmap
 
 - **M2 — real generator:**
-  - A mission graph with start, exit, doors, loops, and secrets, using cyclic generation in the style of Dormans. Door types are in Doors below.
-  - Grid embedding of the graph.
+  - ✅ Slice 0: trap detection in validation.
+  - ✅ Slice 1: a mission graph with start, exit, doors, and loops, using cyclic generation in the style of Dormans. Door types are in Doors below.
+  - ✅ Slice 2: grid embedding of the graph, flat single-storey floor plans.
   - A room grammar: hand-authored archetypes with procedural parameters.
   - Sectorization, followed by validation that covers keys before locks and no traps.
   - Tooling: a seed browser with map thumbnails, and distribution tracking in `gen:stats`.
@@ -149,5 +150,5 @@ Ideas noted during play-testing, not yet scheduled. Each line points at whatever
 - **Health.** Nothing tracks it yet. M3 (damage from enemies) and M5 (health placed along the critical path) both assume it. It belongs in sim state so replays cover it.
 - **Floor hazards.** Damage floors. `Sector.special` is already reserved for this, but nothing reads it. Depends on health. Validation must keep the critical path hazard-free, or at least survivable.
 - **Secrets.** `LineFlags.Secret` exists (hide a line on the automap) but is unused. The automap currently draws every line, so it must honour the flag once secrets exist. M2's mission graph already plans for secret areas; they also need a way to be found (a use-to-open wall, or a sector special that counts a discovery).
-- **Elevators.** Lifts are the undecided half of the doors question. On the grid, a lift fits as a one-cell sector whose floor moves between two heights, the same moving-sector machinery as doors (M2 slice 4). Validation must treat a lift as a step in both directions only when it can be called from either end.
+- **Elevators and storeys.** Floor plans are flat per storey (done in M2 slice 2 for a single storey); elevators will join storeys. Lifts are the undecided half of the doors question. On the grid, a lift fits as a one-cell sector whose floor moves between two heights, the same moving-sector machinery as doors (M2 slice 4). Validation must treat a lift as a step in both directions only when it can be called from either end.
 - **Catwalks and double-height rooms.** A catwalk bridges a tall room on a second level, and the player can walk under it. The sector model allows one floor and one ceiling per point, but the renderer is true 3D with a depth buffer (unlike Doom's), so the limit is the map format and the grid, not rendering. Plan: *slabs* (3D-floor style) on cells with a top and an underside, which means a `MAP_FORMAT_VERSION` bump; `CellGrid` cells hold a stack of walkable levels; `canStep` moves level to level with the same step and headroom rules, with the level picked by the player's z; reachability and trap search run over (cell, level); the automap dims levels below. The generator then gives tall rooms catwalks joining upper doorways, so rooms can connect on two levels. Schedule after M2 slice 4 (doors), so the grid and movement rule change once. Fully stacked rooms with walls on both levels are a bigger, later step.
