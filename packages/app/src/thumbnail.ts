@@ -29,8 +29,11 @@ export function drawThumbnail(canvas: HTMLCanvasElement, map: MapData, size: num
   const tx = (x: number) => ox + (x - x0) * scale;
   const ty = (y: number) => size - oy - (y - y0) * scale; // map y points north, screen y down
 
+  // Floors shade over the level's own height range, so every storey of a tall level reads apart.
+  const floors = map.sectors.map((s) => s.floor);
+  const range: FloorRange = [Math.min(...floors), Math.max(...floors)];
   sectorPolygons(map).forEach((polys, s) => {
-    ctx.fillStyle = sectorColor(map.sectors[s]!);
+    ctx.fillStyle = sectorColor(map.sectors[s]!, range);
     ctx.beginPath();
     for (const poly of polys) {
       for (const loop of [poly.outer, ...poly.holes]) {
@@ -98,7 +101,9 @@ export function drawThumbnail(canvas: HTMLCanvasElement, map: MapData, size: num
   }
 }
 
-function sectorColor(s: Sector): string {
+type FloorRange = readonly [number, number];
+
+function sectorColor(s: Sector, [lo, hi]: FloorRange): string {
   const door = doorKindOf(s);
   if (door === DoorKind.Auto) return '#9a9a9a';
   if (door === DoorKind.Key) return KEY_COLORS[s.tag] ?? '#ffffff';
@@ -106,8 +111,8 @@ function sectorColor(s: Sector): string {
   if (isLift(s)) return '#40d8e0';
   if (s.slab) return '#8aa0b4';
   if (isDamaging(s)) return '#ff7a20';
-  // Brighter when higher: platforms and stairs pop, pits sink.
-  const l = Math.max(18, Math.min(92, 48 + s.floor * 0.7));
+  // Brighter when higher: storeys, platforms and stairs pop, pits sink.
+  const l = hi > lo ? 20 + (72 * (s.floor - lo)) / (hi - lo) : 60;
   if (secretOf(s) >= 0) return `rgb(${l * 0.8} ${l * 0.45} ${l * 1.1})`;
   if (s.floorTex === BaseTex.Slime) return `rgb(${l * 0.55} ${l * 1.05} ${l * 0.5})`;
   return `rgb(${l} ${l * 0.95} ${l * 0.86})`;

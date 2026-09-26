@@ -1,9 +1,10 @@
 /**
  * Headless generator health check and distribution report. Runs in CI; any invalid map
  * fails the build. The distributions make shifts in level shape visible between versions.
- *   npm run gen:stats -- --seeds 10000 [--level 3]
+ *   npm run gen:stats -- --seeds 10000 [--level 3] [--type compound|ascent|descent]
+ * Without --type the seeds cycle through every level type, so each is validated.
  */
-import { GENERATOR_VERSION, generateDetailed, levelStats, validateGenerated, type LayoutFailure, type LevelStats, type RoomTemplate } from '../src/index.js';
+import { GENERATOR_VERSION, LEVEL_TYPES, generateDetailed, isLevelType, levelStats, validateGenerated, type LayoutFailure, type LevelStats, type RoomTemplate } from '../src/index.js';
 
 const arg = (name: string, def: number) => {
   const i = process.argv.indexOf(`--${name}`);
@@ -11,6 +12,8 @@ const arg = (name: string, def: number) => {
 };
 const seeds = arg('seeds', 1000);
 const level = arg('level', 1);
+const typeArg = process.argv[process.argv.indexOf('--type') + 1];
+const only = process.argv.includes('--type') && isLevelType(typeArg) ? typeArg : undefined;
 
 const failures: { seed: string; errors: string[] }[] = [];
 const stats: LevelStats[] = [];
@@ -24,7 +27,7 @@ for (let i = 0; i < seeds; i++) {
   const t = performance.now();
   let g;
   try {
-    g = generateDetailed(seed, { level });
+    g = generateDetailed(seed, { level, type: only ?? LEVEL_TYPES[i % LEVEL_TYPES.length]! });
   } catch (e) {
     failures.push({ seed, errors: [`threw: ${(e as Error).message}`] });
     continue;
@@ -52,7 +55,7 @@ const histogram = (xs: number[]) => {
 };
 const col = (label: string, text: string) => console.log(`${label.padEnd(12)}${text}`);
 
-console.log(`generator ${GENERATOR_VERSION}, level ${level}: ${seeds} seeds in ${ms.toFixed(0)} ms (${(ms / seeds).toFixed(2)} ms/map incl. validation)`);
+console.log(`generator ${GENERATOR_VERSION}, level ${level}, ${only ?? 'all types'}: ${seeds} seeds in ${ms.toFixed(0)} ms (${(ms / seeds).toFixed(2)} ms/map incl. validation)`);
 col('gen ms', summary(times, 1));
 col('sectors', summary(sectors));
 col('linedefs', summary(lines));
@@ -68,6 +71,12 @@ col('enemies', summary(stats.map((s) => s.enemies)));
 col('health', summary(stats.map((s) => s.health)));
 col('lifts', histogram(stats.map((s) => Math.min(s.lifts, 5))));
 col('catwalks', histogram(stats.map((s) => Math.min(s.catwalks, 5))));
+for (const type of LEVEL_TYPES) {
+  const of = stats.filter((s) => s.type === type);
+  if (!of.length) continue;
+  col(type, `storeys ${histogram(of.map((s) => s.storeys))}  drops ${histogram(of.map((s) => Math.min(s.drops, 4)))}  atriums ${histogram(of.map((s) => Math.min(s.atriums, 3)))}  bridges ${histogram(of.map((s) => Math.min(s.bridges, 3)))}`);
+  col('', `rooms ${summary(of.map((s) => s.rooms))}  size ${summary(of.map((s) => s.width * s.height))}  enemies ${summary(of.map((s) => s.enemies))}`);
+}
 const templateTotal: Record<string, number> = {};
 for (const s of stats) for (const [t, n] of Object.entries(s.templates)) templateTotal[t] = (templateTotal[t] ?? 0) + n;
 const rooms = Object.values(templateTotal).reduce((a, b) => a + b, 0);

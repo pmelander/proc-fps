@@ -12,6 +12,9 @@ import type { Rng } from '@proc-fps/core';
  * Loot rooms hang off the cycle behind key doors whose keys are placed where they can
  * be reached first. Dead ends and small detour loops add variety. Secret rooms hang off
  * ordinary rooms behind secret doors; the level never needs them.
+ *
+ * Each room also gets its progress along the critical path (0 at the start, 1 at the gate, the
+ * boss and the exit), which vertical levels turn into storeys.
  */
 export type RoomKind = 'start' | 'room' | 'miniboss' | 'boss' | 'loot' | 'exit' | 'secret';
 
@@ -23,6 +26,11 @@ export interface MissionNode {
   kind: RoomKind;
   /** Key this room holds. */
   key?: number;
+  /**
+   * How far along the critical path the room is: 0 at the start, 1 at the gate, boss and exit;
+   * branches take their host's. Vertical levels turn it into storeys.
+   */
+  progress?: number;
 }
 
 export interface MissionEdge {
@@ -46,10 +54,22 @@ export const EXIT_KEY = 3;
 
 const AUTO_DOOR_CHANCE = 0.4;
 
-export function generateMission(rng: Rng): Mission {
+type Range = readonly [number, number];
+/** How big a mission is: rooms on each arc, detour loops and dead ends (see LevelProfile). */
+export interface MissionShape {
+  shortArc: Range;
+  approach: Range;
+  retreat: Range;
+  detours: Range;
+  deadEnds: Range;
+}
+/** The shape before level types (M2–M11). */
+export const DEFAULT_MISSION_SHAPE: MissionShape = { shortArc: [0, 2], approach: [1, 2], retreat: [0, 2], detours: [0, 2], deadEnds: [0, 2] };
+
+export function generateMission(rng: Rng, shape: MissionShape = DEFAULT_MISSION_SHAPE): Mission {
   const nodes: MissionNode[] = [];
   const edges: MissionEdge[] = [];
-  const add = (kind: RoomKind): number => nodes.push({ id: nodes.length, kind }) - 1;
+  const add = (kind: RoomKind, progress = 0): number => nodes.push({ id: nodes.length, kind, progress }) - 1;
   const connect = (a: number, b: number, door: DoorKind, key?: number) => {
     edges.push(key === undefined ? { a, b, door } : { a, b, door, key });
   };
@@ -58,15 +78,21 @@ export function generateMission(rng: Rng): Mission {
     for (let i = 1; i < ids.length; i++) connect(ids[i - 1]!, ids[i]!, plain());
   };
   const rooms = (n: number) => Array.from({ length: n }, () => add('room'));
+  const between = (r: Range) => rng.int(r[0], r[1]);
+  /** Spreads progress evenly along an arc from `from` to `to` (both excluded). */
+  const spread = (ids: number[], from: number, to: number) => ids.forEach((id, i) => (nodes[id]!.progress = from + ((to - from) * (i + 1)) / (ids.length + 1)));
   const degree = (id: number) => edges.reduce((d, e) => d + (e.a === id ? 1 : 0) + (e.b === id ? 1 : 0), 0);
 
   // Main cycle.
-  const start = add('start');
-  const gate = add('room');
-  chain([start, ...rooms(rng.int(0, 2)), gate]);
-  const approach = [start, ...rooms(rng.int(1, 2))];
+  const start = add('start', 0);
+  const gate = add('room', 1);
+  const shortArc = rooms(between(shape.shortArc));
+  spread(shortArc, 0, 1);
+  chain([start, ...shortArc, gate]);
+  const approach = [start, ...rooms(between(shape.approach))];
   const miniboss = add('miniboss');
-  const retreat = [...rooms(rng.int(0, 2)), gate];
+  const retreat = [...rooms(between(shape.retreat)), gate];
+  spread([...approach.slice(1), miniboss, ...retreat.slice(0, -1)], 0, 1);
   chain(approach);
   chain(retreat);
   // Real doors on both sides of the mini boss, so the fight is announced.
@@ -74,21 +100,21 @@ export function generateMission(rng: Rng): Mission {
   connect(miniboss, retreat[0]!, 'auto');
   nodes[miniboss]!.key = BOSS_KEY; // dropped when it dies
 
-  const boss = add('boss');
+  const boss = add('boss', 1);
   connect(gate, boss, 'key', BOSS_KEY);
   nodes[boss]!.key = EXIT_KEY; // dropped when it dies
-  connect(boss, add('exit'), 'key', EXIT_KEY);
+  connect(boss, add('exit', 1), 'key', EXIT_KEY);
 
   // Detour loops: add u–w–v beside a plain edge u–v between ordinary rooms, so neither the
   // mini boss nor a key door can be bypassed.
-  const detours = rng.int(0, 2);
+  const detours = between(shape.detours);
   for (let i = 0; i < detours; i++) {
     const candidates = edges.filter(
       (e) => (e.door === 'open' || e.door === 'auto') && [e.a, e.b].every((n) => nodes[n]!.kind === 'room' || nodes[n]!.kind === 'start') && degree(e.a) < MAX_DEGREE && degree(e.b) < MAX_DEGREE,
     );
     if (!candidates.length) break;
     const e = rng.pick(candidates);
-    const w = add('room');
+    const w = add('room', (nodes[e.a]!.progress! + nodes[e.b]!.progress!) / 2);
     connect(e.a, w, plain());
     connect(w, e.b, plain());
   }
@@ -102,19 +128,21 @@ export function generateMission(rng: Rng): Mission {
     const h = hosts();
     if (!h.length) break;
     const key = BOSS_KEY + 1 + i;
-    const loot = add('loot');
-    connect(rng.pick(h), loot, 'key', key);
+    const host = rng.pick(h);
+    const loot = add('loot', nodes[host]!.progress);
+    connect(host, loot, 'key', key);
     const holders = nodes.filter((n) => n.kind === 'room' && n.key === undefined);
     if (!holders.length) throw new Error('mission: no room left to hold a loot key');
     rng.pick(holders).key = key;
   }
 
   // Dead ends.
-  const deadEnds = rng.int(0, 2);
+  const deadEnds = between(shape.deadEnds);
   for (let i = 0; i < deadEnds; i++) {
     const h = hosts();
     if (!h.length) break;
-    connect(rng.pick(h), add('room'), plain());
+    const host = rng.pick(h);
+    connect(host, add('room', nodes[host]!.progress), plain());
   }
 
   // Secrets: dead ends behind a secret door, off an ordinary room.
@@ -122,7 +150,8 @@ export function generateMission(rng: Rng): Mission {
   for (let i = 0; i < secrets; i++) {
     const h = hosts();
     if (!h.length) break;
-    connect(rng.pick(h), add('secret'), 'secret');
+    const host = rng.pick(h);
+    connect(host, add('secret', nodes[host]!.progress), 'secret');
   }
 
   return { nodes, edges };

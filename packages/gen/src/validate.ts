@@ -1,6 +1,8 @@
 import {
   CellGrid,
   DoorKind,
+  HEADING_DX,
+  HEADING_DY,
   ThingType,
   doorKindOf,
   droppedKey,
@@ -8,6 +10,7 @@ import {
   keyOfThing,
   validateGridAlignment,
   validateMap,
+  type Heading,
   type MapData,
 } from '@proc-fps/core';
 
@@ -41,9 +44,97 @@ export function validateGenerated(map: MapData): string[] {
   });
   if (traps.size) errors.push(`${traps.size} trap cell(s) cannot reach the exit: ${[...traps].slice(0, 5).join(' ')}`);
   errors.push(...validateKeys(map, grid, sx, sy, ex, ey, reachable));
+  if (!errors.length) errors.push(...validateProgress(map, grid, sx, sy, ex, ey));
   errors.push(...validateThings(map, grid));
   errors.push(...validateSupplies(map));
   return errors;
+}
+
+/**
+ * Nobody gets stranded. One-way drops (ledges too high to climb back) make "reachable" depend on
+ * the order the player goes: a key left above a drop is gone once they jump. So the whole state
+ * space is searched: (cell, level, keys held), moving by the sim's own step rules, key doors
+ * shut until their key is held, keys picked up where they lie (or where the enemy carrying one
+ * starts). Every state the player can get into must still have a way on to the exit.
+ */
+function validateProgress(map: MapData, grid: CellGrid, sx: number, sy: number, ex: number, ey: number): string[] {
+  const W = grid.width;
+  const L = CellGrid.LEVELS;
+  const KEYSETS = 16;
+  const lockOf = new Int8Array(W * grid.height).fill(-1); // cell → key its door needs
+  grid.sector.forEach((sec, i) => {
+    const sector = map.sectors[sec];
+    if (sector && doorKindOf(sector) === DoorKind.Key) lockOf[i] = sector.tag;
+  });
+  const keyAt = new Int8Array(W * grid.height).fill(0); // cell → key bits picked up there
+  for (const t of map.things) {
+    const k = keyOfThing(t.type) >= 0 ? keyOfThing(t.type) : isEnemyThing(t.type) ? droppedKey(t) : -1;
+    if (k < 0) continue;
+    const [cx, cy] = grid.cellOf(t.x, t.y);
+    keyAt[cx + cy * W]! |= 1 << k;
+  }
+  const state = (cell: number, level: number, keys: number) => (cell * L + level) * KEYSETS + keys;
+
+  // Forward search, recording each move so the backward pass can follow them in reverse.
+  const n = W * grid.height * L * KEYSETS;
+  const reached = new Uint8Array(n);
+  const from: number[] = [];
+  const to: number[] = [];
+  const first = state(sx + sy * W, 0, keyAt[sx + sy * W]!);
+  reached[first] = 1;
+  const queue = [first];
+  for (let q = 0; q < queue.length; q++) {
+    const st = queue[q]!;
+    const keys = st % KEYSETS;
+    const level = Math.floor(st / KEYSETS) % L;
+    const cell = Math.floor(st / KEYSETS / L);
+    const cx = cell % W;
+    const cy = Math.floor(cell / W);
+    for (let h = 0; h < 4; h++) {
+      const lb = grid.stepTarget(cx, cy, level, h as Heading);
+      if (lb < 0) continue;
+      const next = cx + HEADING_DX[h as Heading] + (cy + HEADING_DY[h as Heading]) * W;
+      if (lockOf[next]! >= 0 && !(keys & (1 << lockOf[next]!))) continue;
+      const ns = state(next, lb, keys | keyAt[next]!);
+      from.push(st);
+      to.push(ns);
+      if (!reached[ns]) {
+        reached[ns] = 1;
+        queue.push(ns);
+      }
+    }
+  }
+  // Backward from every state at the exit.
+  const into = new Map<number, number[]>();
+  to.forEach((t, i) => {
+    const list = into.get(t);
+    if (list) list.push(from[i]!);
+    else into.set(t, [from[i]!]);
+  });
+  const done = new Uint8Array(n);
+  const back: number[] = [];
+  const exitCell = ex + ey * W;
+  for (const st of queue) {
+    if (Math.floor(st / KEYSETS / L) === exitCell) {
+      done[st] = 1;
+      back.push(st);
+    }
+  }
+  for (let q = 0; q < back.length; q++) {
+    for (const p of into.get(back[q]!) ?? []) {
+      if (!done[p]) {
+        done[p] = 1;
+        back.push(p);
+      }
+    }
+  }
+  const stuck = new Set<string>();
+  for (const st of queue) {
+    if (done[st]) continue;
+    const cell = Math.floor(st / KEYSETS / L);
+    stuck.add(`(${cell % W}, ${Math.floor(cell / W)})`);
+  }
+  return stuck.size ? [`the player can be stranded: ${stuck.size} cell(s) with no way on to the exit, e.g. ${[...stuck].slice(0, 5).join(' ')}`] : [];
 }
 
 /** Some health wherever there are enemies. (Ammo is infinite.) */

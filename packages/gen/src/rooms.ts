@@ -11,7 +11,7 @@ import type { RoomKind } from './mission.js';
  * unless it is deliberately out of reach, like a plinth. Templates also avoid regions that
  * touch themselves only at a corner, which the cell-plan emitter rejects.
  */
-export type RoomTemplate = 'plain' | 'hall' | 'platform' | 'pit' | 'stairs' | 'arena' | 'catwalk';
+export type RoomTemplate = 'plain' | 'hall' | 'platform' | 'pit' | 'stairs' | 'arena' | 'catwalk' | 'atrium';
 
 export interface RoomRegion {
   /** Floor offset from the room's base floor. */
@@ -56,6 +56,23 @@ export function plainDesign(w: number, h: number): RoomDesign {
   return { template: 'plain', regions: [BASE], cells: new Int8Array(w * h), maxRise: 0 };
 }
 
+/** The atrium's regions: 0 the floor, 1 the ring under its catwalk, 2 the lift's cell (a lift is laid over it). */
+export const ATRIUM_RING = 1;
+export const ATRIUM_LIFT = 2;
+
+/**
+ * An atrium: a tall room whose outer ring is a grating catwalk `ringHeight` above its floor.
+ * Corridors from the storey above arrive on the catwalk, corridors on the room's own storey pass
+ * under it, and a lift in an inner corner joins the two. Chosen by the generator, never at random.
+ */
+export function atriumDesign(w: number, h: number, ringHeight: number): RoomDesign {
+  const cells = new Int8Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (x === 0 || y === 0 || x === w - 1 || y === h - 1) cells[x + y * w] = ATRIUM_RING;
+  cells[1 + w] = ATRIUM_LIFT;
+  const regions: RoomRegion[] = [BASE, { rise: 0, lightDelta: -16, slab: { bottom: ringHeight - 16, top: ringHeight } }, { rise: 0, lightDelta: 0 }];
+  return { template: 'atrium', regions, cells, maxRise: ringHeight };
+}
+
 export function designRoom(kind: RoomKind, w: number, h: number, rng: Rng): RoomDesign {
   const iw = w - 2;
   const ih = h - 2;
@@ -67,6 +84,7 @@ export function designRoom(kind: RoomKind, w: number, h: number, rng: Rng): Room
     stairs: Math.max(iw, ih) >= 3 && Math.min(iw, ih) >= 1,
     arena: iw >= 4 && ih >= 4,
     catwalk: Math.max(iw, ih) >= 5 && Math.min(iw, ih) >= 2,
+    atrium: false, // placed by the generator (atriumDesign), never drawn at random
   };
   let template: RoomTemplate = 'plain';
   if (kind === 'boss' || kind === 'miniboss') template = fits.arena ? 'arena' : fits.hall ? 'hall' : 'plain';

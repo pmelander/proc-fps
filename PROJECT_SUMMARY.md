@@ -27,7 +27,7 @@ This file summarises the decisions made so far, the current state of the code, a
 | Package | Contents |
 |---|---|
 | `core` | `map.ts` (format v1: slabs, `hashMap`), `cells.ts` (`CellPlan`: cells → sectors with automatic T-junction splits), `rng.ts` (sfc32 + named forks), `dmath.ts` (deterministic trig), `math.ts` (render-side mat4), `geometry.ts` (sector loops, `SectorLocator`), `builder.ts` (`MapBuilder`, `rect`), `grid.ts` (`CellGrid`, `validateGridAlignment`), `validate.ts`, `constants.ts`, `textures.ts`. `maps/test01.json` is built by `scripts/build-test-maps.ts`. |
-| `gen` | `generate.ts` (v0.14.0: mission → layout → room templates → cell plan → sectors), `mission.ts` (mission graph), `layout.ts` (grid embedding), `rooms.ts` (room templates), `population.ts` (enemies, health and ammo by level and depth), `validate.ts` (structural + grid + reachability + traps), `scripts/stats.ts` (headless health check). |
+| `gen` | `generate.ts` (v0.15.0: mission → layout → room templates → cell plan → sectors), `mission.ts` (mission graph), `layout.ts` (grid embedding), `rooms.ts` (room templates), `population.ts` (enemies, health and ammo by level and depth), `validate.ts` (structural + grid + reachability + traps), `scripts/stats.ts` (headless health check). |
 | `sim` | `input.ts` (`InputFrame`, quantization), `world.ts`, `state.ts`, `player.ts` (grid movement), `sim.ts`, `replay.ts`. |
 | `render` | `backend.ts` (interface), `webgl2.ts`, `mesh.ts` (map → per-sector mesh), `palette.ts` (64 colours), `shaders.ts`, `renderer.ts` (`LevelRenderer`). |
 | `app` | `main.ts` (loop, interpolation, HUD, compass), `input.ts` (DOM → `InputFrame`), `automap.ts`. |
@@ -36,7 +36,7 @@ Commands:
 
 ```
 npm install
-npm run dev              # ?seed=anything  or  ?map=test01 / test02 (doors, keys, secret) / test03 (combat) / test04 (lift, hazard) / test05 (catwalk) / test06 (bridge);  /browse.html = seed browser;  /sprites.html = enemy sprite sheet
+npm run dev              # ?seed=anything[&type=compound|ascent|descent]  or  ?map=test01 / test02 (doors, keys, secret) / test03 (combat) / test04 (lift, hazard) / test05 (catwalk) / test06 (bridge);  /browse.html = seed browser;  /sprites.html = enemy sprite sheet
 npm run ci               # typecheck + tests + gen:stats (2000 seeds) + build
 npm run maps:build       # regenerate test map JSON (CI fails if it drifted)
 npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions (rooms, doors, secrets, templates, attempts, gen time)
@@ -78,20 +78,27 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 **Working:**
 - Map format and validation, including trap detection: every cell reachable from the start must still be able to reach the exit.
 - The grid-aligned test map, which covers a platform, drop, stairs, and a void pillar.
-- The v0.14 generator (catwalk rooms and bridges between storeys; hordes of fragile enemies; the mini boss and boss carry the keys onward; some levels span two storeys joined by lifts; each level also gets a theme, and `generate(seed, { level })` scales its population): a mission graph (M2 slice 1) embedded on the grid (slice 2) as rooms sized by type, joined by corridors, with loops routed by pathfinding. Rooms use templates (slice 3): hall (pillar rows), platform (or an unclimbable plinth), pit, stairs to a dais, and arena (boss and mini boss); start, exit, and loot rooms stay plain. Floors are flat within each storey and hazard stripes mark only corridor ends. Connections get doors (slice 4) as the mission says, auto or key, with keys placed on base floor in their rooms. Up to 2 secret rooms per level (slice 5) hang off ordinary rooms behind secret doors.
+- The v0.15 generator (three level types: flat compounds, ascents and descents over 3–5 storeys joined by lifts, one-way drops, bridges and atriums; catwalk rooms; hordes of fragile enemies; the mini boss and boss carry the keys onward; each level also gets a theme, and `generate(seed, { level, type })` scales its population): a mission graph (M2 slice 1) embedded on the grid (slice 2) as rooms sized by type, joined by corridors, with loops routed by pathfinding. Rooms use templates (slice 3): hall (pillar rows), platform (or an unclimbable plinth), pit, stairs to a dais, and arena (boss and mini boss); start, exit, and loot rooms stay plain. Floors are flat within each storey and hazard stripes mark only corridor ends. Connections get doors (slice 4) as the mission says, auto or key, with keys placed on base floor in their rooms. Up to 2 secret rooms per level (slice 5) hang off ordinary rooms behind secret doors.
 - The WebGL2 renderer, which uses per-sector light with distance falloff in 16 bands and renders at 240p before a 64-colour palette post pass with Bayer dithering.
 - Placeholder procedural patterns per texture id, with floor and ceiling tiles aligned to cells.
 - Grid movement, replays (F8 downloads one), the automap (hold Tab; rotates with the look direction, drawn at 240p with filled floors), and the HUD compass showing where W goes.
 
 **Verified:**
 - The typecheck is clean.
-- 90 tests pass.
+- 96 tests pass.
 - 2000 seeds produce 0 validation failures (about 12 ms per map including validation).
 - The production build succeeds (about 45 kB JS).
 - Headless Chromium (SwiftShader) renders correctly.
 
 **Not yet verified:** real mouse and keyboard play. Pointer lock can't run headless.
 
+- Level types and verticality (M12):
+  - Three types (`gen/src/levels.ts`), each a profile of mission size, room sizes, storey count and how storeys join. **Compound:** one storey, wide, more rooms, detours and dead ends, bigger rooms; hordes and flanking. **Ascent:** start on storey 0, the gate, boss and exit at the top of 3–5 storeys. **Descent:** the same upside down, taken mostly by drops. A run paces them by level (`levelTypeFor`): compound, ascent, compound, descent, …; `?seed=<s>&type=<t>` and the seed browser's type menu pick one.
+  - Storeys come from each room's progress along the critical path (`MissionNode.progress`: 0 at the start, 1 at the gate, boss and exit, spread evenly along both arcs of the main cycle; branches take their host's), so the climb or fall spreads over the whole level. A connection climbs at most two storeys (a tall lift); fewer storeys when the mission is too short.
+  - **Drops:** a corridor down one storey may run at the upper floor and end high in the lower room's wall, a ledge you jump from (gravity takes you down) and cannot climb back to. Each drop is kept only if the level still cannot strand the player: `strandsPlayer` (`progress.ts`) searches (room, keys held) states on the mission graph with drops one way. Descents keep most (drops 3–4 per level typically), ascents a few as shortcuts back down.
+  - **Atriums:** ordinary rooms with a neighbour a storey up may become tall rooms ringed by a grating catwalk at that storey. Corridors from above arrive on the catwalk, corridors level with the room pass under it, and a lift in an inner corner joins them (`atriumDesign`).
+  - Validation searches (cell, level, keys held) states with the sim's step rules (`validateProgress`): wherever the player can get with whatever keys they hold, the exit must still be reachable. It catches a key left above a drop, which plain reachability cannot.
+  - The seed browser shows type, storeys, drops and atriums, and its thumbnails shade floors over each level's own height range. `gen:stats` cycles the types across seeds (or `--type`) and reports storeys, drops, atriums and bridges per type.
 - Procedural enemies (M11):
   - Stats: `enemyDefsFor(seed)` (core/bestiary.ts) varies each role per generated level. A speed trait trades pace for hit points; grunts spit one bolt, twin softer bolts, or one quick bolt after a longer wind-up; brutes hit harder or softer; snipers vary damage and wind-up; the mini boss and boss fire wider softer volleys or tighter harder ones. Every variant keeps the tuning rules: slower than the player, projectiles at least `MIN_PROJECTILE_CELL_TICKS` per cell, hitscan wind-ups of at least `MIN_HITSCAN_WINDUP`, and ordinary enemies at most `MAX_FODDER_HP` (one close blast). The sim reads them from `world.enemyDefs`; hand-built maps (no seed) keep the baseline `ENEMY_DEFS`, so their tests and replays are unchanged.
   - Looks: `enemyLooks(seed, theme)` (render/bestiary.ts) breeds each of the five silhouettes: hunch, bulk, limb heft, head and jaw size, 0–2 horn pairs, back spikes, 1–4 eyes, a second pair of arms, a tail, and a mottled, banded, spotted or pale-bellied skin. `SPRITE_BAKE_FS` takes them as `uPlan` and the atlas is baked per level.
@@ -174,6 +181,7 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 - **M8 — catwalks and double-height rooms:** ✅ complete (generator v0.12.0, map format 1). Slabs, level-aware grid, sim and rendering, and catwalk rooms.
 - **M9 — weapon redesign and bridges:** ✅ complete (generator v0.13.0). A futuristic energy scattergun seen correctly over the barrel, and catwalks carrying corridors between storeys across lower rooms.
 - **M10 — play-test polish:** ✅ complete (generator v0.14.0). Lifts stop after each trip, blast doors, a filled automap, and held keys on the HUD.
+- **M12 — level types and verticality:** ✅ complete (generator v0.15.0). Compound, ascent and descent levels paced through a run; 3–5 storeys; one-way drops kept only where they cannot strand the player; atriums; validation over (cell, keys held) states.
 - **M11 — procedural enemies:** ✅ complete. Every generated level breeds its own mutants: seeded stat variants per role (core `enemyDefsFor`) and seeded body plans and skins that stand out from the theme (render `enemyLooks`). The exit gets a glowing pad, a light beacon and a hum.
 
 ## Doors (decided)

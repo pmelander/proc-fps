@@ -180,7 +180,8 @@ export function buildLevelMesh(map: MapData): LevelMesh {
       const top = { mover: door, move: 0, slide: 1 };
       quad(other.sector, a.x, a.y, b.x, b.y, D.ceil, D.ceil, doorTex(doorSide.sector, other), bottom, top, true, D.floor, D.floor);
     }
-    // Slab edges, seen from the neighbour, except where the neighbour's own floor rises to cover them.
+    // Slab edges, seen from the neighbour, except where the neighbour's own floor rises to cover
+    // them, or they sit above its ceiling (the upper wall over a low doorway already covers that).
     for (const [slabSide, other] of [
       [ld.front, ld.back],
       [ld.back, ld.front],
@@ -188,7 +189,9 @@ export function buildLevelMesh(map: MapData): LevelMesh {
       const slab = map.sectors[slabSide.sector]!.slab;
       const O = map.sectors[other.sector]!;
       if (!slab || O.floor >= slab.top || (O.slab && O.slab.top === slab.top && O.slab.bottom === slab.bottom)) continue;
-      quad(other.sector, a.x, a.y, b.x, b.y, Math.max(slab.bottom, O.floor), slab.top, slab.sideTex);
+      const lo = Math.max(slab.bottom, O.floor);
+      const hi = Math.min(slab.top, O.ceil);
+      if (hi > lo) quad(other.sector, a.x, a.y, b.x, b.y, lo, hi, slab.sideTex);
     }
     if (F.floor !== B.floor && !liftEdge) {
       const side: Side = F.floor < B.floor ? ld.front : ld.back;

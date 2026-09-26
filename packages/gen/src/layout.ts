@@ -12,8 +12,9 @@ import type { Mission, RoomKind } from './mission.js';
  * T-junctions the builder could not merge.
  *
  * Every connection has at least one corridor cell; its first cell is where a door will go.
- * Floor plans are flat: the layout is one storey, so corridors never ramp and a loop can be
- * any length. Storeys joined by elevators come later (see Backlog). Everything here is in
+ * The layout is flat: corridors never ramp and a loop can be any length. Storeys are heights the
+ * generator gives rooms afterwards (lifts, drops, bridges and atriums join them); in plan they
+ * never overlap, except where a catwalk carries a corridor over a room. Everything here is in
  * cell units.
  */
 
@@ -90,7 +91,7 @@ const centre = (r: CellRect): Cell => [(r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2];
 export type LayoutFailure = 'placement' | 'route';
 
 /** Returns a failure reason when this attempt cannot embed the mission; the caller retries with another stream. */
-export function embedMission(mission: Mission, rng: Rng): Layout | LayoutFailure {
+export function embedMission(mission: Mission, rng: Rng, roomSize: readonly [number, number] = ROOM_SIZE.room): Layout | LayoutFailure {
   const n = mission.nodes.length;
   const owner = new Map<number, number>();
   const corridorOwner = (edge: number) => n + edge;
@@ -127,7 +128,8 @@ export function embedMission(mission: Mission, rng: Rng): Layout | LayoutFailure
   const rooms: LayoutRoom[] = new Array(n);
   const corridors: LayoutCorridor[] = [];
   const size = (id: number) => {
-    const [lo, hi] = ROOM_SIZE[mission.nodes[id]!.kind];
+    const kind = mission.nodes[id]!.kind;
+    const [lo, hi] = kind === 'room' ? roomSize : ROOM_SIZE[kind];
     return [rng.int(lo, hi), rng.int(lo, hi)] as const;
   };
 

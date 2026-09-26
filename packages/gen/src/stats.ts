@@ -1,9 +1,16 @@
 import { DoorKind, ThingType, doorKindOf, doorSectors, isEnemyThing, isLift } from '@proc-fps/core';
 import type { Generated } from './generate.js';
+import type { LevelType } from './levels.js';
 import type { RoomTemplate } from './rooms.js';
 
 /** One level's shape and content, for gen:stats distributions and the seed browser. */
 export interface LevelStats {
+  type: LevelType;
+  /** Storeys the level spans. */
+  storeys: number;
+  drops: number;
+  atriums: number;
+  bridges: number;
   rooms: number;
   /** Bounding box in cells. */
   width: number;
@@ -50,10 +57,15 @@ export function levelStats(g: Generated): LevelStats {
     else if (kind === DoorKind.Key) doors.key++;
     else if (kind === DoorKind.Secret) doors.secret++;
   }
-  const templates: Record<RoomTemplate, number> = { plain: 0, hall: 0, platform: 0, pit: 0, stairs: 0, arena: 0, catwalk: 0 };
+  const templates: Record<RoomTemplate, number> = { plain: 0, hall: 0, platform: 0, pit: 0, stairs: 0, arena: 0, catwalk: 0, atrium: 0 };
   for (const d of designs) templates[d.template]++;
   const count = (kind: string) => mission.nodes.filter((n) => n.kind === kind).length;
   return {
+    type: g.type,
+    storeys: Math.max(...g.storeys) + 1,
+    drops: g.drops,
+    atriums: g.atriums,
+    bridges: g.bridges,
     rooms: mission.nodes.length,
     width: x1 - x0,
     height: y1 - y0,

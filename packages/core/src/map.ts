@@ -189,6 +189,8 @@ export interface MapMeta {
   theme?: string;
   /** Position in a run (1 = first level); generated difficulty rises with it. */
   level?: number;
+  /** Generated level type: compound (flat), ascent or descent. */
+  levelType?: string;
 }
 
 export interface MapData {

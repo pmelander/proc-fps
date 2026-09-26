@@ -1,5 +1,5 @@
 import { CELL_SIZE, DoorKind, HEADING_DX, HEADING_DY, PLAYER_EYE_HEIGHT, STEP_TICKS, TICK_DT, isEnemyThing, type MapData } from '@proc-fps/core';
-import { GENERATOR_VERSION, generate, validateGenerated } from '@proc-fps/gen';
+import { GENERATOR_VERSION, generate, isLevelType, validateGenerated, type LevelType } from '@proc-fps/gen';
 import { BASELINE_LOOKS, HIDDEN_OFFSET, LevelRenderer, SpriteShape, THEME_COLORS, WebGL2Backend, enemyLooks, spriteTile, type Sprite } from '@proc-fps/render';
 import {
   PLAYER_MAX_HEALTH,
@@ -52,8 +52,9 @@ function bob(p: PlayerState): number {
 
 /**
  * Which level to play, from the URL:
- * - ?run=<id>&level=<n>: level n of a run; its seed is "<id>-<n>" and difficulty rises with n.
- * - ?seed=<s>[&level=<n>]: one seed (level 1 unless given).
+ * - ?run=<id>&level=<n>: level n of a run; its seed is "<id>-<n>", difficulty rises with n and the
+ *   level type follows the run's pacing (compound, ascent, compound, descent, …).
+ * - ?seed=<s>[&level=<n>][&type=compound|ascent|descent]: one seed (level 1 unless given).
  * - ?map=<name>: a hand-made test map.
  * - nothing: a fresh run at level 1.
  */
@@ -61,6 +62,8 @@ interface Where {
   run?: string;
   seed?: string;
   level: number;
+  /** Overrides the pacing's level type. */
+  type?: LevelType;
 }
 
 function where(): Where & { map?: string } {
@@ -71,7 +74,8 @@ function where(): Where & { map?: string } {
   const run = params.get('run');
   if (run) return { run, level };
   const seed = params.get('seed');
-  if (seed) return { seed, level };
+  const type = params.get('type');
+  if (seed) return isLevelType(type) ? { seed, level, type } : { seed, level };
   const fresh = newRunId();
   history.replaceState(null, '', `?${new URLSearchParams({ run: fresh, level: '1' }).toString()}`);
   return { run: fresh, level: 1 };
@@ -87,7 +91,7 @@ function loadMap(w: Where & { map?: string }): MapData {
     return m;
   }
   const seed = w.run ? `${w.run}-${w.level}` : w.seed!;
-  const map = generate(seed, { level: w.level });
+  const map = generate(seed, w.type ? { level: w.level, type: w.type } : { level: w.level });
   const errors = validateGenerated(map);
   if (errors.length) console.warn(`seed ${seed} failed validation:`, errors);
   return map;
@@ -475,7 +479,7 @@ function main(): void {
       keysHud.innerHTML = KEY_COLORS.filter((_, k) => state.keys & (1 << k)).map((c) => KEY_ICON(c)).join('');
     }
     hud.textContent =
-      `${map.meta.seed ? `level ${here.level}  seed ${map.meta.seed}  gen ${GENERATOR_VERSION}` : `map ${map.meta.name}`}  ${map.meta.theme ?? ''}\n` +
+      `${map.meta.seed ? `level ${here.level} ${map.meta.levelType ?? ''}  seed ${map.meta.seed}  gen ${GENERATOR_VERSION}` : `map ${map.meta.name}`}  ${map.meta.theme ?? ''}\n` +
       `${fps.toFixed(0)} fps  tick ${state.tick}  sector ${p.sector}\n` +
       `cell ${p.cx}, ${p.cy}  z ${p.z.toFixed(0)}` +
       (world.secrets ? `\nsecrets ${popcount(state.secrets)}/${world.secrets}` : '') +
