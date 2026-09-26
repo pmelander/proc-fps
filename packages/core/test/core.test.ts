@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MapBuilder, Rng, SectorLocator, dcos, dsin, rect, sectorPolygons, validateMap, type MapData } from '../src/index.js';
+import { CELL_SIZE, CellPlan, MapBuilder, Rng, SectorLocator, ThingType, dcos, dsin, emitCellPlan, rect, sectorPolygons, validateMap, type MapData } from '../src/index.js';
 import test01 from '../maps/test01.json';
 
 const map = test01 as MapData;
@@ -109,5 +109,51 @@ describe('CellGrid', () => {
     b.addSector({ floor: 0, ceil: 128 }, rect(0, 0, 100, 128));
     b.thing(1, 50, 64);
     expect(validateGridAlignment(b.build({ name: 't' })).length).toBeGreaterThan(0);
+  });
+});
+
+describe('CellPlan', () => {
+  const C = CELL_SIZE;
+  const withStart = (b: MapBuilder) => {
+    b.thing(ThingType.PlayerStart, C / 2, C / 2);
+    return b.build({ name: 'plan' });
+  };
+
+  it('turns an L next to a rectangle into two sectors with no T-junctions', () => {
+    // A: L-shape over cells (0,0) (1,0) (0,1). B: cell (1,1), meeting A's edges part-way.
+    const plan = new CellPlan();
+    const a = plan.spec({ floor: 0, ceil: 128 });
+    const b = plan.spec({ floor: 8, ceil: 128 });
+    plan.set(0, 0, a);
+    plan.set(1, 0, a);
+    plan.set(0, 1, a);
+    plan.set(1, 1, b);
+    const builder = new MapBuilder();
+    emitCellPlan(builder, plan, C);
+    const map = withStart(builder);
+    expect(map.sectors).toHaveLength(2);
+    expect(validateMap(map)).toEqual([]);
+    expect(map.linedefs.filter((l) => l.back)).toHaveLength(2);
+  });
+
+  it('makes a ring into one sector with a hole, merging collinear edges', () => {
+    const plan = new CellPlan();
+    const s = plan.spec({ floor: 0, ceil: 128 });
+    for (let y = 0; y < 3; y++) for (let x = 0; x < 3; x++) if (x !== 1 || y !== 1) plan.set(x, y, s);
+    const builder = new MapBuilder();
+    emitCellPlan(builder, plan, C);
+    const map = withStart(builder);
+    expect(validateMap(map)).toEqual([]);
+    expect(map.sectors).toHaveLength(1);
+    expect(map.linedefs).toHaveLength(8); // 4 outer + 4 hole
+  });
+
+  it('rejects a group that touches itself only at a corner', () => {
+    // Same spec on (0,0) and (1,1), joined around through (2,1) (2,0)… leaving (1,0) and (0,1) out.
+    const plan = new CellPlan();
+    const s = plan.spec({ floor: 0, ceil: 128 });
+    for (const [x, y] of [[0, 0], [1, 1], [2, 1], [2, 0], [2, -1], [1, -1], [0, -1]] as const) plan.set(x, y, s);
+    plan.set(1, 0, plan.spec({ floor: 0, ceil: 128, light: 1 }));
+    expect(() => emitCellPlan(new MapBuilder(), plan, C)).toThrow(/pinches/);
   });
 });

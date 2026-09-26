@@ -26,8 +26,8 @@ This file summarises the decisions made so far, the current state of the code, a
 
 | Package | Contents |
 |---|---|
-| `core` | `map.ts` (format v0, `hashMap`), `rng.ts` (sfc32 + named forks), `dmath.ts` (deterministic trig), `math.ts` (render-side mat4), `geometry.ts` (sector loops, `SectorLocator`), `builder.ts` (`MapBuilder`, `rect`), `grid.ts` (`CellGrid`, `validateGridAlignment`), `validate.ts`, `constants.ts`, `textures.ts`. `maps/test01.json` is built by `scripts/build-test-maps.ts`. |
-| `gen` | `generate.ts` (v0.3.0: mission → layout → sectors), `mission.ts` (mission graph), `layout.ts` (grid embedding), `validate.ts` (structural + grid + reachability + traps), `scripts/stats.ts` (headless health check). |
+| `core` | `map.ts` (format v0, `hashMap`), `cells.ts` (`CellPlan`: cells → sectors with automatic T-junction splits), `rng.ts` (sfc32 + named forks), `dmath.ts` (deterministic trig), `math.ts` (render-side mat4), `geometry.ts` (sector loops, `SectorLocator`), `builder.ts` (`MapBuilder`, `rect`), `grid.ts` (`CellGrid`, `validateGridAlignment`), `validate.ts`, `constants.ts`, `textures.ts`. `maps/test01.json` is built by `scripts/build-test-maps.ts`. |
+| `gen` | `generate.ts` (v0.4.0: mission → layout → room templates → cell plan → sectors), `mission.ts` (mission graph), `layout.ts` (grid embedding), `rooms.ts` (room templates), `validate.ts` (structural + grid + reachability + traps), `scripts/stats.ts` (headless health check). |
 | `sim` | `input.ts` (`InputFrame`, quantization), `world.ts`, `state.ts`, `player.ts` (grid movement), `sim.ts`, `replay.ts`. |
 | `render` | `backend.ts` (interface), `webgl2.ts`, `mesh.ts` (map → per-sector mesh), `palette.ts` (64 colours), `shaders.ts`, `renderer.ts` (`LevelRenderer`). |
 | `app` | `main.ts` (loop, interpolation, HUD, compass), `input.ts` (DOM → `InputFrame`), `automap.ts`. |
@@ -78,14 +78,14 @@ npm run gen:stats -- --seeds 10000
 **Working:**
 - Map format and validation, including trap detection: every cell reachable from the start must still be able to reach the exit.
 - The grid-aligned test map, which covers a platform, drop, stairs, and a void pillar.
-- The v0.3 generator: a mission graph (M2 slice 1) embedded on the grid (slice 2) as rooms sized by type, joined by corridors, with loops routed by pathfinding. Floors are flat (one storey), hazard stripes mark only corridor ends, every connection is an open doorway until doors land (slice 4), and rooms still get one pillar, platform, or pit until room templates land (slice 3).
+- The v0.4 generator: a mission graph (M2 slice 1) embedded on the grid (slice 2) as rooms sized by type, joined by corridors, with loops routed by pathfinding. Rooms use templates (slice 3): hall (pillar rows), platform (or an unclimbable plinth), pit, stairs to a dais, and arena (boss and mini boss); start, exit, and loot rooms stay plain. Floors are flat (one storey), hazard stripes mark only corridor ends, and every connection is an open doorway until doors land (slice 4).
 - The WebGL2 renderer, which uses per-sector light with distance falloff in 16 bands and renders at 240p before a 64-colour palette post pass with Bayer dithering.
 - Placeholder procedural patterns per texture id, with floor and ceiling tiles aligned to cells.
 - Grid movement, replays (F8 downloads one), the automap (hold Tab; rotates with the look direction, drawn at 240p in the palette), and the HUD compass showing where W goes.
 
 **Verified:**
 - The typecheck is clean.
-- 40 tests pass.
+- 44 tests pass.
 - 2000 seeds produce 0 validation failures (about 12 ms per map including validation).
 - The production build succeeds (about 45 kB JS).
 - Headless Chromium (SwiftShader) renders correctly.
@@ -99,7 +99,7 @@ npm run gen:stats -- --seeds 10000
 1. **Portal culling.** The mesh is already grouped per sector (`LevelRenderer.sectorRanges`), but everything is drawn in one call.
 2. **Back-face culling** is off. Walls are single quads owned by the visible side.
 3. **Sector lookup** (`SectorLocator`) is O(lines). That's fine now; use the grid or a BSP later.
-4. **Pinch points:** `chainLoops` doesn't support loops touching at a single vertex, so generators must avoid them.
+4. **Pinch points:** `chainLoops` doesn't support loops touching at a single vertex, so generators must avoid them. `emitCellPlan` detects them and throws, naming the vertex.
 5. **Middle textures on two-sided lines** (grates, windows) need alpha. Not implemented.
 6. **Sub-cell decorative geometry** needs a Decorative line flag and renderer-only handling.
 7. **Uniforms** are set by name. The WebGPU backend will need a declared uniform-buffer layout.
@@ -110,7 +110,7 @@ npm run gen:stats -- --seeds 10000
   - ✅ Slice 0: trap detection in validation.
   - ✅ Slice 1: a mission graph with start, exit, doors, and loops, using cyclic generation in the style of Dormans. Door types are in Doors below.
   - ✅ Slice 2: grid embedding of the graph, flat single-storey floor plans.
-  - A room grammar: hand-authored archetypes with procedural parameters.
+  - ✅ Slice 3: room templates (hand-authored archetypes with procedural parameters), emitted through `CellPlan`.
   - Sectorization, followed by validation that covers keys before locks and no traps.
   - Tooling: a seed browser with map thumbnails, and distribution tracking in `gen:stats`.
 - **M3 — combat:**
@@ -152,3 +152,4 @@ Ideas noted during play-testing, not yet scheduled. Each line points at whatever
 - **Secrets.** `LineFlags.Secret` exists (hide a line on the automap) but is unused. The automap currently draws every line, so it must honour the flag once secrets exist. M2's mission graph already plans for secret areas; they also need a way to be found (a use-to-open wall, or a sector special that counts a discovery).
 - **Elevators and storeys.** Floor plans are flat per storey (done in M2 slice 2 for a single storey); elevators will join storeys. Lifts are the undecided half of the doors question. On the grid, a lift fits as a one-cell sector whose floor moves between two heights, the same moving-sector machinery as doors (M2 slice 4). Validation must treat a lift as a step in both directions only when it can be called from either end.
 - **Catwalks and double-height rooms.** A catwalk bridges a tall room on a second level, and the player can walk under it. The sector model allows one floor and one ceiling per point, but the renderer is true 3D with a depth buffer (unlike Doom's), so the limit is the map format and the grid, not rendering. Plan: *slabs* (3D-floor style) on cells with a top and an underside, which means a `MAP_FORMAT_VERSION` bump; `CellGrid` cells hold a stack of walkable levels; `canStep` moves level to level with the same step and headroom rules, with the level picked by the player's z; reachability and trap search run over (cell, level); the automap dims levels below. The generator then gives tall rooms catwalks joining upper doorways, so rooms can connect on two levels. Schedule after M2 slice 4 (doors), so the grid and movement rule change once. Fully stacked rooms with walls on both levels are a bigger, later step.
+- **Sound synthesis.** Already planned for M4: WebAudio effects in the style of jsfxr and a pattern-based music generator. No hand-made audio files, like the rest of the assets. Sounds are synthesised from a seed (per theme or per level) so they stay reproducible. Playback lives in `app` (WebAudio is a DOM API); the sim only emits events such as step, door, and hit, which keeps it deterministic and replayable.
