@@ -20,7 +20,8 @@ export type SoundId =
   | 'lob' | 'splash' | 'homing' | 'split'
   | 'menuMove' | 'menuChoose' | 'menuBack' | 'tally' | 'tallyDone'
   | 'chargeRoar' | 'chargeRush' | 'crash' | 'fuse' | 'shieldBlock'
-  | 'armorPickup' | 'berserk' | 'overcharge' | 'powerDown';
+  | 'armorPickup' | 'berserk' | 'overcharge' | 'powerDown'
+  | 'rail' | 'railReady';
 
 type Recipe = Voice[];
 
@@ -62,6 +63,13 @@ const RECIPES: Record<SoundId, Recipe> = {
     { wave: 'saw', freq: 55, freqEnd: 25, attack: 0, sustain: 0.04, release: 0.25, volume: 0.4, lowpass: 300 },
     { wave: 'sine', freq: 60, freqEnd: 22, attack: 0, sustain: 0.05, release: 0.35, volume: 0.7 },
   ],
+  // The railgun: a searing crack over a deep thunderclap, and a rising whine as it recharges.
+  rail: [
+    { wave: 'noise', freq: 7000, freqEnd: 900, attack: 0, sustain: 0.03, release: 0.35, volume: 0.6 },
+    { wave: 'square', freq: 2400, freqEnd: 180, attack: 0, sustain: 0.05, release: 0.3, volume: 0.3, duty: 0.2 },
+    { wave: 'sine', freq: 70, freqEnd: 24, attack: 0, sustain: 0.1, release: 0.7, volume: 1 },
+  ],
+  railReady: [{ wave: 'sine', freq: 300, freqEnd: 1200, attack: 0.05, sustain: 0.25, release: 0.1, volume: 0.18, vibrato: { depth: 0.02, rate: 40 } }],
   // Armour strapped on: a heavy metal clank.
   armorPickup: [
     { wave: 'square', freq: 320, freqEnd: 260, attack: 0, sustain: 0.04, release: 0.15, volume: 0.3, duty: 0.35, lowpass: 2200 },

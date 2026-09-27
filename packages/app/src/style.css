@@ -505,6 +505,7 @@ body:not(.loading) #loading {
 /* The weapon lowers while the automap is up, as in Doom; the HUD stays over the map. */
 #automap:not([hidden]) ~ #gun,
 #automap:not([hidden]) ~ #bolter,
+#automap:not([hidden]) ~ #railgun,
 #automap:not([hidden]) ~ #saw,
 #automap:not([hidden]) ~ #launcher {
   visibility: hidden !important;
@@ -875,9 +876,10 @@ body.ended .hud {
   background: rgb(255 30 20 / 0.28);
   pointer-events: none;
 }
-/* The view models (weapon.ts, bolter.ts): pixel art, big and heavy. */
+/* The view models (weapon.ts, bolter.ts, railgun.ts): pixel art, big and heavy. */
 #gun,
-#bolter {
+#bolter,
+#railgun {
   position: fixed;
   width: auto;
   height: 48vh;
@@ -907,6 +909,7 @@ body.ended .hud {
 body.titling .hud,
 body.titling #gun,
 body.titling #bolter,
+body.titling #railgun,
 body.titling #saw,
 body.titling #launcher,
 body.titling #start {

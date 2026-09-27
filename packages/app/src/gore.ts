@@ -90,12 +90,12 @@ export class Gore {
   }
 
   /** A sniper's shot: a glowing line from (x0, y0, z0) to (x1, y1, z1) that fades out fast. */
-  beam(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): void {
+  beam(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, size = 6): void {
     const len = Math.hypot(x1 - x0, y1 - y0, z1 - z0);
     const n = Math.max(2, Math.ceil(len / BEAM_SPACING));
     for (let i = 0; i <= n; i++) {
       const t = i / n;
-      this.add({ x: x0 + (x1 - x0) * t, y: y0 + (y1 - y0) * t, z: z0 + (z1 - z0) * t, vx: 0, vy: 0, vz: 0, size: 6, kind: 'beam', age: 0 });
+      this.add({ x: x0 + (x1 - x0) * t, y: y0 + (y1 - y0) * t, z: z0 + (z1 - z0) * t, vx: 0, vy: 0, vz: 0, size, kind: 'beam', age: 0 });
     }
   }
 

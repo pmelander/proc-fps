@@ -15,7 +15,7 @@ export const CONTROLS: readonly [readonly string[], string][] = [
   [['Mouse'], 'Look'],
   [['Click'], 'Fire; with an enemy in reach, the chainsword (nothing hurts you while it grinds)'],
   [['Right'], 'Lob a grenade (scarce: find them in loot rooms)'],
-  [['1', '2', 'Q'], 'Switch guns (or the wheel)'],
+  [['1', '2', '3', 'Q'], 'Switch guns (or the wheel)'],
   [['R'], 'Reload'],
   [['E'], 'Open key doors and secret walls (or Space)'],
   [['Tab'], 'Hold for the map'],

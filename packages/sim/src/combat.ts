@@ -150,6 +150,7 @@ export function playerFire(world: World, state: SimState, trigger: boolean, relo
   // Direct hits and bursts are kept apart: a warden's shield stops the first, not the second.
   const hits = new Map<number, number>();
   const splashed = new Map<number, number>();
+  const pierced = new Map<number, number>();
   const add = (i: number, amount: number, into = hits) => into.set(i, (into.get(i) ?? 0) + amount);
   const pellets = gun.pellets === 1 ? [gun.spread[p.shots % gun.spread.length]!] : gun.spread.slice(0, gun.pellets);
   p.shots++;
@@ -158,6 +159,11 @@ export function playerFire(world: World, state: SimState, trigger: boolean, relo
     const dx = cp * dcos(p.angle + yaw);
     const dy = cp * dsin(p.angle + yaw);
     const dz = dsin(p.pitch + pitch);
+    if (gun.pierce) {
+      // A slug: through every enemy on the way to the wall, each at full damage.
+      for (const i of pierceTargets(world, state, ox, oy, oz, dx, dy, dz)) add(i, Math.max(1, Math.round(gun.damage * boost)), pierced);
+      continue;
+    }
     const { target, t } = pelletTarget(world, state, ox, oy, oz, dx, dy, dz);
     if (target >= 0) add(target, Math.max(1, Math.round(gun.damage * boost * falloffAt(gun, t))));
     if (gun.splashRadius > 0 && t < WEAPON_RANGE) {
@@ -178,6 +184,32 @@ export function playerFire(world: World, state: SimState, trigger: boolean, relo
   }
   damage(world, state, hits, 'shot');
   damage(world, state, splashed, 'splash');
+  damage(world, state, pierced, 'pierce');
+}
+
+/** Every enemy a ray passes through before the first wall, nearest first (see pelletTarget). */
+function pierceTargets(world: World, state: SimState, ox: number, oy: number, oz: number, dx: number, dy: number, dz: number): number[] {
+  const wall = castRay(world, state, ox, oy, oz, dx, dy, dz, WEAPON_RANGE);
+  const a = dx * dx + dy * dy;
+  if (a <= 1e-9) return [];
+  const hits: [number, number][] = [];
+  state.enemies.forEach((e, i) => {
+    if (e.mode === 'dead') return;
+    const def = defOf(world.enemyDefs, e);
+    const fx = ox - e.x;
+    const fy = oy - e.y;
+    const b = 2 * (dx * fx + dy * fy);
+    const c = fx * fx + fy * fy - def.radius * def.radius;
+    const disc = b * b - 4 * a * c;
+    if (disc < 0) return;
+    let t = (-b - Math.sqrt(disc)) / (2 * a);
+    if (t < 0) t = c < 0 ? 0 : -1;
+    if (t < 0 || t >= wall) return;
+    const z = oz + dz * t;
+    if (z < e.z || z > e.z + def.height) return;
+    hits.push([t, i]);
+  });
+  return hits.sort((p, q) => p[0] - q[0]).map(([, i]) => i);
 }
 
 /**
@@ -224,7 +256,7 @@ export function shieldStops(state: SimState, e: EnemyState, def: EnemyDef): bool
  * it: a warden's shield stops the player's direct shots (not bursts, blasts or the chainsword), and
  * a bloater killed by anything bursts.
  */
-function damage(world: World, state: SimState, hits: ReadonlyMap<number, number>, kind: 'shot' | 'splash' | 'melee' | 'blast'): void {
+function damage(world: World, state: SimState, hits: ReadonlyMap<number, number>, kind: 'shot' | 'splash' | 'melee' | 'blast' | 'pierce'): void {
   const burst: number[] = [];
   for (const [i, amount] of hits) {
     const e = state.enemies[i]!;

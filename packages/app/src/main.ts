@@ -47,6 +47,7 @@ import { loadOptions, type Options } from './options.js';
 import { installFonts, installSkin } from './ui/skin.js';
 import { tally } from './ui/tally.js';
 import { Bolter } from './bolter.js';
+import { Railgun } from './railgun.js';
 import { Launcher } from './launcher.js';
 import { bossName } from './bossname.js';
 import { InputSampler } from './input.js';
@@ -333,6 +334,20 @@ function sniperBeam(world: World, state: SimState, e: EnemyState, gore: Gore): v
   gore.beam(sx, sy, sz, tx, ty, tz);
 }
 
+/** A slug's beam, render-only: a thick white-hot line from the muzzle to the wall, sparks where it strikes. */
+function railBeam(world: World, state: SimState, gore: Gore): void {
+  const p = state.player;
+  const cp = dcos(p.pitch);
+  const dx = cp * dcos(p.angle);
+  const dy = cp * dsin(p.angle);
+  const dz = dsin(p.pitch);
+  const oz = p.z + PLAYER_EYE_HEIGHT - 8;
+  const wall = castRay(world, state, p.x, p.y, oz, dx, dy, dz, WEAPON_RANGE);
+  const start = 30;
+  gore.beam(p.x + dx * start, p.y + dy * start, oz + dz * start, p.x + dx * wall, p.y + dy * wall, oz + dz * wall, 11);
+  if (wall < WEAPON_RANGE) gore.impact(p.x + dx * (wall - 2), p.y + dy * (wall - 2), oz + dz * (wall - 2), -dx, -dy, -dz);
+}
+
 /**
  * A bolt's tracer, render-only: a bright streak from the muzzle along the bolt (the sim's walk of
  * the aim; it bursts where it lands, which the sim reports as a `blast` event).
@@ -446,6 +461,7 @@ async function main(): Promise<void> {
   /** When the last weapon switch started (seconds), for the lower-and-raise animation. */
   let switchAt = -10;
   let switchFrom = 0;
+  let heldWeapon = 0;
   let shownAmmo = '';
   const gore = new Gore();
   const screenBlood = new ScreenBlood(document.getElementById('bloodscreen') as HTMLCanvasElement);
@@ -504,6 +520,7 @@ async function main(): Promise<void> {
   await stage(1);
   const weapon = new Weapon(document.getElementById('gun') as HTMLCanvasElement, theme.techLight);
   const bolter = new Bolter(document.getElementById('bolter') as HTMLCanvasElement, theme.techLight);
+  const railgun = new Railgun(document.getElementById('railgun') as HTMLCanvasElement, theme.techLight);
   const chainsword = new Chainsword(document.getElementById('saw') as HTMLCanvasElement);
   const launcher = new Launcher(document.getElementById('launcher') as HTMLCanvasElement);
   const ammoGrenades = document.querySelector('#ammo .grenades') as HTMLDivElement;
@@ -767,6 +784,7 @@ async function main(): Promise<void> {
           chainsword.attack(now, MELEE_TICKS * TICK_DT, MELEE_FIRST_HIT / MELEE_TICKS, MELEE_IFRAMES / MELEE_TICKS);
           weapon.makeRoom(now, MELEE_TICKS * TICK_DT);
           bolter.makeRoom(now, MELEE_TICKS * TICK_DT);
+          railgun.makeRoom(now, MELEE_TICKS * TICK_DT);
           audio.play('saw');
         }
         if (e.type === 'melee') {
@@ -800,7 +818,15 @@ async function main(): Promise<void> {
         if (e.type === 'locked') [notice, noticeUntil] = [`Needs the ${KEY_NAMES[e.key]} key`, now + NOTICE_SECONDS];
         if (e.type === 'secret') [notice, noticeUntil] = ['You found a secret!', now + NOTICE_SECONDS];
         if (e.type === 'health') [notice, noticeUntil] = [`+${e.amount} health`, now + NOTICE_SECONDS];
-        if (e.type === 'shot' && e.weapon === WeaponId.Bolter) {
+        if (e.type === 'shot' && e.weapon === WeaponId.Railgun) {
+          // A slug: a searing beam to the wall, a thunderclap, a hard kick and a flash.
+          audio.play('rail', undefined, undefined, 0.95 + Math.random() * 0.08);
+          railgun.fire(now);
+          renderer.flash = 1;
+          joltUntil = now + JOLT_SECONDS * 2.5;
+          railBeam(world, state, gore);
+          if (state.player.reload === 0) window.setTimeout(() => audio.play('railReady'), 450);
+        } else if (e.type === 'shot' && e.weapon === WeaponId.Bolter) {
           // A bolt: a sharp crack from alternating barrels, a lighter jolt, a tracer to its burst.
           audio.play('bolt', undefined, undefined, 0.88 + Math.random() * 0.1);
           bolter.fire(now, state.player.shots % 2);
@@ -831,7 +857,8 @@ async function main(): Promise<void> {
         }
         if (e.type === 'switch') {
           switchAt = now;
-          switchFrom = e.weapon === WeaponId.Bolter ? WeaponId.Scattergun : WeaponId.Bolter;
+          switchFrom = heldWeapon;
+          heldWeapon = e.weapon;
           audio.play('switch');
         }
         if (e.type === 'grenade') {
@@ -909,6 +936,7 @@ async function main(): Promise<void> {
         if (e.type === 'reload') {
           const seconds = reloadTicksOf(world, state.player.weapon) * TICK_DT;
           if (state.player.weapon === WeaponId.Bolter) bolter.reload(now, seconds);
+          else if (state.player.weapon === WeaponId.Railgun) railgun.reload(now, seconds);
           else weapon.reload(now, seconds);
         }
         if (e.type === 'hurt') {
@@ -976,6 +1004,8 @@ async function main(): Promise<void> {
     const bobbing = state.player.stepTick / STEP_TICKS;
     weapon.update(now, dt, bobbing, p.mags[WeaponId.Scattergun]! / MAG_SIZE, lowerOf(WeaponId.Scattergun));
     bolter.update(now, dt, bobbing, p.mags[WeaponId.Bolter]! / magSizeOf(world, WeaponId.Bolter), lowerOf(WeaponId.Bolter));
+    const railCooldown = p.weapon === WeaponId.Railgun ? p.fireCooldown / Math.max(1, WEAPONS[WeaponId.Railgun]!.cooldown) : 0;
+    railgun.update(now, dt, bobbing, p.mags[WeaponId.Railgun]!, magSizeOf(world, WeaponId.Railgun), 1 - railCooldown, lowerOf(WeaponId.Railgun));
     chainsword.update(now);
     // Armour under the health; power-ups as badges with their seconds left, and a tint.
     if (p.armor !== shownArmor) {
@@ -1025,7 +1055,7 @@ async function main(): Promise<void> {
       ammoCount.textContent = String(mag);
       ammoSize.textContent = `/ ${magSize}`;
       ammoType.textContent = gun.ammo;
-      ammoSlots.innerHTML = WEAPONS.map((w, i) => `<span class="${i === p.weapon ? 'on' : ''}">${i + 1} ${w.name}</span>`).join('');
+      ammoSlots.innerHTML = WEAPONS.map((w, i) => `<span class="${i === p.weapon ? 'on' : ''}">${i + 1} ${w.short}</span>`).join('');
       ammo.classList.toggle('empty', mag === 0);
     }
     hurtFlash.hidden = now >= hurtUntil;

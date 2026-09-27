@@ -267,7 +267,7 @@ describe('weapons', () => {
     const { state, step } = sim(arena({ w: 8, h: 3, py: 1 }));
     step({ turn: -Math.PI / 2 }); // face the wall
     step({ fire: true });
-    expect(state.player.mags).toEqual([MAG_SIZE - 1, bolter.magSize]);
+    expect(state.player.mags).toEqual([MAG_SIZE - 1, bolter.magSize, WEAPONS[WeaponId.Railgun]!.magSize]);
     step({ weapon: WeaponId.Bolter });
     expect(events(state, 'switch')).toEqual([{ type: 'switch', weapon: WeaponId.Bolter }]);
     let shots = 0;
@@ -278,7 +278,7 @@ describe('weapons', () => {
     expect(shots).toBe(0);
     step({ fire: true }, 2);
     expect(state.player.weapon).toBe(WeaponId.Bolter);
-    expect(state.player.mags).toEqual([MAG_SIZE - 1, bolter.magSize - 1]);
+    expect(state.player.mags).toEqual([MAG_SIZE - 1, bolter.magSize - 1, WEAPONS[WeaponId.Railgun]!.magSize]);
   });
 
   it('fires the bolter at its own rate, and drops a reload in progress on a switch', () => {
@@ -947,5 +947,38 @@ describe('run perks', async () => {
     expect(replay.perks).toEqual(perks);
     expect(hashState(runReplay(map, replay))).toBe(hashState(state));
     expect(ARMOR.max).toBeGreaterThan(0);
+  });
+});
+
+describe('railgun', () => {
+  const rail = WEAPONS[WeaponId.Railgun]!;
+  it('goes through every enemy in a line to the wall, each at full damage', () => {
+    const s = sim(arena({ w: 10, h: 1, things: [[EnemyType.Brute, 2, 0], [EnemyType.Brute, 4, 0], [EnemyType.Brute, 6, 0]] }));
+    s.step({ weapon: WeaponId.Railgun }, WEAPON_SWITCH_TICKS + 1);
+    s.step({ fire: true });
+    expect(events(s.state, 'shot')).toEqual([{ type: 'shot', weapon: WeaponId.Railgun }]);
+    for (const e of s.state.enemies) expect(e.mode).toBe('dead'); // 70 each fells a brute (55)
+    expect(s.state.player.mags[WeaponId.Railgun]).toBe(rail.magSize - 1);
+  });
+
+  it('is not stopped by a warden\'s shield, and walls stop it', () => {
+    const s = sim(arena({ w: 8, h: 3, py: 1, things: [[EnemyType.Warden, 3, 1]] }));
+    s.step({ weapon: WeaponId.Railgun }, WEAPON_SWITCH_TICKS + 1);
+    s.step({ fire: true });
+    expect(events(s.state, 'blocked')).toHaveLength(0);
+    expect(s.state.enemies[0]!.mode).toBe('dead');
+    // Behind a pillar-free wall: a door that is shut.
+    const d = sim(arena({ w: 3, h: 1, doorAt: 3, things: [[EnemyType.Grunt, 5, 0]] }));
+    d.step({ weapon: WeaponId.Railgun }, WEAPON_SWITCH_TICKS + 1);
+    d.step({ fire: true });
+    expect(d.state.enemies[0]!.hp).toBe(ENEMY_DEFS[EnemyType.Grunt].hp);
+  });
+
+  it('fires slowly: nothing more until its cooldown has passed', () => {
+    const s = sim(arena({ w: 8, h: 3, py: 1 }));
+    s.step({ weapon: WeaponId.Railgun }, WEAPON_SWITCH_TICKS + 1);
+    let shots = 0;
+    for (let t = 0; t < rail.cooldown; t++) shots += events(s.step({ fire: true }), 'shot').length;
+    expect(shots).toBe(1);
   });
 });
