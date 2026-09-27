@@ -558,7 +558,7 @@ describe('boss fights', async () => {
 
   it('skips a slam from afar, and widens its volleys when enraged', () => {
     const { state, step, boss, def } = fight();
-    boss.attacks = 2; // the slam's turn in phase 0 (volley, ring, slam)
+    boss.attacks = 3; // the slam's turn in phase 0 (volley, ring, wall, slam)
     expect(nextPattern(state, boss, 0)).not.toBe('slam');
     boss.hp = Math.floor(def.hp * 0.2);
     boss.mode = 'windup';
@@ -619,5 +619,105 @@ describe('grenades', () => {
     for (let k = 0; k < 3; k++) step({ move: 1 }, STEP_TICKS + 1);
     expect(state.player.grenades).toBe(GRENADE.max);
     expect(state.taken.filter(Boolean).length).toBe(GRENADE.max - GRENADE.start);
+  });
+});
+
+describe('projectile patterns', async () => {
+  const { bossAttack } = await import('../src/boss.js');
+  const { stepEmitters, SPIRAL, SPLIT, WALL } = await import('../src/shots.js');
+  /** A generated level's seed whose first grunt variant spits `shot`. */
+  const seedFor = (shot: 'lob' | 'homing') => {
+    for (let i = 0; i < 400; i++) if (enemyDefsFor(`${shot}-${i}`)[EnemyType.Grunt][0]!.shot === shot) return `${shot}-${i}`;
+    throw new Error(`no seed with ${shot} grunts`);
+  };
+  const shooter = (shot: 'lob' | 'homing') => {
+    const map = arena({ w: 9, h: 3, py: 1, things: [[EnemyType.Grunt, 6, 1]] });
+    map.meta.seed = seedFor(shot);
+    return sim(map);
+  };
+  /** Steps until the enemy's first shot, then with `after` until that shot is gone; whether it hurt. */
+  const follow = (s: ReturnType<typeof sim>, after: (t: number) => Partial<InputFrame>) => {
+    while (!events(s.state, 'attack').length) s.step();
+    const shot = s.state.projectiles[0]!;
+    let hurt = false;
+    let splashed = false;
+    for (let t = 0; s.state.projectiles.includes(shot); t++) {
+      s.step(after(t));
+      if (s.state.projectiles.includes(shot)) continue;
+      hurt = events(s.state, 'hurt').length > 0;
+      splashed = events(s.state, 'splash').length > 0;
+    }
+    return { shot, hurt, splashed };
+  };
+
+  it('lobs arc up and burst where the player stood: a hit standing still, a miss one step away', () => {
+    const still = follow(shooter('lob'), () => ({}));
+    expect(still.shot.kind).toBe('lob');
+    expect(still.hurt).toBe(true);
+    const moved = shooter('lob');
+    const { hurt, splashed } = follow(moved, (t) => (t === 0 ? { strafe: 1 } : {}));
+    expect(splashed).toBe(true); // it burst on the floor beside the player
+    expect(hurt).toBe(false);
+  });
+
+  it('homing orbs turn after a player who sidesteps, and still find one who then stands', () => {
+    const s = shooter('homing');
+    const { shot, hurt } = follow(s, (t) => (t === 0 ? { strafe: 1 } : {}));
+    expect(shot.kind).toBe('homing');
+    expect(Math.abs(shot.vy)).toBeGreaterThan(0.1); // it bent off the row towards the new lane
+    expect(hurt).toBe(true);
+  });
+
+  it('walls leave a gap a step to one side of the player, and one shot in their lane', () => {
+    const { state, world, boss, def } = (() => {
+      const s = sim(arena({ w: 10, h: 7, py: 3, things: [[EnemyType.Boss, 7, 3]] }));
+      return { ...s, boss: s.state.enemies[0]!, def: s.world.enemyDefs[EnemyType.Boss][0]! };
+    })();
+    bossAttack(world, state, boss, def, 0, 'wall');
+    expect(state.projectiles).toHaveLength(WALL.shots - 2);
+    // The player is due west: lanes are the shots' y offsets from the player's row.
+    const lanes = state.projectiles.map((q) => q.y - state.player.y);
+    expect(Math.min(...lanes.map(Math.abs))).toBeLessThan(1);
+    const clear = (side: number) => lanes.every((l) => Math.abs(l - side * C) > 16 + 6);
+    expect(clear(1) || clear(-1)).toBe(true);
+    expect(state.projectiles.every((q) => q.unblockable)).toBe(true);
+  });
+
+  it('split shots burst into a fan part of the way there', () => {
+    const s = sim(arena({ w: 10, h: 5, py: 2, things: [[EnemyType.Boss, 8, 2]] }));
+    const boss = s.state.enemies[0]!;
+    boss.cooldown = 10_000; // keep it from attacking on its own
+    bossAttack(s.world, s.state, boss, s.world.enemyDefs[EnemyType.Boss][0]!, 0, 'split');
+    expect(s.state.projectiles.map((q) => q.kind)).toEqual(['split']);
+    const x0 = s.state.projectiles[0]!.x;
+    for (let t = 0; t < 400 && !events(s.state, 'split').length; t++) s.step({});
+    const burst = events(s.state, 'split')[0] as { x: number } | undefined;
+    expect(burst).toBeDefined();
+    expect(burst!.x).toBeLessThan(x0 - C); // well on its way before it burst
+    expect(s.state.projectiles).toHaveLength(SPLIT.into);
+    const dirs = s.state.projectiles.map((q) => q.vy / Math.hypot(q.vx, q.vy));
+    expect(Math.max(...dirs) - Math.min(...dirs)).toBeGreaterThan(0.5);
+  });
+
+  it('spirals spin shots out all round over time, and stop when the boss dies', () => {
+    const s = sim(arena({ w: 10, h: 5, py: 2, things: [[EnemyType.Boss, 6, 2]] }));
+    const boss = s.state.enemies[0]!;
+    const def = s.world.enemyDefs[EnemyType.Boss][0]!;
+    bossAttack(s.world, s.state, boss, def, 0, 'spiral');
+    expect(s.state.emitters).toHaveLength(1);
+    const arms = s.state.emitters[0]!.arms;
+    const eye = () => boss.z + def.height * 0.5;
+    for (let t = 0; t < 4; t++) stepEmitters(s.state, eye);
+    expect(s.state.projectiles.length).toBe(arms * 2); // emissions on ticks 0 and SPIRAL.every
+    for (let t = 0; t < SPIRAL.emissions * SPIRAL.every; t++) stepEmitters(s.state, eye);
+    expect(s.state.projectiles.length).toBe(arms * SPIRAL.emissions);
+    expect(s.state.emitters).toHaveLength(0);
+    const angles = s.state.projectiles.map((q) => Math.atan2(q.vy, q.vx));
+    expect(Math.max(...angles) - Math.min(...angles)).toBeGreaterThan(Math.PI * 1.5);
+
+    bossAttack(s.world, s.state, boss, def, 0, 'spiral');
+    boss.mode = 'dead';
+    stepEmitters(s.state, eye);
+    expect(s.state.emitters).toHaveLength(0);
   });
 });

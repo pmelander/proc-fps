@@ -85,13 +85,18 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 
 **Verified:**
 - The typecheck is clean.
-- 134 tests pass.
+- 139 tests pass.
 - 2000 seeds produce 0 validation failures (about 12 ms per map including validation).
 - The production build succeeds (about 45 kB JS).
 - Headless Chromium (SwiftShader) renders correctly.
 
 **Not yet verified:** real mouse and keyboard play. Pointer lock can't run headless.
 
+- Projectile patterns (M20):
+  - `sim/src/shots.ts`: projectiles gain optional behaviours (`Projectile.kind`, `gravity`, `homing`, `splitAt`, `splash`), all turned with dcos/dsin so replays hold. A lob arcs to where the player stood (4.5 units a tick across the ground, never landing in under 40 ticks, topping out 96 above the higher end or under the lower roof) and bursts there, hurting within 60 units: one step clears it. A homing orb (3.2 a tick, slower than the player walks) turns 0.025 rad a tick towards the player and fizzles after 6 s: outrun it or put a wall between you. A wall is nine parallel shots across the aim with a two-shot gap a step to one side (alternating sides cast by cast) and one shot in the player's lane. A split shot flies slowly and bursts into a five-shot fan past halfway. A spiral is a short-lived emitter (`SimState.emitters`) spinning out 2–4 arms of shots over 48 ticks, stopping if its boss dies.
+  - Grunts breed two new spit patterns (core/bestiary.ts, five now): lobbed globs and homing orbs (`EnemyDef.shot`); a level's two grunt variants still differ.
+  - Boss rotations (`sim/src/boss.ts`) bring the new patterns in by phase: mini boss volley / wall / slam, then volley / split / ring / summon / slam; boss volley / ring / wall / slam, then spiral / summon / split / slam / volley, then (enraged) spiral / homing / ring / summon / slam / wall. All unblockable, like the rest of a boss's blows.
+  - App: a lob is a dark, wobbling glob with a sickly burning core, a homing orb a magenta core in a pulsing ring, a split shot a big cracked white-hot orb; globs burst in a low flare and sparks with a sizzling splat, split shots crack into their fan with sparks; lobs and homing orbs have their own launch sounds.
 - Grenade launcher (M19):
   - `GRENADE` (core/src/weapons.ts): E lobs a grenade from the left hand (a new replayed `grenade` input; never mid-swing, 40 ticks between throws). It flies in an arc (12 units a tick along the aim plus a third of that upwards, gravity 0.12) and bursts on touching an enemy, a wall, a floor, a ceiling or a catwalk (or after 3 s): every enemy within 192 units of the burst (measured to its body) takes 90 at the centre falling to 25 at the edge, and the noise wakes the level. It never hurts the player.
   - Scarce: the player starts with 1 and carries at most 3 (`PlayerState.grenades`); half the loot and secret rooms hold one (`ThingType.Grenade`, a pickup that stays on the floor while the player is full).
@@ -235,6 +240,7 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 - **M15 — more weapons:** ✅ complete. The heavy bolter (fast, accurate, explosive bolts) beside the scattergun, weapon switching (1/2, wheel, Q), per-weapon magazines, its own view model, sounds, tracers and bursts, and a per-weapon ammo panel with weapon slots.
 - **M16 — enemy behaviour:** ✅ complete (generator v0.17.0). Enemies ride lifts and follow the player between storeys, snipers perch on catwalk tops, and some enemies flank.
 - **M19 — grenade launcher:** ✅ complete (generator v0.20.0). Scarce grenades, found in loot and secret rooms, lobbed from the left hand with E; doors and secret walls moved to Space.
+- **M20 — projectile patterns:** ✅ complete. Lobbed globs and homing orbs for grunt variants; walls with a gap, split shots, spirals and homing fans rotated into boss phases.
 - **M18 — boss fights:** ✅ complete. Bosses fight in phases with rotating attacks (volleys, ring bursts, summoned packs, telegraphed slams), an enraged last phase, blows the chainsword cannot shield, a named boss bar, and deaths worth watching.
 - **M17 — run structure:** ✅ complete. A title screen, four difficulties, runs tracked across levels with a score, an end-of-level screen with the run so far, a run summary and the best runs.
 - **M11 — procedural enemies:** ✅ complete. Every generated level breeds its own mutants: seeded stat variants per role (core `enemyDefsFor`) and seeded body plans and skins that stand out from the theme (render `enemyLooks`). The exit gets a glowing pad, a light beacon and a hum.
@@ -265,4 +271,5 @@ In the map format a door is a one-cell sector with its kind in `Sector.special` 
 
 Ideas noted during play-testing, not yet scheduled. Each line points at whatever already exists for it.
 
-- **Projectile patterns.** Enemy fire is aimed fans (and the bosses' rings); more patterns would make fights read differently: spirals, a wall with a gap to find, slow homing orbs, lobbed arcs that land where the player was, delayed bursts. Could vary by enemy variant (core/bestiary.ts already gives grunts spit patterns) and by boss phase (sim/boss.ts).
+
+- Nothing queued.

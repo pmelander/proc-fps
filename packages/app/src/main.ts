@@ -272,7 +272,8 @@ function buildSprites(
     sprites.push({ x: ex, y: ey, z: world.grid.floorAt(world.exit[0], world.exit[1]), width: 80, height: EXIT_BEACON_HEIGHT, shape: SpriteShape.ExitBeacon, charge: 0, flash: 0, light: 1, tile: -1 });
   }
   for (const q of state.projectiles) {
-    sprites.push({ x: q.x, y: q.y, z: q.z - PROJECTILE_SIZE / 2, width: PROJECTILE_SIZE, height: PROJECTILE_SIZE, shape: SpriteShape.Projectile, charge: 0, flash: 0, light: 1, tile: -1 });
+    const [shape, size] = q.kind === 'lob' ? [SpriteShape.Lob, 18] : q.kind === 'homing' ? [SpriteShape.Homing, 16] : q.kind === 'split' ? [SpriteShape.Split, 26] : [SpriteShape.Projectile, PROJECTILE_SIZE];
+    sprites.push({ x: q.x, y: q.y, z: q.z - size / 2, width: size, height: size, shape, charge: 0, flash: 0, light: 1, tile: -1 });
   }
   return sprites;
 }
@@ -626,10 +627,11 @@ function main(): void {
         }
         if (e.type === 'windup' || e.type === 'attack') {
           const enemy = enemyAt(e.enemy);
-          const kind = defOf(world.enemyDefs, enemy).attack;
+          const def = defOf(world.enemyDefs, enemy);
+          const kind = def.attack;
           const id: SoundId = e.type === 'windup'
             ? e.type === 'windup' && e.pattern === 'slam' ? 'windupSlam' : kind === 'melee' ? 'windupMelee' : kind === 'hitscan' ? 'windupHitscan' : 'windup'
-            : kind === 'melee' ? 'melee' : kind === 'hitscan' ? 'snipe' : 'launch';
+            : kind === 'melee' ? 'melee' : kind === 'hitscan' ? 'snipe' : def.shot === 'lob' ? 'lob' : def.shot === 'homing' || enemy.pattern === 'homing' ? 'homing' : 'launch';
           audio.play(id, enemy, listener);
           // A sniper's shot shows: a glowing line from its eye to the player, or to the wall if
           // they broke line of sight in time.
@@ -654,6 +656,14 @@ function main(): void {
           joltUntil = now + JOLT_SECONDS;
           // The coils recharge between shots; the last shot's reload has its own sound.
           if (state.player.reload === 0) window.setTimeout(() => audio.play('charge'), 90);
+        }
+        if (e.type === 'splash') {
+          gore.globBurst(e.x, e.y, e.z);
+          audio.play('splash', e, listener, 0.9 + Math.random() * 0.2);
+        }
+        if (e.type === 'split') {
+          gore.sparks(e.x, e.y, e.z);
+          audio.play('split', e, listener);
         }
         if (e.type === 'blast') {
           // A bolt bursting: a flash of fire, sparks and chips, and a thump from where it hit.

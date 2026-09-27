@@ -33,3 +33,4 @@ export * from './raycast.js';
 export { distanceField, flankSide } from './ai.js';
 export { MAX_ADDS, SLAM_RADIUS, SLAM_WINDUP, isBoss, type BossPattern } from './boss.js';
 export * from './lifts.js';
+export { HOMING, LOB, SPIRAL, SPLIT, WALL, type Emitter, type ShotKind } from './shots.js';

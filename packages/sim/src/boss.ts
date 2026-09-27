@@ -1,5 +1,6 @@
 import { ALERT_TICKS, CELL_SIZE, EnemyType, MAX_STEP, dcos, dsin, type EnemyDef } from '@proc-fps/core';
 import { hurtPlayer } from './combat.js';
+import { fireHoming, fireSplit, fireWall, startSpiral } from './shots.js';
 import type { EnemyState, SimState } from './state.js';
 import { doorAtCell, type World } from './world.js';
 
@@ -9,11 +10,16 @@ import { doorAtCell, type World } from './world.js';
  * - volley: the aimed fan every enemy with projectiles fires;
  * - ring: a burst of projectiles in every direction (the gaps between them are the way through);
  * - summon: a pack of grunts erupts from the floor around it (capped, so it cannot flood the room);
- * - slam: a long wind-up, then a blow to everyone within SLAM_RADIUS on its floor (step out in time).
+ * - slam: a long wind-up, then a blow to everyone within SLAM_RADIUS on its floor (step out in time);
+ * - wall: a line of parallel shots with a gap a step to one side (see shots.ts);
+ * - split: a slow shot that bursts into a fan part of the way there;
+ * - spiral: streams of shots spun out around it for most of a second;
+ * - homing: a fan of slow orbs that steer after the player.
+ * Later phases bring in the harder patterns.
  * The boss's last phase is enraged: it winds up faster and waits less between attacks, and its
  * volleys widen. Bosses' blows cannot be turned away by the chainsword's invulnerability.
  */
-export type BossPattern = 'volley' | 'ring' | 'summon' | 'slam';
+export type BossPattern = 'volley' | 'ring' | 'summon' | 'slam' | 'wall' | 'split' | 'spiral' | 'homing';
 
 export const isBoss = (type: EnemyType): boolean => type === EnemyType.MiniBoss || type === EnemyType.Boss;
 
@@ -25,8 +31,12 @@ const PHASES: Partial<Record<EnemyType, readonly number[]>> = {
 
 /** Each phase's rotation of attacks. */
 const PATTERNS: Partial<Record<EnemyType, readonly (readonly BossPattern[])[]>> = {
-  [EnemyType.MiniBoss]: [['volley', 'volley', 'slam'], ['volley', 'ring', 'summon', 'slam']],
-  [EnemyType.Boss]: [['volley', 'ring', 'slam'], ['volley', 'summon', 'ring', 'slam'], ['ring', 'volley', 'summon', 'slam', 'volley']],
+  [EnemyType.MiniBoss]: [['volley', 'wall', 'slam'], ['volley', 'split', 'ring', 'summon', 'slam']],
+  [EnemyType.Boss]: [
+    ['volley', 'ring', 'wall', 'slam'],
+    ['spiral', 'summon', 'split', 'slam', 'volley'],
+    ['spiral', 'homing', 'ring', 'summon', 'slam', 'wall'],
+  ],
 };
 
 /** A slam reaches everyone this close (map units) on the boss's floor. */
@@ -35,6 +45,9 @@ export const SLAM_RADIUS = 2.2 * CELL_SIZE;
 export const SLAM_WINDUP = 48;
 /** Projectiles in a ring burst. */
 const RING: Partial<Record<EnemyType, number>> = { [EnemyType.MiniBoss]: 10, [EnemyType.Boss]: 16 };
+/** Arms of a spiral, and orbs in a homing fan. */
+const SPIRAL_ARMS: Partial<Record<EnemyType, number>> = { [EnemyType.MiniBoss]: 2, [EnemyType.Boss]: 3 };
+const HOMING_FAN: Partial<Record<EnemyType, number>> = { [EnemyType.MiniBoss]: 2, [EnemyType.Boss]: 3 };
 /** Grunts per summon, and the most a boss's summons may have alive at once. */
 const SUMMON: Partial<Record<EnemyType, number>> = { [EnemyType.MiniBoss]: 2, [EnemyType.Boss]: 3 };
 export const MAX_ADDS = 6;
@@ -90,7 +103,7 @@ export function patternCooldown(e: EnemyState, def: EnemyDef): number {
 /** Extra projectiles an enraged boss adds to its volleys. */
 export const volleyBonus = (e: EnemyState): number => (enraged(e) ? 2 : 0);
 
-/** Carries out a ring, summon or slam (volleys go through the ordinary attack). */
+/** Carries out any attack but a volley (volleys go through the ordinary attack). */
 export function bossAttack(world: World, state: SimState, e: EnemyState, def: EnemyDef, index: number, pattern: BossPattern): void {
   if (pattern === 'ring') {
     const n = RING[e.type] ?? 10;
@@ -104,6 +117,14 @@ export function bossAttack(world: World, state: SimState, e: EnemyState, def: En
         damage: def.damage, ttl: 0, unblockable: true,
       });
     }
+    state.events.push({ type: 'attack', enemy: index });
+    return;
+  }
+  if (pattern === 'wall' || pattern === 'split' || pattern === 'spiral' || pattern === 'homing') {
+    if (pattern === 'wall') fireWall(state, e, def, e.attacks, true);
+    if (pattern === 'split') fireSplit(state, e, def, true);
+    if (pattern === 'spiral') startSpiral(state, e, def, index, (SPIRAL_ARMS[e.type] ?? 2) + (enraged(e) ? 1 : 0), true);
+    if (pattern === 'homing') fireHoming(state, e, def, (HOMING_FAN[e.type] ?? 2) + (enraged(e) ? 1 : 0), 0.5, true);
     state.events.push({ type: 'attack', enemy: index });
     return;
   }

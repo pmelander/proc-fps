@@ -68,7 +68,7 @@ describe('enemyDefsFor', () => {
       const [a, b] = defs[EnemyType.Grunt] as [EnemyDef, EnemyDef];
       if (Math.sign(a.stepTicks - base) !== Math.sign(b.stepTicks - base)) opposite++;
       // Grunts spit differently.
-      expect([a.volley, a.projectileSpeed]).not.toEqual([b.volley, b.projectileSpeed]);
+      expect([a.volley, a.projectileSpeed, a.shot]).not.toEqual([b.volley, b.projectileSpeed, b.shot]);
       expect(defOf(defs, { type: EnemyType.Boss, variant: 1 })).toBe(defs[EnemyType.Boss][0]);
     }
     expect(opposite).toBeGreaterThan(150); // one quick and frail, one slow and tough, nearly always

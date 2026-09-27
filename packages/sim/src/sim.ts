@@ -1,4 +1,4 @@
-import { GRENADE, PLAYER_HEIGHT,
+import { GRENADE, PLAYER_HEIGHT, defOf,
   DoorKind,
   HAZARD_DAMAGE,
   HAZARD_TICKS,
@@ -11,6 +11,7 @@ import { GRENADE, PLAYER_HEIGHT,
   isDamaging,
 } from '@proc-fps/core';
 import { stepEnemies } from './ai.js';
+import { stepEmitters } from './shots.js';
 import { hurtPlayer, playerFire, playerGrenade, stepGrenades, stepProjectiles } from './combat.js';
 import { quantizeInput, type InputFrame } from './input.js';
 import { callLift, floorNow, liftAtCell, liftMoving, stepLifts } from './lifts.js';
@@ -137,6 +138,7 @@ export function stepSim(world: World, state: SimState, input: InputFrame): void 
   playerFire(world, state, q.fire, q.reload, q.melee, q.weapon);
   playerGrenade(state, q.grenade);
   stepEnemies(world, state);
+  stepEmitters(state, (e) => e.z + defOf(world.enemyDefs, e).height * 0.5);
   stepProjectiles(world, state);
   stepGrenades(world, state);
 

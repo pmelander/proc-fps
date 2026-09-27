@@ -21,7 +21,8 @@ import {
 import { alert, makeNoise } from './ai.js';
 import { floorNow } from './lifts.js';
 import { castRay, cellOpen } from './raycast.js';
-import type { SimState } from './state.js';
+import { HOMING, steer } from './shots.js';
+import type { Projectile, SimState } from './state.js';
 import type { World } from './world.js';
 
 const PROJECTILE_RADIUS = 6;
@@ -279,7 +280,24 @@ function explode(world: World, state: SimState, x: number, y: number, z: number)
 export function stepProjectiles(world: World, state: SimState): void {
   const p = state.player;
   const g = world.grid;
+  const born: Projectile[] = [];
+  const burst = (q: Projectile) => {
+    if (!q.splash) return;
+    state.events.push({ type: 'splash', x: q.x, y: q.y, z: q.z });
+    const dx = q.x - p.x;
+    const dy = q.y - p.y;
+    const reach = q.splash + PLAYER_RADIUS;
+    if (dx * dx + dy * dy <= reach * reach && q.z >= p.z - q.splash && q.z <= p.z + PLAYER_HEIGHT + q.splash) {
+      hurtPlayer(state, q.damage, { x: q.x - q.vx * 16, y: q.y - q.vy * 16 }, q.unblockable === true);
+    }
+  };
   state.projectiles = state.projectiles.filter((q) => {
+    const children = steer(state, q);
+    if (children) {
+      state.events.push({ type: 'split', x: q.x, y: q.y, z: q.z });
+      born.push(...children);
+      return false;
+    }
     q.x += q.vx;
     q.y += q.vy;
     q.z += q.vz;
@@ -288,14 +306,23 @@ export function stepProjectiles(world: World, state: SimState): void {
     const reach = PLAYER_RADIUS + PROJECTILE_RADIUS;
     if (dx * dx + dy * dy < reach * reach && q.z >= p.z && q.z <= p.z + PLAYER_HEIGHT) {
       // It came from back along its flight.
-      hurtPlayer(state, q.damage, { x: q.x - q.vx * 16, y: q.y - q.vy * 16 }, q.unblockable === true);
+      if (q.splash) burst(q);
+      else hurtPlayer(state, q.damage, { x: q.x - q.vx * 16, y: q.y - q.vy * 16 }, q.unblockable === true);
       return false;
     }
     const [cx, cy] = g.cellOf(q.x, q.y);
-    if (!cellOpen(world, state, cx, cy)) return false;
-    const sec = world.map.sectors[g.sectorAt(cx, cy)]!;
-    if (q.z < floorNow(world, state, cx, cy) || q.z > sec.ceil) return false;
-    if (sec.slab && q.z >= sec.slab.bottom && q.z <= sec.slab.top) return false;
-    return ++q.ttl <= PROJECTILE_TTL;
+    let hit = !cellOpen(world, state, cx, cy);
+    if (!hit) {
+      const sec = world.map.sectors[g.sectorAt(cx, cy)]!;
+      if (q.z < floorNow(world, state, cx, cy) || q.z > sec.ceil) hit = true;
+      else if (sec.slab && q.z >= sec.slab.bottom && q.z <= sec.slab.top) hit = true;
+    }
+    if (hit) {
+      // Burst a step back along the flight, clear of the surface it struck.
+      if (q.splash) burst({ ...q, x: q.x - q.vx, y: q.y - q.vy, z: q.z - q.vz });
+      return false;
+    }
+    return ++q.ttl <= (q.homing ? HOMING.life : PROJECTILE_TTL);
   });
+  state.projectiles.push(...born);
 }

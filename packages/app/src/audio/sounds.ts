@@ -16,7 +16,8 @@ export type SoundId =
   | 'saw' | 'sawHit' | 'shielded'
   | 'bolt' | 'boltBlast' | 'switch'
   | 'roar' | 'slam' | 'windupSlam' | 'summon' | 'bossDeath'
-  | 'grenadeFire' | 'explode' | 'grenadePickup';
+  | 'grenadeFire' | 'explode' | 'grenadePickup'
+  | 'lob' | 'splash' | 'homing' | 'split';
 
 type Recipe = Voice[];
 
@@ -57,6 +58,23 @@ const RECIPES: Record<SoundId, Recipe> = {
     { wave: 'noise', freq: 1000, freqEnd: 80, attack: 0, sustain: 0.04, release: 0.35, volume: 0.7, lowpass: 1800 },
     { wave: 'saw', freq: 55, freqEnd: 25, attack: 0, sustain: 0.04, release: 0.25, volume: 0.4, lowpass: 300 },
     { wave: 'sine', freq: 60, freqEnd: 22, attack: 0, sustain: 0.05, release: 0.35, volume: 0.7 },
+  ],
+  // A glob spat up in an arc: a wet, gulping pop.
+  lob: [
+    { wave: 'sine', freq: 160, freqEnd: 420, attack: 0, sustain: 0.05, release: 0.12, volume: 0.45 },
+    { wave: 'noise', freq: 900, freqEnd: 300, attack: 0, sustain: 0.03, release: 0.1, volume: 0.25, lowpass: 1200 },
+  ],
+  // The glob bursting where it lands: a sizzling splat.
+  splash: [
+    { wave: 'noise', freq: 2400, freqEnd: 600, attack: 0, sustain: 0.05, release: 0.35, volume: 0.5, lowpass: 3500 },
+    { wave: 'sine', freq: 120, freqEnd: 50, attack: 0, sustain: 0.03, release: 0.15, volume: 0.4 },
+  ],
+  // A homing orb loosed: a rising, warbling whine.
+  homing: [{ wave: 'square', freq: 300, freqEnd: 700, attack: 0.02, sustain: 0.18, release: 0.15, volume: 0.22, duty: 0.3, vibrato: { depth: 0.08, rate: 14 }, lowpass: 2500 }],
+  // A split shot bursting into its fan: a sharp crack.
+  split: [
+    { wave: 'noise', freq: 4000, freqEnd: 900, attack: 0, sustain: 0.01, release: 0.12, volume: 0.45 },
+    { wave: 'square', freq: 900, freqEnd: 300, attack: 0, sustain: 0.02, release: 0.1, volume: 0.2, duty: 0.25 },
   ],
   // The launcher: a hollow thunk and a pop.
   grenadeFire: [

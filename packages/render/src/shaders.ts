@@ -401,6 +401,34 @@ void main() {
     outColor = vec4(kc * (0.9 + 0.5 * p.y) * (1.0 - 0.4 * smoothstep(-0.03, 0.0, k)), 1.0);
     return;
   }
+  if (vShape == 21) { // lob: a dark lumpy glob with a burning green-yellow core
+    vec2 q = p - 0.5;
+    float wob = 0.05 * sin(atan(q.y, q.x) * 5.0 + uTime * 9.0);
+    float r = length(q) * 2.0;
+    if (r > 0.9 + wob) discard;
+    vec3 c = r < 0.5 ? mix(vec3(1.0, 1.0, 0.55), vec3(0.6, 0.95, 0.1), r * 2.0) : vec3(0.16, 0.2, 0.05) * (1.4 - r);
+    outColor = vec4(c, 1.0);
+    return;
+  }
+  if (vShape == 22) { // homing: a magenta core in a pulsing ring
+    float r = length(p - 0.5) * 2.0;
+    float ring = abs(r - (0.72 + 0.12 * sin(uTime * 12.0)));
+    if (r > 1.0 || (r > 0.45 && ring > 0.1)) discard;
+    vec3 c = r <= 0.45 ? mix(vec3(1.0, 0.85, 1.0), vec3(1.0, 0.2, 0.8), r / 0.45) : vec3(0.85, 0.2, 1.0);
+    outColor = vec4(c, 1.0);
+    return;
+  }
+  if (vShape == 23) { // split: a big hot orb cracked with lines of fire
+    vec2 q = p - 0.5;
+    float r = length(q) * 2.0;
+    if (r > 1.0) discard;
+    float a = atan(q.y, q.x) + uTime * 2.0;
+    float crack = abs(sin(a * 2.5)) < 0.12 ? 1.0 : 0.0;
+    vec3 c = mix(vec3(1.0, 1.0, 0.95), vec3(0.95, 0.5, 0.1), r);
+    c = mix(c, vec3(1.0, 0.2, 0.05), crack * step(0.35, r));
+    outColor = vec4(c, 1.0);
+    return;
+  }
   if (vShape == 8) { // projectile: a hot, self-lit orb
     float r = length(p - 0.5) * 2.0;
     if (r > 1.0) discard;

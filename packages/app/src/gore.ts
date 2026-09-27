@@ -107,6 +107,24 @@ export class Gore {
     for (let k = 0; k < 3; k++) this.impact(x, y, z + 4, (this.rand() - 0.5) * 0.6, (this.rand() - 0.5) * 0.6, 1);
   }
 
+  /** An enemy's glob bursting where it lands: a low flare and a spray of sparks. */
+  globBurst(x: number, y: number, z: number): void {
+    for (let i = 0; i < 2; i++) this.add({ x: x + (this.rand() - 0.5) * 20, y: y + (this.rand() - 0.5) * 20, z: z + this.rand() * 6, vx: 0, vy: 0, vz: 20, size: 22 + this.rand() * 12, kind: 'fire', age: 0 });
+    this.sparks(x, y, z, 12);
+  }
+
+  /** A burst of sparks in every direction (a split shot breaking apart). */
+  sparks(x: number, y: number, z: number, n = 10): void {
+    for (let i = 0; i < n; i++) {
+      const speed = 150 + this.rand() * 300;
+      this.add({
+        x, y, z,
+        vx: (this.rand() - 0.5) * 2 * speed, vy: (this.rand() - 0.5) * 2 * speed, vz: this.rand() * speed,
+        size: 3 + this.rand() * 2.5, kind: 'spark', age: this.rand() * 0.2,
+      });
+    }
+  }
+
   /** A bolt bursting: a ball of fire that swells and fades, with sparks and chips. */
   blast(x: number, y: number, z: number): void {
     for (let i = 0; i < 3; i++) this.add({ x: x + (this.rand() - 0.5) * 10, y: y + (this.rand() - 0.5) * 10, z: z - 10 + this.rand() * 10, vx: 0, vy: 0, vz: 30, size: 18 + this.rand() * 14, kind: 'fire', age: 0 });

@@ -1,5 +1,6 @@
 import { DEG_TO_RAD, GRENADE, PLAYER_MAX_HEALTH, WEAPONS, defOf, isHigh, variantOf, ThingType, isEnemyThing, type EnemyType, type Heading } from '@proc-fps/core';
 import type { BossPattern } from './boss.js';
+import type { Emitter, ShotKind } from './shots.js';
 import type { World } from './world.js';
 
 /** No buffered step. */
@@ -126,6 +127,16 @@ export interface Projectile {
   ttl: number;
   /** A boss's: the chainsword's invulnerability does not turn it away. */
   unblockable?: boolean;
+  /** How it looks (see shots.ts); a plain orb when absent. */
+  kind?: ShotKind;
+  /** Units per tick² it falls (a lob). */
+  gravity?: number;
+  /** Radians per tick it turns towards the player (homing). */
+  homing?: number;
+  /** The tick of its flight it bursts into a fan (a split shot). */
+  splitAt?: number;
+  /** Where it lands it bursts, hurting everyone within this radius (a lob). */
+  splash?: number;
 }
 
 /** A grenade in flight (map units, per tick). */
@@ -158,6 +169,9 @@ export type SimEvent =
   | { type: 'explode'; x: number; y: number; z: number }
   | { type: 'grenadePickup' }
   /** A reload started (the cell ran dry, or R), and finished. */
+  /** An enemy's glob burst where it landed; a split shot burst into its fan. */
+  | { type: 'splash'; x: number; y: number; z: number }
+  | { type: 'split'; x: number; y: number; z: number }
   | { type: 'reload' }
   | { type: 'reloaded' }
   /** The player took damage; `from` is where it came from (none for a hazard floor). */
@@ -197,6 +211,8 @@ export interface SimState {
   secrets: number;
   enemies: EnemyState[];
   projectiles: Projectile[];
+  /** Bosses' spirals being spun out. */
+  emitters: Emitter[];
   /** The player's grenades in flight. */
   grenades: Grenade[];
   /** The player died; the sim ignores input from here. */
@@ -272,6 +288,7 @@ export function createSimState(world: World): SimState {
     secrets: 0,
     enemies,
     projectiles: [],
+    emitters: [],
     grenades: [],
     dead: false,
     won: false,

@@ -35,6 +35,8 @@ export interface EnemyDef {
   /** Projectiles per attack, fanned by `spread` radians. */
   volley: number;
   spread: number;
+  /** How its projectiles fly: aimed straight (the default), lobbed in an arc that bursts where it lands, or homing. */
+  shot?: 'lob' | 'homing';
   /** Ticks stunned when hit (0 = never flinches). */
   pain: number;
 }

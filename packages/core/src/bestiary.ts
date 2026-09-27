@@ -27,6 +27,9 @@ export const MIN_PROJECTILE_CELL_TICKS = STEP_TICKS + 6;
 export const MIN_HITSCAN_WINDUP = 58;
 /** An ordinary enemy never has more hit points than this: one close blast (8 × 12) still kills. */
 export const MAX_FODDER_HP = 60;
+/** Grunt spit patterns (see variant). */
+const GRUNT_PATTERNS = 5;
+
 /** Roles that come in two variants per level. */
 export const VARIANT_TYPES: readonly EnemyType[] = [EnemyType.Grunt, EnemyType.Brute, EnemyType.Sniper];
 
@@ -38,7 +41,8 @@ export const BASELINE_DEFS: EnemyDefs = Object.fromEntries(TYPES.map((t) => [t, 
 
 /**
  * One role's stats for a speed trait (-1 lumbering and tough … +1 quick and frail) and, for grunts,
- * a spit pattern (0 one bolt, 1 a twin spread of softer bolts, 2 one quick bolt after a longer wind-up).
+ * a spit pattern (0 one bolt, 1 a twin spread of softer bolts, 2 one quick bolt after a longer wind-up,
+ * 3 a lobbed glob that bursts where it lands, 4 a slow homing orb).
  */
 function variant(type: EnemyType, r: Rng, speed: number, pattern: number): EnemyDef {
   const base = ENEMY_DEFS[type];
@@ -52,6 +56,8 @@ function variant(type: EnemyType, r: Rng, speed: number, pattern: number): Enemy
     case EnemyType.Grunt:
       if (pattern === 1) Object.assign(def, { volley: 2, spread: 0.14, damage: round(base.damage * 0.7) });
       if (pattern === 2) Object.assign(def, { projectileSpeed: base.projectileSpeed * 1.2, windup: def.windup + 8 });
+      if (pattern === 3) Object.assign(def, { shot: 'lob', windup: def.windup + 6 });
+      if (pattern === 4) Object.assign(def, { shot: 'homing', damage: round(base.damage * 0.8), cooldown: round(base.cooldown * 1.25) });
       break;
     case EnemyType.Brute:
       def.damage = round(base.damage * r.range(0.85, 1.2));
@@ -85,14 +91,14 @@ export function enemyDefsFor(seed: string | undefined): EnemyDefs {
   for (const type of TYPES) {
     const r = rng.fork(String(type));
     const speed = r.range(-1, 1);
-    const pattern = r.int(0, 2);
+    const pattern = r.int(0, GRUNT_PATTERNS - 1);
     const first = variant(type, r, speed, pattern);
     if (!VARIANT_TYPES.includes(type)) {
       out[type] = [first];
       continue;
     }
     // The second variant pulls the other way: the opposite speed trait, another spit pattern.
-    const second = variant(type, r.fork('variant'), -Math.sign(speed || 1) * r.range(0.5, 1), (pattern + r.int(1, 2)) % 3);
+    const second = variant(type, r.fork('variant'), -Math.sign(speed || 1) * r.range(0.5, 1), (pattern + r.int(1, GRUNT_PATTERNS - 1)) % GRUNT_PATTERNS);
     out[type] = [first, second];
   }
   return out;

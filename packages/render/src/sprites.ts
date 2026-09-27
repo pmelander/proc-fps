@@ -57,6 +57,12 @@ export const SpriteShape = {
   Warning: 19,
   /** A grenade: lying as a pickup, or in flight. A dark casing, a brass band, a blinking light. */
   Grenade: 20,
+  /** A lobbed glob: a dark, lumpy shell around a sickly burning core (self-lit). */
+  Lob: 21,
+  /** A homing orb: a magenta core in a pulsing ring (self-lit). */
+  Homing: 22,
+  /** A split shot: a big white-hot orb, cracked with lines of fire, about to burst (self-lit). */
+  Split: 23,
 } as const;
 
 export interface Sprite {

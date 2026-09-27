@@ -3,6 +3,7 @@ import { hurtPlayer } from './combat.js';
 import { callLift, floorNow, liftAtCell, liftMoving } from './lifts.js';
 import { bossAttack, isBoss, nextPattern, patternCooldown, patternWindup, updatePhase, volleyBonus } from './boss.js';
 import { lineOfSight } from './raycast.js';
+import { fireHoming, fireLob } from './shots.js';
 import { DOOR_OPEN_TICKS, type EnemyState, type SimState } from './state.js';
 import { doorAtCell, type World } from './world.js';
 
@@ -358,6 +359,9 @@ function attack(world: World, state: SimState, e: EnemyState, def: EnemyDef, ind
     if (lineOfSight(world, state, e.x, e.y, p.x, p.y)) hurtPlayer(state, def.damage, { x: e.x, y: e.y });
     return;
   }
+  const boss = isBoss(e.type);
+  if (def.shot === 'lob') return fireLob(world, state, e, def, boss);
+  if (def.shot === 'homing') return fireHoming(state, e, def, def.volley, def.spread, boss);
   // Projectiles, aimed where the player is now, fanned for volleys. An even fan is shifted half a
   // step (to alternating sides, volley by volley) so one projectile always flies at the aim:
   // a symmetric even fan leaves a gap exactly where the player stands.
@@ -368,7 +372,6 @@ function attack(world: World, state: SimState, e: EnemyState, def: EnemyDef, ind
   const ay = p.y - sy;
   const az = p.z + AIM_HEIGHT - sz;
   const len = Math.sqrt(ax * ax + ay * ay + az * az) || 1;
-  const boss = isBoss(e.type);
   const volley = def.volley + (boss ? volleyBonus(e) : 0);
   for (let k = 0; k < volley; k++) {
     const shift = volley % 2 === 0 ? (state.tick % 2 === 0 ? 0.5 : -0.5) : 0;
