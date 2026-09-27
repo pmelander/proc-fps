@@ -85,7 +85,7 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 
 **Verified:**
 - The typecheck is clean.
-- 156 tests pass.
+- 160 tests pass.
 - 2000 seeds produce 0 validation failures (about 12 ms per map including validation).
 - The production build succeeds (about 45 kB JS).
 - Headless Chromium (SwiftShader) renders correctly.
@@ -93,6 +93,12 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 **Not yet verified:** real mouse and keyboard play. Pointer lock can't run headless.
 
 - The game is called **Null Sector** (chosen over Hellseed, Gridfall, Cursed Protocol and others; not yet checked against existing games or trademarks). The name shows on the title logo and the page titles; the repository, the `@proc-fps/*` packages and the browser-storage keys (`proc-fps.run`, `.best`, `.difficulty`, so saved runs carry over) keep the working name.
+- Pickups (M25), constants in `core/src/powerups.ts`:
+  - **Armour** (`ThingType.Armor`): a vest adds 50, to 100 (`ARMOR`); it soaks up half of every hurt (hazard floors included) until it runs out, and stays on the floor while the armour is full. A thinner steel bar under the health shows it while there is any.
+  - **Berserk** (`ThingType.Berserk`): heals 50 when picked up; for 20 s the chainsword hits three times as hard (60 a hit: one fells a brute) and every hit that lands heals 3 per enemy struck (`BERSERK`). A throbbing blood-red box on the floor; a roar, a banner, a pulsing red tint round the screen and a badge counting down (blinking for its last 3 s).
+  - **Overcharge** (`ThingType.Overcharge`): for 15 s the guns hit twice as hard (bolter bursts too) and fire half as fast again (`OVERCHARGE`). A pulsing energy cell; an electric hum, a banner, a tint in the theme's light and a badge.
+  - `PlayerState.armor`, `.berserk`, `.overcharge`; `armor`, `powerup` and `powerdown` events. Placement (`population.ts`, its own `powerups` stream, after everything else): secret rooms pay best (armour 60%, berserk 30%, else overcharge 25%), loot rooms less, the gate room before the boss may hold armour, ordinary rooms rarely, power-ups there only from level 2.
+  - The pixel font gained a shield (⛨) and a bolt (⚡) for the HUD. `?map=test07` holds one of each pickup by the start.
 - More enemy roles (M24), each with one clear answer:
   - **Charger** (`EnemyType.Charger`, attack `charge`): when the player stands in a straight, clear lane 2–6 cells away on its level, it lowers its horns (a 36-tick wind-up, a rasping bellow) and rushes down the lane at 7 ticks a cell (`CHARGE_STEP_TICKS`). The player in the next cell takes 30; anything else in the way (a wall, a closed door, another enemy) is a crash that stuns it for 70 ticks (`CHARGE_STUN`), a free shot. Step out of the lane during the wind-up.
   - **Bloater** (`Bloater`, attack `blast`): frail and fairly quick; next to the player it runs a 34-tick fuse (flashing faster, an alarm) and bursts (`detonate`), dying: everyone within 176 units (`BLAST_RADIUS`) takes up to 35, falling to 30% at the edge, the player included (the chainsword's invulnerability turns it away). Killed by anything it bursts too, and bloaters caught go up in turn: shoot one in a crowd. Get two cells away during the fuse.
@@ -269,7 +275,7 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 - **M22 — options:** ✅ complete. Mouse speed, invert look, field of view, music and sound volume, screen shake, flashes and head bob, from the title and pause screens, kept in the browser.
 - **M23 — per-theme palettes:** ✅ complete. Each theme quantizes to its own 64 colours, built from its own colours; the HUD, menus and automap follow.
 - **M24 — more enemy roles:** ✅ complete (generator v0.21.0). The charger (rushes down a straight lane), the bloater (bursts beside the player, or when killed, taking others with it) and the warden (a front shield, lowered only to fire).
-- **M25 — pickups:** planned. Beyond health and grenades: armour, a berserk power-up for the chainsword, and the like.
+- **M25 — pickups:** ✅ complete (generator v0.22.0). Armour that soaks half of every hurt, berserk (a savage, healing chainsword) and overcharge (harder, faster guns).
 
 ## Doors (decided)
 

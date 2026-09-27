@@ -1,4 +1,4 @@
-import { GRENADE, PLAYER_HEIGHT, defOf,
+import { ARMOR, BERSERK, GRENADE, OVERCHARGE, PLAYER_HEIGHT, defOf,
   DoorKind,
   HAZARD_DAMAGE,
   HAZARD_TICKS,
@@ -115,6 +115,20 @@ export function stepSim(world: World, state: SimState, input: InputFrame): void 
       const amount = Math.min(HEALTH_PICKUP, PLAYER_MAX_HEALTH - p.health);
       p.health += amount;
       state.events.push({ type: 'health', amount });
+    } else if (k.kind === 'armor') {
+      // Stays on the floor while the armour is full.
+      if (p.armor >= ARMOR.max) return;
+      const amount = Math.min(ARMOR.pickup, ARMOR.max - p.armor);
+      p.armor += amount;
+      state.events.push({ type: 'armor', amount });
+    } else if (k.kind === 'berserk' || k.kind === 'overcharge') {
+      if (k.kind === 'berserk') {
+        p.berserk = BERSERK.ticks;
+        p.health = Math.min(PLAYER_MAX_HEALTH, p.health + BERSERK.heal);
+      } else {
+        p.overcharge = OVERCHARGE.ticks;
+      }
+      state.events.push({ type: 'powerup', kind: k.kind });
     } else if (k.kind === 'grenade') {
       // Stays on the floor while the player carries all they can.
       if (p.grenades >= GRENADE.max) return;
@@ -134,6 +148,10 @@ export function stepSim(world: World, state: SimState, input: InputFrame): void 
   } else {
     p.hazardTicks = 0;
   }
+
+  // Power-ups run down.
+  if (p.berserk > 0 && --p.berserk === 0) state.events.push({ type: 'powerdown', kind: 'berserk' });
+  if (p.overcharge > 0 && --p.overcharge === 0) state.events.push({ type: 'powerdown', kind: 'overcharge' });
 
   playerFire(world, state, q.fire, q.reload, q.melee, q.weapon);
   playerGrenade(state, q.grenade);

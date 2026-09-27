@@ -99,6 +99,12 @@ export const ThingType = {
   Health: 3,
   /** A grenade for the launcher, picked up when walked over (see GRENADE). */
   Grenade: 4,
+  /** An armour vest (see ARMOR). */
+  Armor: 5,
+  /** Berserk: a while of a savage chainsword (see BERSERK). */
+  Berserk: 6,
+  /** Overcharge: a while of harder, faster guns (see OVERCHARGE). */
+  Overcharge: 7,
 } as const;
 
 /** Enemy thing types. Stats and behaviour live in the sim (`ENEMY_DEFS`). */

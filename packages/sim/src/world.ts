@@ -45,9 +45,15 @@ export interface LiftInfo {
   cells: number[];
 }
 
+export type PickupKind = 'key' | 'health' | 'grenade' | 'armor' | 'berserk' | 'overcharge';
+/** Floor pickups by thing type (keys aside). */
+const PICKUP_OF: Partial<Record<number, PickupKind>> = {
+  [ThingType.Health]: 'health', [ThingType.Grenade]: 'grenade', [ThingType.Armor]: 'armor', [ThingType.Berserk]: 'berserk', [ThingType.Overcharge]: 'overcharge',
+};
+
 /** Something picked up by walking over it. */
 export interface PickupInfo {
-  kind: 'key' | 'health' | 'grenade';
+  kind: PickupKind;
   /** Key id, for keys. */
   key: number;
   /** Where it lies; a dropped key lies where its carrier died instead. */
@@ -100,8 +106,8 @@ export function createWorld(map: MapData): World {
       return key >= 0 ? [{ kind: 'key', key, cx, cy, carrier }] : [];
     }
     const key = keyOfThing(t.type);
-    if (key < 0 && t.type !== ThingType.Health && t.type !== ThingType.Grenade) return [];
-    return [{ kind: key >= 0 ? 'key' : t.type === ThingType.Grenade ? 'grenade' : 'health', key, cx, cy, carrier: -1 }];
+    const kind = key >= 0 ? 'key' : PICKUP_OF[t.type];
+    return kind ? [{ kind, key, cx, cy, carrier: -1 }] : [];
   });
   const lifts: LiftInfo[] = [];
   const liftAt = new Int32Array(grid.width * grid.height).fill(-1);
@@ -120,8 +126,8 @@ export function createWorld(map: MapData): World {
   return { map, locator: new SectorLocator(map), grid, doors, doorAt, lifts, liftAt, pickups, exit, secrets: secretCount(map), enemyDefs: scaleDamage(enemyDefsFor(map.meta.seed), DIFFICULTY[difficultyOf(map)].damage) };
 }
 
-/** True for things that are floor pickups (keys and health; carried keys come from enemies). */
-export const isPickupThing = (type: number): boolean => keyOfThing(type) >= 0 || type === ThingType.Health;
+/** True for things that are floor pickups (carried keys come from enemies). */
+export const isPickupThing = (type: number): boolean => keyOfThing(type) >= 0 || PICKUP_OF[type] !== undefined;
 
 /** Where a pickup is now, or null while its carrier lives. */
 export function pickupCell(state: { enemies: readonly { mode: string; cx: number; cy: number }[] }, k: PickupInfo): [number, number] | null {

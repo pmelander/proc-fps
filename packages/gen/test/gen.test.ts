@@ -219,3 +219,22 @@ describe('balance', () => {
     expect(harder).toBeGreaterThan(easier * 1.3);
   });
 });
+
+describe('armour and power-ups', () => {
+  it('lie about the levels, mostly in secret and loot rooms, and new roles join as a run goes on', () => {
+    const count = (level: number, types: number[]) => {
+      let n = 0;
+      for (let i = 0; i < 40; i++) n += generate(`pu-${i}`, { level }).things.filter((t) => types.includes(t.type)).length;
+      return n;
+    };
+    expect(count(3, [ThingType.Armor])).toBeGreaterThan(10);
+    expect(count(3, [ThingType.Berserk])).toBeGreaterThan(2);
+    expect(count(3, [ThingType.Overcharge])).toBeGreaterThan(2);
+    // Chargers and bloaters from level 2, wardens from level 3.
+    expect(count(1, [EnemyType.Charger, EnemyType.Bloater, EnemyType.Warden])).toBe(0);
+    expect(count(2, [EnemyType.Warden])).toBe(0);
+    expect(count(4, [EnemyType.Charger])).toBeGreaterThan(0);
+    expect(count(4, [EnemyType.Bloater])).toBeGreaterThan(0);
+    expect(count(4, [EnemyType.Warden])).toBeGreaterThan(0);
+  });
+});

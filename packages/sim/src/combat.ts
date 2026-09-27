@@ -1,4 +1,8 @@
 import {
+  ARMOR,
+  BERSERK,
+  OVERCHARGE,
+  PLAYER_MAX_HEALTH,
   BLAST_EDGE,
   BLAST_RADIUS,
   type EnemyDef,
@@ -46,6 +50,10 @@ export function hurtPlayer(state: SimState, amount: number, from?: { x: number; 
     state.events.push(from ? { type: 'shielded', amount, from } : { type: 'shielded', amount });
     return;
   }
+  // Armour soaks up its share, as long as it lasts.
+  const soak = Math.min(p.armor, Math.round(amount * ARMOR.absorb));
+  p.armor -= soak;
+  amount -= soak;
   p.health = Math.max(0, p.health - amount);
   state.events.push(from ? { type: 'hurt', amount, from } : { type: 'hurt', amount });
   if (p.health === 0) {
@@ -106,7 +114,12 @@ export function playerFire(world: World, state: SimState, trigger: boolean, relo
     if (t >= 0 && t % MELEE_HIT_INTERVAL === 0 && t / MELEE_HIT_INTERVAL < MELEE_HITS) {
       const struck = inReach();
       for (const i of struck) state.events.push({ type: 'melee', enemy: i });
-      if (struck.length) damage(world, state, new Map(struck.map((i) => [i, MELEE_DAMAGE])), 'melee');
+      if (struck.length) {
+        // Berserk: savage hits, and each one that lands heals.
+        const berserk = p.berserk > 0;
+        damage(world, state, new Map(struck.map((i) => [i, MELEE_DAMAGE * (berserk ? BERSERK.melee : 1)])), 'melee');
+        if (berserk) p.health = Math.min(PLAYER_MAX_HEALTH, p.health + BERSERK.leech * struck.length);
+      }
     }
     if (++p.melee > MELEE_TICKS) p.melee = 0;
     return;
@@ -115,7 +128,9 @@ export function playerFire(world: World, state: SimState, trigger: boolean, relo
 
   // A shot needs a loaded magazine.
   if (p.reload > 0) return;
-  p.fireCooldown = gun.cooldown;
+  // Overcharge: harder hits, faster shots.
+  const boost = p.overcharge > 0 ? OVERCHARGE.damage : 1;
+  p.fireCooldown = p.overcharge > 0 ? Math.round(gun.cooldown / OVERCHARGE.rate) : gun.cooldown;
   state.events.push({ type: 'shot', weapon: p.weapon });
   p.mags[p.weapon]!--;
   if (p.mags[p.weapon] === 0) startReload();
@@ -135,7 +150,7 @@ export function playerFire(world: World, state: SimState, trigger: boolean, relo
     const dy = cp * dsin(p.angle + yaw);
     const dz = dsin(p.pitch + pitch);
     const { target, t } = pelletTarget(world, state, ox, oy, oz, dx, dy, dz);
-    if (target >= 0) add(target, Math.max(1, Math.round(gun.damage * falloffAt(gun, t))));
+    if (target >= 0) add(target, Math.max(1, Math.round(gun.damage * boost * falloffAt(gun, t))));
     if (gun.splashRadius > 0 && t < WEAPON_RANGE) {
       // The bolt bursts where it hit: everyone within the splash radius (of their body) is caught.
       const bx = ox + dx * t;
@@ -148,7 +163,7 @@ export function playerFire(world: World, state: SimState, trigger: boolean, relo
         const ex = e.x - bx;
         const ey = e.y - by;
         const reach = gun.splashRadius + def.radius;
-        if (ex * ex + ey * ey <= reach * reach && bz >= e.z - gun.splashRadius && bz <= e.z + def.height + gun.splashRadius) add(i, gun.splashDamage, splashed);
+        if (ex * ex + ey * ey <= reach * reach && bz >= e.z - gun.splashRadius && bz <= e.z + def.height + gun.splashRadius) add(i, gun.splashDamage * boost, splashed);
       });
     }
   }

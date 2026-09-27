@@ -69,6 +69,10 @@ export const SpriteShape = {
   Split: 23,
   /** A warden's shield: a shimmering wall of light before it, screen-door transparent (self-lit). */
   Barrier: 24,
+  /** Pickups: an armour vest, berserk, and an overcharge cell. */
+  Armor: 25,
+  Berserk: 26,
+  Overcharge: 27,
 } as const;
 
 export interface Sprite {

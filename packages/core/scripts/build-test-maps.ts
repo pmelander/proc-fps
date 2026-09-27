@@ -195,10 +195,11 @@ export function buildTest06(): MapData {
 }
 
 /**
- * test07: the M24 roles (cells; y grows north). Arena (0–13, 0–8), start (0, 4) facing east, a
+ * test07: the M24 roles and the M25 pickups (cells; y grows north). Arena (0–13, 0–8), start (0, 4) facing east, a
  * pillar pair for cover at (4, 2) and (4, 6). A charger in the start's row at (9, 4); bloaters at
  * (6, 1) and (6, 7), each beside a grunt at (7, 1) and (7, 7) (shoot one, catch both); wardens at
- * (8, 2) and (8, 6); health at (1, 0) and (1, 8); the exit (13, 4).
+ * (8, 2) and (8, 6); health at (1, 0) and (1, 8); armour (1, 3), berserk (1, 5), overcharge (0, 6);
+ * the exit (13, 4).
  */
 export function buildTest07(): MapData {
   const plan = new CellPlan();
@@ -217,6 +218,9 @@ export function buildTest07(): MapData {
   at(EnemyType.Warden, 8, 6);
   at(ThingType.Health, 1, 0);
   at(ThingType.Health, 1, 8);
+  at(ThingType.Armor, 1, 3);
+  at(ThingType.Berserk, 1, 5);
+  at(ThingType.Overcharge, 0, 6);
   at(ThingType.Exit, 13, 4);
   return b.build({ name: 'test07', theme: 'hell' });
 }

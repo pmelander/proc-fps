@@ -28,6 +28,18 @@ export interface PopulationInput {
   difficulty?: DifficultyDef;
 }
 
+/**
+ * Armour and power-ups (core/powerups.ts): per room kind, the chance of each. Secret rooms pay
+ * best; the gate room before the boss may hold armour; ordinary rooms rarely hold anything, and
+ * power-ups only from level 2 there.
+ */
+const POWERUP_CHANCE: Record<'secret' | 'loot' | 'gate' | 'room', [armor: number, berserk: number, overcharge: number]> = {
+  secret: [0.6, 0.3, 0.25],
+  loot: [0.4, 0.15, 0.12],
+  gate: [0.5, 0, 0],
+  room: [0.06, 0.03, 0.03],
+};
+
 /** Chance a loot or secret room also holds a grenade. */
 const GRENADE_CHANCE = 0.5;
 /** Chance an atrium gets a sniper on its ring, before the level adds to it. */
@@ -179,6 +191,20 @@ export function populate(input: PopulationInput): Placed[] {
     } else if (node.kind === 'room' && rng.chance((ROOM_HEALTH_CHANCE + 0.15 * (depth[id]! / maxDepth)) * scale.health)) {
       put(id, ThingType.Health);
     }
+  });
+
+  // Armour and power-ups, from their own stream (placed after everything else, so they never
+  // reshuffle it).
+  const powerups = rng.fork('powerups');
+  mission.nodes.forEach((node, id) => {
+    const kind = node.kind === 'secret' || node.kind === 'loot' ? node.kind : id === gateRoom ? 'gate' : node.kind === 'room' ? 'room' : null;
+    if (!kind) return;
+    const [armor, berserk, overcharge] = POWERUP_CHANCE[kind];
+    const late = kind !== 'room' || level >= 2;
+    const drop = (type: number) => free[id]!.length > 0 && put(id, type, powerups.int(0, free[id]!.length - 1));
+    if (powerups.chance(armor)) drop(ThingType.Armor);
+    if (late && powerups.chance(berserk)) drop(ThingType.Berserk);
+    else if (late && powerups.chance(overcharge)) drop(ThingType.Overcharge);
   });
 
   return placed;

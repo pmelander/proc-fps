@@ -43,6 +43,9 @@
     {"type":37,"x":1088,"y":832,"angle":180,"flags":0},
     {"type":3,"x":192,"y":64,"angle":180,"flags":0},
     {"type":3,"x":192,"y":1088,"angle":180,"flags":0},
+    {"type":5,"x":192,"y":448,"angle":180,"flags":0},
+    {"type":6,"x":192,"y":704,"angle":180,"flags":0},
+    {"type":7,"x":64,"y":832,"angle":180,"flags":0},
     {"type":2,"x":1728,"y":576,"angle":180,"flags":0}
   ]
 }

@@ -1,4 +1,4 @@
-import { CELL_SIZE, DIFFICULTY, DoorKind, isDifficulty, type Difficulty, EnemyType, PELLETS, PELLET_SPREAD, WEAPONS, WEAPON_RANGE, WEAPON_SWITCH_TICKS, WeaponId, dcos, defOf, dsin, MAG_SIZE, MELEE_FIRST_HIT, MELEE_IFRAMES, MELEE_TICKS, RELOAD_TICKS, HEADING_DX, HEADING_DY, PLAYER_EYE_HEIGHT, STEP_TICKS, TICK_DT, isEnemyThing, type MapData } from '@proc-fps/core';
+import { ARMOR, CELL_SIZE, DIFFICULTY, DoorKind, isDifficulty, type Difficulty, EnemyType, PELLETS, PELLET_SPREAD, WEAPONS, WEAPON_RANGE, WEAPON_SWITCH_TICKS, WeaponId, dcos, defOf, dsin, MAG_SIZE, MELEE_FIRST_HIT, MELEE_IFRAMES, MELEE_TICKS, RELOAD_TICKS, HEADING_DX, HEADING_DY, PLAYER_EYE_HEIGHT, STEP_TICKS, TICK_DT, isEnemyThing, type MapData } from '@proc-fps/core';
 import { GENERATOR_VERSION, generate, isLevelType, validateGenerated, type LevelType } from '@proc-fps/gen';
 import { BASELINE_LOOKS, HIDDEN_OFFSET, LevelRenderer, SpriteShape, THEME_COLORS, WebGL2Backend, enemyLooks, spriteRow, spriteTile, type Sprite } from '@proc-fps/render';
 import {
@@ -278,6 +278,15 @@ function buildSprites(
     const bob = 6 * Math.sin(performance.now() / 300 + i);
     sprites.push({ x: kx, y: ky, z: world.grid.floorAt(at[0], at[1]) + 18 + bob, width: 28, height: 28, shape: SpriteShape.Key + k.key, charge: 0, flash: 0, light: 1, tile: -1 });
   });
+  // Armour and power-ups bobbing where they lie.
+  world.pickups.forEach((k, i) => {
+    const shape = k.kind === 'armor' ? SpriteShape.Armor : k.kind === 'berserk' ? SpriteShape.Berserk : k.kind === 'overcharge' ? SpriteShape.Overcharge : -1;
+    if (shape < 0 || state.taken[i]) return;
+    const [px, py] = world.grid.center(k.cx, k.cy);
+    const bob = 5 * Math.sin(performance.now() / 320 + i);
+    const size = k.kind === 'armor' ? 30 : 26;
+    sprites.push({ x: px, y: py, z: world.grid.floorAt(k.cx, k.cy) + 10 + bob, width: size, height: size, shape, charge: 0, flash: 0, light: light(px, py), tile: -1 });
+  });
   // Grenades in flight, and grenade pickups bobbing where they lie.
   for (const n of state.grenades) {
     sprites.push({ x: n.x, y: n.y, z: n.z - 7, width: 14, height: 14, shape: SpriteShape.Grenade, charge: 0, flash: 0, light: light(n.x, n.y), tile: -1 });
@@ -404,6 +413,13 @@ function main(): void {
   const healthBar = document.getElementById('healthbar') as HTMLDivElement;
   const healthFill = healthBar.querySelector('.fill') as HTMLDivElement;
   const healthValue = healthBar.querySelector('.value') as HTMLSpanElement;
+  const armorRow = healthBar.querySelector('.armor') as HTMLDivElement;
+  const armorFill = armorRow.querySelector('.fill') as HTMLDivElement;
+  const armorValue = armorRow.querySelector('.value') as HTMLSpanElement;
+  const powerupsHud = document.getElementById('powerups') as HTMLDivElement;
+  const tint = document.getElementById('tint') as HTMLDivElement;
+  let shownArmor = -1;
+  let shownPowerups = '';
   let shownHealth = -1;
   const ammo = document.getElementById('ammo') as HTMLDivElement;
   const ammoPips = ammo.querySelector('.pips') as HTMLDivElement;
@@ -776,6 +792,18 @@ function main(): void {
           renderer.flash = Math.max(renderer.flash, near);
           if (near > 0.2) joltUntil = now + JOLT_SECONDS * (1 + 3 * near);
         }
+        if (e.type === 'armor') {
+          audio.play('armorPickup');
+          [notice, noticeUntil] = [`Armour +${e.amount}`, now + NOTICE_SECONDS];
+        }
+        if (e.type === 'powerup') {
+          audio.play(e.kind);
+          say(e.kind === 'berserk' ? 'Berserk!' : 'Overcharge!', now, 1.6);
+        }
+        if (e.type === 'powerdown') {
+          audio.play('powerDown');
+          [notice, noticeUntil] = [e.kind === 'berserk' ? 'The berserk fades' : 'The overcharge runs out', now + NOTICE_SECONDS];
+        }
         if (e.type === 'grenadePickup') {
           audio.play('grenadePickup');
           [notice, noticeUntil] = ['Picked up a grenade', now + NOTICE_SECONDS];
@@ -891,6 +919,22 @@ function main(): void {
     weapon.update(now, dt, bobbing, p.mags[WeaponId.Scattergun]! / MAG_SIZE, lowerOf(WeaponId.Scattergun));
     bolter.update(now, dt, bobbing, p.mags[WeaponId.Bolter]! / WEAPONS[WeaponId.Bolter]!.magSize, lowerOf(WeaponId.Bolter));
     chainsword.update(now);
+    // Armour under the health; power-ups as badges with their seconds left, and a tint.
+    if (p.armor !== shownArmor) {
+      shownArmor = p.armor;
+      armorRow.hidden = p.armor <= 0;
+      armorFill.style.width = `${Math.round((100 * p.armor) / ARMOR.max)}%`;
+      armorValue.textContent = String(p.armor);
+    }
+    const secs = (ticks: number) => Math.ceil(ticks * TICK_DT);
+    const badges =
+      (p.berserk > 0 ? `<span class="pu berserk${p.berserk < 180 ? ' ending' : ''}">☠ Berserk <b>${secs(p.berserk)}</b></span>` : '') +
+      (p.overcharge > 0 ? `<span class="pu overcharge${p.overcharge < 180 ? ' ending' : ''}">⚡ Overcharge <b>${secs(p.overcharge)}</b></span>` : '');
+    if (badges !== shownPowerups) {
+      powerupsHud.innerHTML = shownPowerups = badges;
+      tint.classList.toggle('berserk', p.berserk > 0);
+      tint.classList.toggle('overcharge', p.overcharge > 0);
+    }
     launcher.update(now);
     if (p.grenades !== shownGrenades) {
       shownGrenades = p.grenades;

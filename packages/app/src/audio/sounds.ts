@@ -19,7 +19,8 @@ export type SoundId =
   | 'grenadeFire' | 'explode' | 'grenadePickup'
   | 'lob' | 'splash' | 'homing' | 'split'
   | 'menuMove' | 'menuChoose' | 'menuBack' | 'tally' | 'tallyDone'
-  | 'chargeRoar' | 'chargeRush' | 'crash' | 'fuse' | 'shieldBlock';
+  | 'chargeRoar' | 'chargeRush' | 'crash' | 'fuse' | 'shieldBlock'
+  | 'armorPickup' | 'berserk' | 'overcharge' | 'powerDown';
 
 type Recipe = Voice[];
 
@@ -61,6 +62,23 @@ const RECIPES: Record<SoundId, Recipe> = {
     { wave: 'saw', freq: 55, freqEnd: 25, attack: 0, sustain: 0.04, release: 0.25, volume: 0.4, lowpass: 300 },
     { wave: 'sine', freq: 60, freqEnd: 22, attack: 0, sustain: 0.05, release: 0.35, volume: 0.7 },
   ],
+  // Armour strapped on: a heavy metal clank.
+  armorPickup: [
+    { wave: 'square', freq: 320, freqEnd: 260, attack: 0, sustain: 0.04, release: 0.15, volume: 0.3, duty: 0.35, lowpass: 2200 },
+    { wave: 'noise', freq: 3000, freqEnd: 1200, attack: 0, sustain: 0.02, release: 0.1, volume: 0.2 },
+  ],
+  // Berserk: a heartbeat under a roar.
+  berserk: [
+    { wave: 'saw', freq: 90, freqEnd: 200, attack: 0.05, sustain: 0.35, release: 0.3, volume: 0.35, lowpass: 1100, vibrato: { depth: 0.05, rate: 20 } },
+    { wave: 'sine', freq: 60, freqEnd: 40, attack: 0, sustain: 0.1, release: 0.3, volume: 0.8, arpeggio: [1, 0.8], arpeggioTime: 0.18 },
+  ],
+  // Overcharge: a rising electric hum.
+  overcharge: [
+    { wave: 'square', freq: 110, freqEnd: 660, attack: 0.02, sustain: 0.45, release: 0.2, volume: 0.22, duty: 0.3, lowpass: 3000, vibrato: { depth: 0.03, rate: 30 } },
+    { wave: 'noise', freq: 6000, freqEnd: 3000, attack: 0.1, sustain: 0.3, release: 0.2, volume: 0.08 },
+  ],
+  // A power-up running out: a falling tone.
+  powerDown: [{ wave: 'square', freq: 520, freqEnd: 130, attack: 0, sustain: 0.25, release: 0.15, volume: 0.18, duty: 0.3, lowpass: 2000 }],
   // A charger lowering its horns: a rising, rasping bellow.
   chargeRoar: [
     { wave: 'saw', freq: 70, freqEnd: 150, attack: 0.05, sustain: 0.35, release: 0.15, volume: 0.35, lowpass: 900, vibrato: { depth: 0.06, rate: 18 } },

@@ -809,3 +809,55 @@ describe('new roles', () => {
     expect(w.fx!).toBeLessThan(-0.99);
   });
 });
+
+describe('armour and power-ups', async () => {
+  const { ARMOR, BERSERK, OVERCHARGE } = await import('@proc-fps/core');
+  const { hurtPlayer } = await import('../src/index.js');
+
+  it('armour soaks up half of each hurt until it runs out; a full vest stays on the floor', () => {
+    const { state, step } = sim(arena({ w: 6, h: 1, things: [[ThingType.Armor, 1, 0], [ThingType.Armor, 2, 0], [ThingType.Armor, 3, 0]] }));
+    for (let k = 0; k < 3; k++) step({ move: 1 }, STEP_TICKS + 1);
+    expect(state.player.armor).toBe(ARMOR.max);
+    expect(state.taken.filter(Boolean)).toHaveLength(2);
+    hurtPlayer(state, 20);
+    expect([state.player.health, state.player.armor]).toEqual([PLAYER_MAX_HEALTH - 10, ARMOR.max - 10]);
+    state.player.armor = 3;
+    hurtPlayer(state, 20);
+    expect([state.player.health, state.player.armor]).toEqual([PLAYER_MAX_HEALTH - 10 - 17, 0]);
+  });
+
+  it('berserk: picked up it heals; the chainsword hits three times as hard and heals as it lands; then it wears off', () => {
+    const { state, step } = sim(arena({ w: 6, h: 1, things: [[ThingType.Berserk, 1, 0], [EnemyType.Brute, 2, 0]] }));
+    state.player.health = 30;
+    step({ move: 1 }, STEP_TICKS + 1);
+    expect(state.player.berserk).toBeGreaterThan(0);
+    expect(state.player.health).toBe(30 + BERSERK.heal);
+    const brute = state.enemies[0]!;
+    brute.mode = 'chase';
+    brute.cooldown = 1000;
+    let health = state.player.health;
+    step({ fire: true });
+    for (let t = 0; t < MELEE_FIRST_HIT + 2 && state.enemies[0]!.mode !== 'dead'; t++) step({});
+    expect(state.enemies[0]!.mode).toBe('dead'); // one savage hit (3 × 20) fells a brute (55)
+    expect(state.player.health).toBe(health + BERSERK.leech);
+    health = state.player.health;
+    let worn = false;
+    for (let t = 0; t < BERSERK.ticks + 5 && !worn; t++) worn = events(step({}), 'powerdown').length > 0;
+    expect(worn).toBe(true);
+    expect(state.player.berserk).toBe(0);
+  });
+
+  it('overcharge doubles the guns\' damage and fires faster', () => {
+    const shoot = (overcharge: number) => {
+      const s = sim(arena({ w: 8, h: 1, things: [[EnemyType.Brute, 4, 0]] }));
+      s.state.player.overcharge = overcharge;
+      s.step({ fire: true });
+      return { loss: ENEMY_DEFS[EnemyType.Brute].hp - s.state.enemies[0]!.hp, cooldown: s.state.player.fireCooldown };
+    };
+    const plain = shoot(0);
+    const boosted = shoot(OVERCHARGE.ticks);
+    expect(plain.loss).toBeGreaterThan(0);
+    expect(boosted.loss).toBeGreaterThanOrEqual(plain.loss * 1.8);
+    expect(boosted.cooldown).toBeLessThan(plain.cooldown);
+  });
+});

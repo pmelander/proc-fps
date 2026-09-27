@@ -65,6 +65,10 @@ export interface PlayerState {
   grenadeCooldown: number;
   /** Ticks spent on a damaging floor since it last hurt. */
   hazardTicks: number;
+  /** Armour left (see ARMOR), and ticks left of berserk and overcharge (0 = off). */
+  armor: number;
+  berserk: number;
+  overcharge: number;
 }
 
 /** `charge`: a charger rushing down its lane (see ai.ts). */
@@ -174,6 +178,10 @@ export type SimEvent =
   | { type: 'grenade' }
   | { type: 'explode'; x: number; y: number; z: number }
   | { type: 'grenadePickup' }
+  /** Armour picked up; a power-up picked up, and one running out. */
+  | { type: 'armor'; amount: number }
+  | { type: 'powerup'; kind: 'berserk' | 'overcharge' }
+  | { type: 'powerdown'; kind: 'berserk' | 'overcharge' }
   /** A reload started (the cell ran dry, or R), and finished. */
   /** An enemy's glob burst where it landed; a split shot burst into its fan. */
   | { type: 'splash'; x: number; y: number; z: number }
@@ -295,6 +303,9 @@ export function createSimState(world: World): SimState {
       grenades: GRENADE.start,
       grenadeCooldown: 0,
       hazardTicks: 0,
+      armor: 0,
+      berserk: 0,
+      overcharge: 0,
     },
     doors: world.doors.map(() => 0),
     lifts: world.lifts.map((): LiftState => ({ pos: 0, target: 0, wait: 0, armed: true })),

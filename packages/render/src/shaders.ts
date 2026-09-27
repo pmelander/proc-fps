@@ -401,6 +401,39 @@ void main() {
     outColor = vec4(kc * (0.9 + 0.5 * p.y) * (1.0 - 0.4 * smoothstep(-0.03, 0.0, k)), 1.0);
     return;
   }
+  if (vShape == 25) { // armour: a steel breastplate with shoulder guards and a bright ridge
+    vec2 q = p - vec2(0.5, 0.45);
+    float hw = 0.34 - max(0.0, -q.y) * 0.35;
+    if (abs(q.x) > hw || q.y < -0.4 || q.y > 0.36 || length(q - vec2(0.0, 0.36)) < 0.13) discard;
+    vec3 c = mix(vec3(0.2, 0.28, 0.42), vec3(0.55, 0.68, 0.85), p.y);
+    if (abs(q.x) < 0.03) c = vec3(0.8, 0.9, 1.0);
+    if (q.y > 0.18 && abs(q.x) > hw - 0.1) c *= 1.25;
+    c *= lightBand(vLight, vWorld, uEye);
+    outColor = vec4(c, 1.0);
+    return;
+  }
+  if (vShape == 26) { // berserk: a blood-red box with a black cross, throbbing (self-lit)
+    vec2 q = p - 0.5;
+    if (max(abs(q.x), abs(q.y)) > 0.36) discard;
+    float beat = 0.7 + 0.3 * pow(abs(sin(uTime * 3.2)), 8.0);
+    vec3 c = vec3(0.85, 0.08, 0.05) * beat;
+    if ((abs(q.x) < 0.07 && abs(q.y) < 0.25) || (abs(q.y) < 0.07 && abs(q.x) < 0.25)) c = vec3(0.04, 0.02, 0.02);
+    if (max(abs(q.x), abs(q.y)) > 0.31) c = vec3(0.45, 0.04, 0.03);
+    outColor = vec4(c, 1.0);
+    return;
+  }
+  if (vShape == 27) { // overcharge: an energy cell, capped, its core pulsing white-blue (self-lit)
+    vec2 q = p - 0.5;
+    if (abs(q.x) > 0.22 || abs(q.y) > 0.42) discard;
+    vec3 c;
+    if (abs(q.y) > 0.32) c = vec3(0.35, 0.37, 0.4);
+    else {
+      float band = 0.5 + 0.5 * sin(q.y * 30.0 - uTime * 10.0);
+      c = mix(vec3(0.15, 0.5, 1.0), vec3(0.9, 1.0, 1.0), band * (1.0 - abs(q.x) * 3.0));
+    }
+    outColor = vec4(c, 1.0);
+    return;
+  }
   if (vShape == 24) { // barrier: a rounded wall of light, bright at its rim, scanlines rolling up it
     vec2 q = (p - 0.5) * 2.0;
     float edge = length(q * vec2(1.0, 0.8));

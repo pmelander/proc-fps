@@ -470,10 +470,28 @@ body.ended .hud {
   top: calc(var(--u) * 4);
   left: 50%;
   transform: translateX(-50%);
+  display: grid;
+  gap: calc(var(--u) * 2);
+  padding: 0 calc(var(--u) * 2);
+}
+#healthbar .row {
   display: flex;
   align-items: center;
   gap: calc(var(--u) * 3);
-  padding: 0 calc(var(--u) * 2);
+}
+/* Armour: a thinner steel bar under the health, while there is any. */
+#healthbar .armor .icon {
+  color: rgb(150 180 220);
+}
+#healthbar .armor .bar {
+  height: calc(var(--u) * 3);
+}
+#healthbar .armor .fill {
+  background: linear-gradient(rgb(150 180 220) 0 50%, rgb(97 117 146) 50%);
+}
+#healthbar .armor .value {
+  font-size: var(--f1);
+  color: rgb(150 180 220);
 }
 #healthbar .icon {
   color: var(--blood);
@@ -499,10 +517,10 @@ body.ended .hud {
   inset: 0;
   background: repeating-linear-gradient(90deg, transparent 0 calc(var(--u) * 4), var(--ink) 0 calc(var(--u) * 5));
 }
-#healthbar.mid .fill {
+#healthbar.mid .health .fill {
   background: linear-gradient(var(--rust) 0 50%, var(--rust-mid) 50%);
 }
-#healthbar.low .fill {
+#healthbar.low .health .fill {
   background: linear-gradient(var(--blood) 0 50%, var(--blood-mid) 50%);
   animation: blink 0.6s steps(1) infinite;
 }
@@ -693,6 +711,49 @@ body.ended .hud {
 }
 #ammo .nade.full {
   background: linear-gradient(rgb(106 122 58) 0 calc(var(--u) * 2), var(--rust-mid) 0 calc(var(--u) * 3), rgb(106 122 58) 0);
+}
+/* Power-ups running, bottom left above the keys: a badge each, with the seconds left. */
+#powerups {
+  left: calc(var(--u) * 6);
+  bottom: calc(var(--u) * 36);
+  display: grid;
+  gap: calc(var(--u) * 2);
+}
+#powerups .pu {
+  font-size: var(--f1);
+}
+#powerups .pu b {
+  font-weight: normal;
+  color: var(--bone-hi);
+}
+#powerups .berserk {
+  color: var(--blood);
+}
+#powerups .overcharge {
+  color: var(--accent);
+}
+#powerups .ending {
+  animation: blink 0.4s steps(1) infinite;
+}
+/* A power-up's tint round the screen's edge: blood for berserk, the theme light for overcharge. */
+#tint {
+  inset: 0;
+  z-index: 0;
+}
+#tint.berserk {
+  background: radial-gradient(ellipse at center, transparent 50%, rgb(200 20 10 / 0.38));
+  animation: throb 0.94s ease-in-out infinite;
+}
+#tint.overcharge {
+  background: radial-gradient(ellipse at center, transparent 60%, color-mix(in srgb, var(--accent) 32%, transparent));
+}
+#tint.berserk.overcharge {
+  background: radial-gradient(ellipse at center, transparent 50%, color-mix(in srgb, var(--accent) 25%, transparent) 70%, rgb(200 20 10 / 0.38));
+}
+@keyframes throb {
+  50% {
+    opacity: 0.55;
+  }
 }
 /* Keys held, bottom left. */
 #keys {
