@@ -1,4 +1,4 @@
-import { EnemyType, THING_VARIANT, ThingType, VARIANT_TYPES, dropsKeyFlags, type Rng } from '@proc-fps/core';
+import { EnemyType, THING_HIGH, THING_VARIANT, ThingType, VARIANT_TYPES, dropsKeyFlags, type Rng } from '@proc-fps/core';
 import type { Layout } from './layout.js';
 import type { Mission } from './mission.js';
 import type { RoomDesign } from './rooms.js';
@@ -11,7 +11,8 @@ import type { RoomDesign } from './rooms.js';
  * - Health sits along the way (always one in the gate room before the boss) and in loot and
  *   secret rooms. Ammo is infinite.
  * Things go on free base floor, never on a cell in front of a doorway, never two on a cell.
- * Start and exit rooms stay empty.
+ * Start and exit rooms stay empty. Snipers prefer high ground: a room's catwalk tops (an atrium's
+ * ring, the catwalk across a pit) are perches, and an atrium usually gets a sniper up there.
  */
 export interface PopulationInput {
   mission: Mission;
@@ -24,6 +25,9 @@ export interface PopulationInput {
   rng: Rng;
   level: number;
 }
+
+/** Chance an atrium gets a sniper on its ring, before the level adds to it. */
+const ATRIUM_SNIPER_CHANCE = 0.35;
 
 export type Placed = [type: number, x: number, y: number, angle: number, flags?: number];
 
@@ -99,6 +103,29 @@ export function populate(input: PopulationInput): Placed[] {
     return v ? THING_VARIANT : 0;
   };
   const putEnemy = (id: number, type: EnemyType) => put(id, type, undefined, variantFlags(id, type));
+  // Perches: cells of a room whose region carries a slab (a catwalk top), clear of its doorways.
+  const perches = mission.nodes.map((_, id) => {
+    const r = layout.rooms[id]!;
+    const w = r.x1 - r.x0;
+    const d = designs[id]!;
+    const cells: [number, number][] = [];
+    for (let y = r.y0; y < r.y1; y++) {
+      for (let x = r.x0; x < r.x1; x++) {
+        const region = d.cells[x - r.x0 + (y - r.y0) * w]!;
+        if (region >= 0 && d.regions[region]!.slab && !nearDoor.has(`${x},${y}`) && !occupied.has(`${x},${y}`)) cells.push([x, y]);
+      }
+    }
+    return cells;
+  });
+  /** A sniper up on one of the room's perches; false when it has none free. */
+  const perch = (id: number): boolean => {
+    const cells = perches[id]!;
+    if (!cells.length) return false;
+    const [[x, y]] = cells.splice(variants.int(0, cells.length - 1), 1) as [[number, number]];
+    occupied.add(`${x},${y}`);
+    placed.push([EnemyType.Sniper, x, y, 0, THING_HIGH | variantFlags(id, EnemyType.Sniper)]);
+    return true;
+  };
 
   // Enemies.
   mission.nodes.forEach((node, id) => {
@@ -109,9 +136,11 @@ export function populate(input: PopulationInput): Placed[] {
       for (let n = 0; n < MAX_ROOM_ENEMIES; n++) {
         const type = pickEnemy(deep);
         const cost = COST[type] ?? 1;
-        if (cost > budget + 0.5 || !putEnemy(id, type)) break;
+        if (cost > budget + 0.5) break;
+        if (!(type === EnemyType.Sniper && perch(id)) && !putEnemy(id, type)) break;
         budget -= cost;
       }
+      if (designs[id]!.template === 'atrium' && variants.chance(ATRIUM_SNIPER_CHANCE + 0.1 * (level - 1))) perch(id);
     } else if (node.kind === 'miniboss') {
       putCentral(id, EnemyType.MiniBoss);
       const escort = rng.int(2, 3 + Math.floor(level / 2));

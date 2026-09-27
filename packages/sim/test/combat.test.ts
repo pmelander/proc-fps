@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CELL_SIZE as C, CellPlan, DoorKind, EnemyType, MapBuilder, STEP_TICKS, ThingType, dropsKeyFlags, emitCellPlan, enemyDefsFor, BASELINE_DEFS, defOf, type MapData } from '@proc-fps/core';
+import { CELL_SIZE as C, CellPlan, DoorKind, EnemyType, MapBuilder, SPECIAL_LIFT, STEP_TICKS, ThingType, dropsKeyFlags, emitCellPlan, enemyDefsFor, BASELINE_DEFS, defOf, type MapData } from '@proc-fps/core';
 import { generate } from '@proc-fps/gen';
 import {
   DOOR_OPEN_TICKS,
@@ -13,6 +13,7 @@ import {
   WEAPON_SWITCH_TICKS,
   WeaponId,
   falloffAt,
+  flankSide,
   MELEE_DAMAGE,
   MELEE_FIRST_HIT,
   MELEE_HITS,
@@ -339,6 +340,63 @@ describe('weapons', () => {
     step({ fire: true });
     expect(events(state, 'blast')).toEqual([]);
     expect(events(state, 'shot')).toEqual([{ type: 'shot', weapon: WeaponId.Scattergun }]);
+  });
+});
+
+describe('enemy behaviour', () => {
+  it('rides a lift to follow the player up a storey', () => {
+    // A low room (x 0–3), a corridor (4), a lift (5) up to a high room (6–9). The player waits
+    // upstairs; a brute below has to call the lift, ride it up and step off to reach them.
+    const plan = new CellPlan();
+    const low = plan.spec({ floor: 0, ceil: 192 });
+    const high = plan.spec({ floor: 192, ceil: 384 });
+    for (let y = 0; y < 3; y++) for (let x = 0; x < 4; x++) plan.set(x, y, low);
+    plan.set(4, 1, plan.spec({ floor: 0, ceil: 128 }));
+    plan.set(5, 1, plan.spec({ floor: 0, ceil: 320, special: SPECIAL_LIFT, tag: 192 }));
+    for (let y = 0; y < 3; y++) for (let x = 6; x < 10; x++) plan.set(x, y, high);
+    const b = new MapBuilder();
+    emitCellPlan(b, plan, C);
+    b.thing(ThingType.PlayerStart, 8.5 * C, 1.5 * C, 180);
+    b.thing(EnemyType.Brute, 1.5 * C, 1.5 * C, 0);
+    const { state, step } = sim(b.build({ name: 'lift-chase' }));
+    step({ fire: true }); // the noise wakes it
+    let rode = false;
+    for (let t = 0; t < 1500 && state.player.health === PLAYER_MAX_HEALTH; t++) {
+      step({});
+      rode ||= state.enemies[0]!.cx === 5 && state.enemies[0]!.z > 180;
+    }
+    expect(rode).toBe(true);
+    expect(state.enemies[0]!.cx).toBeGreaterThanOrEqual(6);
+    expect(state.player.health).toBeLessThan(PLAYER_MAX_HEALTH);
+  });
+
+  it('flankers go round the other way', () => {
+    // A ring corridor (x 0–6, y 0–4) round a solid middle. The player stands at the top middle
+    // facing south; a brute at (4, 0) has a shorter way round to the right. Things before it in a
+    // sealed pocket set its index, which decides whether it flanks.
+    const ring = (fillers: number) => {
+      const plan = new CellPlan();
+      const floor = plan.spec({ floor: 0, ceil: 192 });
+      for (let y = 0; y < 5; y++) for (let x = 0; x < 7; x++) if (y === 0 || y === 4 || x === 0 || x === 6) plan.set(x, y, floor);
+      for (let x = 10; x < 10 + Math.max(1, fillers); x++) plan.set(x, 0, floor);
+      const b = new MapBuilder();
+      emitCellPlan(b, plan, C);
+      b.thing(ThingType.PlayerStart, 3.5 * C, 4.5 * C, 270);
+      for (let k = 0; k < fillers; k++) b.thing(EnemyType.Grunt, (10.5 + k) * C, 0.5 * C, 0);
+      b.thing(EnemyType.Brute, 4.5 * C, 0.5 * C, 0);
+      return b.build({ name: 'ring' });
+    };
+    const firstMoves = (fillers: number) => {
+      const { state, step } = sim(ring(fillers));
+      const brute = state.enemies[fillers]!;
+      step({ fire: true });
+      for (let t = 0; t < 200 && brute.cx === 4; t++) step({});
+      return brute.cx;
+    };
+    expect(flankSide(0, 0)).toBe(-1); // index 0 goes direct …
+    expect(flankSide(4, 0)).toBe(1); // … index 4 flanks to the player's right
+    expect(firstMoves(0)).toBe(5); // direct: the short way, right
+    expect(firstMoves(4)).toBe(3); // flanking to the player's right (their west): the long way, left
   });
 });
 

@@ -27,7 +27,7 @@ This file summarises the decisions made so far, the current state of the code, a
 | Package | Contents |
 |---|---|
 | `core` | `map.ts` (format v1: slabs, `hashMap`), `cells.ts` (`CellPlan`: cells → sectors with automatic T-junction splits), `rng.ts` (sfc32 + named forks), `dmath.ts` (deterministic trig), `math.ts` (render-side mat4), `geometry.ts` (sector loops, `SectorLocator`), `builder.ts` (`MapBuilder`, `rect`), `grid.ts` (`CellGrid`, `validateGridAlignment`), `validate.ts`, `constants.ts`, `textures.ts`. `maps/test01.json` is built by `scripts/build-test-maps.ts`. |
-| `gen` | `generate.ts` (v0.16.0: mission → layout → room templates → cell plan → sectors), `mission.ts` (mission graph), `layout.ts` (grid embedding), `rooms.ts` (room templates), `population.ts` (enemies, health and ammo by level and depth), `validate.ts` (structural + grid + reachability + traps), `scripts/stats.ts` (headless health check). |
+| `gen` | `generate.ts` (v0.17.0: mission → layout → room templates → cell plan → sectors), `mission.ts` (mission graph), `layout.ts` (grid embedding), `rooms.ts` (room templates), `population.ts` (enemies, health and ammo by level and depth), `validate.ts` (structural + grid + reachability + traps), `scripts/stats.ts` (headless health check). |
 | `sim` | `input.ts` (`InputFrame`, quantization), `world.ts`, `state.ts`, `player.ts` (grid movement), `sim.ts`, `replay.ts`. |
 | `render` | `backend.ts` (interface), `webgl2.ts`, `mesh.ts` (map → per-sector mesh), `palette.ts` (64 colours), `shaders.ts`, `renderer.ts` (`LevelRenderer`). |
 | `app` | `main.ts` (loop, interpolation, HUD, compass), `input.ts` (DOM → `InputFrame`), `automap.ts`. |
@@ -85,13 +85,17 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 
 **Verified:**
 - The typecheck is clean.
-- 114 tests pass.
+- 117 tests pass.
 - 2000 seeds produce 0 validation failures (about 12 ms per map including validation).
 - The production build succeeds (about 45 kB JS).
 - Headless Chromium (SwiftShader) renders correctly.
 
 **Not yet verified:** real mouse and keyboard play. Pointer lock can't run headless.
 
+- Enemy behaviour (M16):
+  - Lifts: the pathing field no longer treats lifts as walls, so enemies route through them between storeys. They ride by the player's rules (`liftAllows` in ai.ts): never on or off a moving lift; onto one that is not level they call it and wait, but never one the player stands on; off one towards a floor it is not level with they send it there and ride; and the way off must be open at the lift's real height. An enemy's height follows the platform (`floorNow`).
+  - Flanking: two enemies in five (by index and variant, `flankSide`) flank to the player's left or right: while their path is longer than 4 steps they make for the reachable cell about 3 cells to that side of the player (across the player's facing, a second distance field per side, computed at most once a tick), then close in directly. Round a loop, a horde now comes from both ways.
+  - High ground: a room's catwalk tops (an atrium's ring, the catwalk over a pit) are perches. Snipers picked for a room go up there when one is free, and an atrium gets a sniper on its ring with a chance rising with the level. `THING_HIGH` (flag 1 << 6) marks them; the sim starts them on the slab (level 1) and validation checks that level is walkable.
 - More weapons (M15):
   - Guns are data (`core/src/weapons.ts`, `WEAPONS`): cooldown, magazine, reload, damage, pellets and spread, and an optional burst. The scattergun's pellets lose damage with range (`falloffAt`: full out to 2 cells, falling to a quarter at 8), so point-blank it is devastating and at range it only sprays. The heavy bolter fires every 9 ticks (6.7 a second), one bolt walking a small fixed pattern (`BOLT_SPREAD`, so replays hold), 12 damage, and each bolt bursts where it lands for 7 more to every enemy within 56 units of its body (a `blast` event). Its drum holds 30 and reloads in 2 s. Ammo stays infinite.
   - Switching: 1 and 2, the mouse wheel, or Q for the last gun; the request resolves to a weapon index before it is recorded (a new `weapon` input), so replays hold. A switch takes `WEAPON_SWITCH_TICKS` (24): the old gun lowers, the new one rises, nothing fires meanwhile, a reload in progress is dropped, the new gun's cooldown starts clear, and each gun keeps its own magazine (`PlayerState.mags`). The chainsword works with either.
@@ -214,7 +218,7 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 - **M13 — play-test polish II:** ✅ complete (generator v0.16.0). An 8-shot magazine with reload, the ammo panel and a top-centre health bar; a heavier, slower tempo; damage direction glows; the left-hand chainsword with invulnerability frames; much more gore (pools, wall and screen splatter); two enemy variants per role with leg types and glowing markings; a heavier shot with tracers and impact debris; the raised-lift clipping fix.
 - **M14 — rendering performance:** ✅ complete. The palette post pass now runs at the scene's low resolution (the canvas holds 240 rows and CSS scales it up pixelated; same image, a twentieth of the fill at 1080p), portal culling draws only the sectors the camera can see (about 7% of a level's sectors), visible ranges draw in one call, sprite quads reuse one buffer, and F3 shows a perf overlay (F4 toggles culling).
 - **M15 — more weapons:** ✅ complete. The heavy bolter (fast, accurate, explosive bolts) beside the scattergun, weapon switching (1/2, wheel, Q), per-weapon magazines, its own view model, sounds, tracers and bursts, and a per-weapon ammo panel with weapon slots.
-- **M16 — enemy behaviour:** planned. Enemies that ride lifts and follow the player between storeys, snipers placed on catwalks and ledges, flanking.
+- **M16 — enemy behaviour:** ✅ complete (generator v0.17.0). Enemies ride lifts and follow the player between storeys, snipers perch on catwalk tops, and some enemies flank.
 - **M17 — run structure:** planned. A title screen, a run summary, score and kills tracked across a run, difficulty options.
 - **M11 — procedural enemies:** ✅ complete. Every generated level breeds its own mutants: seeded stat variants per role (core `enemyDefsFor`) and seeded body plans and skins that stand out from the theme (render `enemyLooks`). The exit gets a glowing pad, a light beacon and a hum.
 
@@ -244,4 +248,5 @@ In the map format a door is a one-cell sector with its kind in `Sector.special` 
 
 Ideas noted during play-testing, not yet scheduled. Each line points at whatever already exists for it.
 
-- Empty.
+- **More vertical levels.** The ascents and descents play best; make them a little more common than compounds. Today `levelTypeFor` alternates compound, ascent, compound, descent (half flat); e.g. compound, ascent, descent, ascent, compound, descent (a third flat).
+- **Grenade launcher, limited ammo.** A left-hand launcher like the chainsword, fired with E; grenades are scarce: one now and then in a loot room, a count on the HUD. Needs: a grenade pickup (thing type) placed by the generator in some loot rooms, a count in `PlayerState`, a lobbed projectile with an arc, a fuse or impact burst with splash (reuse the bolter's blast), a left-hand view model and sounds. Controls (decided): fire it with E, and doors move to Space only (today E and Space both open doors).

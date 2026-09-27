@@ -7,6 +7,7 @@ import {
   doorKindOf,
   droppedKey,
   isEnemyThing,
+  isHigh,
   keyOfThing,
   validateGridAlignment,
   validateMap,
@@ -153,7 +154,8 @@ function validateThings(map: MapData, grid: CellGrid): string[] {
   map.things.forEach((t, i) => {
     const [cx, cy] = grid.cellOf(t.x, t.y);
     const c = cx + cy * grid.width;
-    if (!grid.walkable(cx, cy)) errors.push(`thing ${i} (type ${t.type}) on a cell that is not walkable`);
+    const level = isHigh(t) ? 1 : 0;
+    if (!grid.walkable(cx, cy, level)) errors.push(`thing ${i} (type ${t.type}) on a cell that is not walkable${level ? ' up on its catwalk' : ''}`);
     if (seen.has(c)) errors.push(`things ${seen.get(c)} and ${i} share cell (${cx}, ${cy})`);
     seen.set(c, i);
     if (isEnemyThing(t.type) && Math.abs(cx - sx) + Math.abs(cy - sy) <= 1) errors.push(`enemy ${i} next to the player start`);

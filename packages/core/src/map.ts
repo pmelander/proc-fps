@@ -122,6 +122,9 @@ export const droppedKey = (t: Thing): number => (t.flags & THING_DROPS_KEY ? t.f
 /** An ordinary enemy of the level's second variant (see core's enemyDefsFor, render's enemyLooks). */
 export const THING_VARIANT = 1 << 5;
 export const variantOf = (t: Thing): number => (t.flags & THING_VARIANT ? 1 : 0);
+/** An enemy that starts up on its cell's slab (a catwalk), not on the floor under it. */
+export const THING_HIGH = 1 << 6;
+export const isHigh = (t: Thing): boolean => (t.flags & THING_HIGH) !== 0;
 
 /** Key things are KEY_THING_BASE + key id, for key ids 0 … MAX_KEYS - 1. */
 export const KEY_THING_BASE = 16;

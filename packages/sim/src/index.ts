@@ -29,5 +29,5 @@ export {
 } from '@proc-fps/core';
 export * from './combat.js';
 export * from './raycast.js';
-export { distanceField } from './ai.js';
+export { distanceField, flankSide } from './ai.js';
 export * from './lifts.js';

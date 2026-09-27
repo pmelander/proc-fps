@@ -1,4 +1,4 @@
-import { DEG_TO_RAD, PLAYER_MAX_HEALTH, WEAPONS, defOf, variantOf, ThingType, isEnemyThing, type EnemyType, type Heading } from '@proc-fps/core';
+import { DEG_TO_RAD, PLAYER_MAX_HEALTH, WEAPONS, defOf, isHigh, variantOf, ThingType, isEnemyThing, type EnemyType, type Heading } from '@proc-fps/core';
 import type { World } from './world.js';
 
 /** No buffered step. */
@@ -185,9 +185,11 @@ export function createSimState(world: World): SimState {
     if (!isEnemyThing(t.type)) return [];
     const [ex, ey] = world.grid.cellOf(t.x, t.y);
     const [px, py] = world.grid.center(ex, ey);
+    // A perched enemy starts on the catwalk (the cell's slab), if it has one.
+    const level = isHigh(t) && world.grid.walkable(ex, ey, 1) ? 1 : 0;
     return [{
-      type: t.type, variant: variantOf(t), cx: ex, cy: ey, fromCx: ex, fromCy: ey, level: 0, fromLevel: 0, stepTick: 0,
-      x: px, y: py, z: world.grid.floorAt(ex, ey),
+      type: t.type, variant: variantOf(t), cx: ex, cy: ey, fromCx: ex, fromCy: ey, level, fromLevel: level, stepTick: 0,
+      x: px, y: py, z: world.grid.floorAt(ex, ey, level),
       hp: defOf(world.enemyDefs, { type: t.type, variant: variantOf(t) }).hp, mode: 'idle', timer: 0, cooldown: 0,
     }];
   });

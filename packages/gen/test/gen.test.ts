@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CELL_SIZE as C, CellPlan, DoorKind, MAX_STEP, MapBuilder, ThingType, emitCellPlan, keyThing, rect } from '@proc-fps/core';
+import { CELL_SIZE as C, CellGrid, CellPlan, DoorKind, EnemyType, MAX_STEP, MapBuilder, ThingType, emitCellPlan, isEnemyThing, isHigh, keyThing, rect } from '@proc-fps/core';
 import { BOSS_KEY, EXIT_KEY, LEVEL_TYPES, generate, generateDetailed, levelTypeFor, strandsPlayer, validateGenerated, type Mission } from '../src/index.js';
 
 describe('generator', () => {
@@ -43,6 +43,28 @@ describe('level types', () => {
     }
     expect(drops).toBeGreaterThan(30); // descents are mostly taken by drops
     expect(atriums).toBeGreaterThan(5);
+  });
+});
+
+describe('snipers on high ground', () => {
+  it('perches some snipers on catwalk tops, where the sim starts them up on the slab', async () => {
+    const { createWorld, createSimState } = await import('@proc-fps/sim');
+    let perched = 0;
+    for (let i = 0; i < 60; i++) {
+      const map = generate(`perch-${i}`, { level: 4, type: 'ascent' });
+      const grid = new CellGrid(map);
+      const state = createSimState(createWorld(map));
+      map.things.filter((t) => isEnemyThing(t.type)).forEach((t, k) => {
+        if (!isHigh(t)) return;
+        perched++;
+        expect(t.type).toBe(EnemyType.Sniper);
+        const [cx, cy] = grid.cellOf(t.x, t.y);
+        expect(grid.levels(cx, cy)).toBe(2);
+        expect(state.enemies[k]!.level).toBe(1);
+        expect(state.enemies[k]!.z).toBe(grid.floorAt(cx, cy, 1));
+      });
+    }
+    expect(perched).toBeGreaterThan(10);
   });
 });
 

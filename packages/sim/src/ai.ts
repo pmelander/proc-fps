@@ -1,5 +1,6 @@
-import { ALERT_TICKS, CELL_SIZE, CellGrid, DoorKind, defOf, HEADING_DX, HEADING_DY, MAX_STEP, NOISE_CELLS, SIGHT_CELLS, dcos, dsin, type EnemyDef, type Heading } from '@proc-fps/core';
+import { ALERT_TICKS, CELL_SIZE, CellGrid, DoorKind, defOf, HEADING_DX, HEADING_DY, MAX_STEP, NOISE_CELLS, PLAYER_HEIGHT, SIGHT_CELLS, dcos, dsin, type EnemyDef, type Heading } from '@proc-fps/core';
 import { hurtPlayer } from './combat.js';
+import { callLift, floorNow, liftAtCell, liftMoving } from './lifts.js';
 import { lineOfSight } from './raycast.js';
 import { DOOR_OPEN_TICKS, type EnemyState, type SimState } from './state.js';
 import { doorAtCell, type World } from './world.js';
@@ -14,19 +15,23 @@ const AIM_HEIGHT = 44;
  * pathing along a distance field towards the player's cell. Modes:
  * idle → (sees the player, hears gunfire, or is hurt) → alert → chase ⇄ windup → attack,
  * with pain interrupting and dead final. Auto doors are bumped open; key and secret doors
- * are walls to them.
+ * are walls to them. They ride lifts like the player (calling one that is not level, never one
+ * the player is on), so they follow between storeys. Some flank (see FLANK_*): while still far,
+ * they make for a point beside the player, so a horde comes round a loop from both sides.
  */
 export function stepEnemies(world: World, state: SimState): void {
   const occupied = occupancy(state);
   let field: Int32Array | undefined;
   const distance = () => (field ??= distanceField(world, state));
+  const flankFields: (Int32Array | null | undefined)[] = [];
+  const flank = (side: number) => (flankFields[side] === undefined ? (flankFields[side] = flankField(world, state, distance(), side)) : flankFields[side]);
 
   state.enemies.forEach((e, i) => {
     if (e.mode === 'dead') return;
     const def = defOf(world.enemyDefs, e);
     if (e.cooldown > 0) e.cooldown--;
     if (e.stepTick > 0 && ++e.stepTick > def.stepTicks) e.stepTick = 0;
-    updatePose(world, e, def);
+    updatePose(world, state, e, def);
 
     switch (e.mode) {
       case 'idle':
@@ -50,11 +55,17 @@ export function stepEnemies(world: World, state: SimState): void {
           state.events.push({ type: 'windup', enemy: i });
           break;
         }
-        const next = nextStep(world, state, e, distance(), occupied);
+        // Flankers head for a point beside the player while still far from it; then straight in.
+        const side = flankSide(i, e.variant);
+        const main = distance();
+        const far = main[(e.cx + e.cy * world.grid.width) * CellGrid.LEVELS + e.level]! > FLANK_CLOSE;
+        const toward = side >= 0 && far ? (flank(side) ?? main) : main;
+        const next = nextStep(world, state, e, toward, occupied) ?? (toward !== main ? nextStep(world, state, e, main, occupied) : undefined);
         if (next === undefined) break;
         const [heading, lands] = next;
         const nx = e.cx + HEADING_DX[heading];
         const ny = e.cy + HEADING_DY[heading];
+        if (!liftAllows(world, state, e, nx, ny, lands)) break;
         const door = doorAtCell(world, nx, ny);
         if (door >= 0 && state.doors[door]! < DOOR_OPEN_TICKS) {
           // Only auto doors can be in the path; bump it and wait.
@@ -141,7 +152,6 @@ export function distanceField(world: World, state: SimState): Int32Array {
   const queue = [start];
   const shut = (x: number, y: number) => {
     const door = doorAtCell(world, x, y);
-    if (world.liftAt[x + y * g.width]! >= 0) return true; // enemies do not ride lifts
     return door >= 0 && world.doors[door]!.kind !== DoorKind.Auto && state.doors[door]! < DOOR_OPEN_TICKS;
   };
   for (let qi = 0; qi < queue.length; qi++) {
@@ -186,19 +196,125 @@ function nextStep(world: World, state: SimState, e: EnemyState, dist: Int32Array
   return best;
 }
 
-function updatePose(world: World, e: EnemyState, def: EnemyDef): void {
+function updatePose(world: World, state: SimState, e: EnemyState, def: EnemyDef): void {
   const g = world.grid;
   const [tx, ty] = g.center(e.cx, e.cy);
+  // Floors as they are now: a lift carries whoever stands on it.
+  const toZ = floorNow(world, state, e.cx, e.cy, e.level);
   if (e.stepTick === 0) {
-    [e.x, e.y, e.z] = [tx, ty, g.floorAt(e.cx, e.cy, e.level)];
+    [e.x, e.y, e.z] = [tx, ty, toZ];
     return;
   }
   const t = e.stepTick / def.stepTicks;
   const [fx, fy] = g.center(e.fromCx, e.fromCy);
-  const fz = g.floorAt(e.fromCx, e.fromCy, e.fromLevel);
+  const fz = floorNow(world, state, e.fromCx, e.fromCy, e.fromLevel);
   e.x = fx + (tx - fx) * t;
   e.y = fy + (ty - fy) * t;
-  e.z = fz + (g.floorAt(e.cx, e.cy, e.level) - fz) * t;
+  e.z = fz + (toZ - fz) * t;
+}
+
+/**
+ * Lifts, for an enemy about to step from its cell to (nx, ny): the same rules as the player's.
+ * Never on or off a moving lift. Onto one that is not level: call it (unless the player is
+ * aboard) and wait. Off one towards a floor it is not level with: send it there (ride) and wait;
+ * and the way off must be open at the lift's real height.
+ */
+function liftAllows(world: World, state: SimState, e: EnemyState, nx: number, ny: number, lands: number): boolean {
+  const from = liftAtCell(world, e.cx, e.cy);
+  const to = liftAtCell(world, nx, ny);
+  if (from < 0 && to < 0) return true;
+  if ((from >= 0 && liftMoving(world, state, from)) || (to >= 0 && liftMoving(world, state, to))) return false;
+  const here = floorNow(world, state, e.cx, e.cy, e.level);
+  const there = floorNow(world, state, nx, ny, lands);
+  if (to >= 0 && Math.abs(there - here) > MAX_STEP) {
+    if (!playerAboard(world, state, to)) callLift(world, state, to, here);
+    return false;
+  }
+  if (from >= 0 && to < 0) {
+    if (Math.abs(there - here) > MAX_STEP && there > here) {
+      callLift(world, state, from, there);
+      return false;
+    }
+    const g = world.grid;
+    const fromCeil = g.span(e.cx, e.cy, e.level)![1];
+    const toCeil = g.span(nx, ny, lands)![1];
+    if (Math.min(fromCeil, toCeil) - Math.max(here, there) < PLAYER_HEIGHT) {
+      // A lower floor behind the wall of a raised lift: ride down to it.
+      if (there < here) callLift(world, state, from, there);
+      return false;
+    }
+  }
+  return true;
+}
+
+function playerAboard(world: World, state: SimState, lift: number): boolean {
+  const p = state.player;
+  return p.level === 0 && world.lifts[lift]!.cells.includes(p.cx + p.cy * world.grid.width);
+}
+
+/** Enemies go direct unless their index and variant make them flank: -1 direct, 0 left, 1 right. */
+export function flankSide(index: number, variant: number): number {
+  const k = (index * 7 + variant * 3) % 5;
+  return k === 1 ? 0 : k === 3 ? 1 : -1;
+}
+/** Flankers make for a point this many cells to the player's side … */
+const FLANK_OFFSET = 3;
+/** … until their path to the player is this short. */
+const FLANK_CLOSE = 4;
+
+/**
+ * A distance field towards a point FLANK_OFFSET cells to the player's left (side 0) or right (1),
+ * across the player's facing: the reachable cell there closest to that far from the player (by
+ * path), or null when there is none.
+ */
+function flankField(world: World, state: SimState, main: Int32Array, side: number): Int32Array | null {
+  const g = world.grid;
+  const L = CellGrid.LEVELS;
+  const p = state.player;
+  const sign = side === 0 ? 1 : -1;
+  const tx = Math.round(p.cx - dsin(p.angle) * FLANK_OFFSET * sign);
+  const ty = Math.round(p.cy + dcos(p.angle) * FLANK_OFFSET * sign);
+  let target = -1;
+  let score = Infinity;
+  for (let dy = -2; dy <= 2; dy++) {
+    for (let dx = -2; dx <= 2; dx++) {
+      const x = tx + dx;
+      const y = ty + dy;
+      if (!g.inBounds(x, y)) continue;
+      for (let l = 0; l < g.levels(x, y); l++) {
+        const d = main[(x + y * g.width) * L + l]!;
+        if (d < 2) continue;
+        const s = Math.abs(dx) + Math.abs(dy) + Math.abs(d - FLANK_OFFSET) * 2;
+        if (s < score) [target, score] = [(x + y * g.width) * L + l, s];
+      }
+    }
+  }
+  if (target < 0) return null;
+  // Path distance to the target, following steps in reverse (as distanceField does to the player).
+  const dist = new Int32Array(g.width * g.height * L).fill(-1);
+  dist[target] = 0;
+  const queue = [target];
+  for (let qi = 0; qi < queue.length; qi++) {
+    const st = queue[qi]!;
+    const l = st % L;
+    const c = (st - l) / L;
+    const x = c % g.width;
+    const y = (c - x) / g.width;
+    for (let h = 0; h < 4; h++) {
+      const nx = x + HEADING_DX[h as Heading];
+      const ny = y + HEADING_DY[h as Heading];
+      if (!g.inBounds(nx, ny)) continue;
+      const door = doorAtCell(world, nx, ny);
+      if (door >= 0 && world.doors[door]!.kind !== DoorKind.Auto && state.doors[door]! < DOOR_OPEN_TICKS) continue;
+      for (let ln = 0; ln < g.levels(nx, ny); ln++) {
+        const n = (nx + ny * g.width) * L + ln;
+        if (dist[n] !== -1 || g.stepTarget(nx, ny, ln, ((h + 2) % 4) as Heading) !== l) continue;
+        dist[n] = dist[st]! + 1;
+        queue.push(n);
+      }
+    }
+  }
+  return dist;
 }
 
 function sees(world: World, state: SimState, e: EnemyState, def: EnemyDef, cells: number): boolean {
