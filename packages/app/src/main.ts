@@ -482,6 +482,8 @@ function main(): void {
   let shownGrenades = -1;
   const world = createWorld(map);
   const state = createSimState(world);
+  // Dev builds only: the running game, for poking at from the console.
+  if (import.meta.env.DEV) Object.assign(window, { __game: { world, state, map } });
   let prev: PlayerState = clonePlayer(state.player);
   let prevEnemies: EnemyState[] = state.enemies.map((e) => ({ ...e }));
   const recorder = new ReplayRecorder(map);

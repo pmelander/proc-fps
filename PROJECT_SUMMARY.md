@@ -93,6 +93,7 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 **Not yet verified:** real mouse and keyboard play. Pointer lock can't run headless.
 
 - The game is called **Null Sector** (chosen over Hellseed, Gridfall, Cursed Protocol and others; not yet checked against existing games or trademarks). The name shows on the title logo and the page titles; the repository, the `@proc-fps/*` packages and the browser-storage keys (`proc-fps.run`, `.best`, `.difficulty`, so saved runs carry over) keep the working name.
+- Boss bar fix (after M25): the options' volume pips shared the `.bar` class with the boss bar, whose track collapsed to nothing; the pips are `.meter` now. Dev builds expose the running game as `window.__game` (world, state, map) for poking at from the console.
 - Enemies see in 3D (fix after M25): sight, and so wake-ups, attacks and a sniper's shot, needs a clear line from the enemy's eye to the player's chest or head (`sightLine`, over `clearLine` in raycast.ts, judged as `castRay` judges the player's shots). The old check was 2D, so a raised lift, a floor between storeys, a ledge or a catwalk did not block it: snipers shot through lifts.
 - Pickups (M25), constants in `core/src/powerups.ts`:
   - **Armour** (`ThingType.Armor`): a vest adds 50, to 100 (`ARMOR`); it soaks up half of every hurt (hazard floors included) until it runs out, and stays on the floor while the armour is full. A thinner steel bar under the health shows it while there is any.

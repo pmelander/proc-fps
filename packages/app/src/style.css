@@ -258,18 +258,19 @@ h1 {
   min-width: calc(var(--u) * 26);
   text-align: center;
 }
-.bar {
+/* A setting's level in the options (volumes): a row of pips. */
+.meter {
   display: inline-flex;
   gap: var(--u);
   vertical-align: middle;
 }
-.bar i {
+.meter i {
   width: calc(var(--u) * 2);
   height: calc(var(--u) * 6);
   background: var(--iron-mid);
   box-shadow: 0 0 0 var(--u) var(--ink);
 }
-.bar i.on {
+.meter i.on {
   background: var(--accent);
 }
 

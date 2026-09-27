@@ -12,7 +12,7 @@ export function optionValueHtml(def: OptionDef, o: Options): string {
   if (!def.bar) return def.format(v);
   const steps = (def.max - def.min) / def.step;
   const on = (v - def.min) / def.step;
-  return `<span class="bar">${Array.from({ length: steps }, (_, i) => `<i${i < on ? ' class="on"' : ''}></i>`).join('')}</span>`;
+  return `<span class="meter">${Array.from({ length: steps }, (_, i) => `<i${i < on ? ' class="on"' : ''}></i>`).join('')}</span>`;
 }
 
 export function optionsPanelHtml(o: Options): string {
