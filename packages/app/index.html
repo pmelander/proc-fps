@@ -18,6 +18,7 @@
     <canvas id="gun"></canvas>
     <canvas id="bolter"></canvas>
     <canvas id="saw"></canvas>
+    <canvas id="launcher"></canvas>
     <div id="healthbar"><div class="fill"></div><span class="value">100</span></div>
     <div id="bossbar" hidden><span class="name"></span><div class="bar"><div class="fill"></div></div></div>
     <div id="banner" hidden></div>
@@ -26,6 +27,7 @@
       <div class="type"><span class="cell"></span><span class="name">Scatter cell</span></div>
       <div class="pips"></div>
       <div class="count"><b>8</b> / <span class="size">8</span> <span class="reserve">∞</span></div>
+      <div class="grenades"></div>
     </div>
     <div id="keys"></div>
     <canvas id="bloodscreen"></canvas>
@@ -41,7 +43,8 @@
       <p>Ammo is infinite, but a cell holds 8 shots: it reloads itself when empty, or press R.</p>
       <p>Up close, firing swings the chainsword instead (or right-click / V): nothing can hurt you while it grinds.</p>
       <p>1 and 2 (or the mouse wheel, or Q for the last one) switch between the scattergun and the heavy bolter.</p>
-      <p>Doors open when you walk into them. Key doors open with E or Space once you have the key.</p>
+      <p>Doors open when you walk into them. Key doors (once you have the key) and secret walls open with Space.</p>
+      <p>E lobs a grenade from the left hand: scarce, found in loot and secret rooms.</p>
       <p>Each level of a run is harder. Hold Tab for the map, F2 starts a new run (Quit to title to change difficulty), F3 shows performance, F8 saves a replay. M music, N sound.</p>
       <p id="runline" class="run"></p>
       <p><a href="./index.html" id="quit">Quit to title</a> · <a href="./browse.html">Seed browser</a></p>

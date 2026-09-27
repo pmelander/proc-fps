@@ -9,6 +9,7 @@ export {
   FIRE_COOLDOWN,
   MAG_SIZE,
   WEAPONS,
+  GRENADE,
   WEAPON_SWITCH_TICKS,
   WeaponId,
   falloffAt,

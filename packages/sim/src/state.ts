@@ -1,4 +1,4 @@
-import { DEG_TO_RAD, PLAYER_MAX_HEALTH, WEAPONS, defOf, isHigh, variantOf, ThingType, isEnemyThing, type EnemyType, type Heading } from '@proc-fps/core';
+import { DEG_TO_RAD, GRENADE, PLAYER_MAX_HEALTH, WEAPONS, defOf, isHigh, variantOf, ThingType, isEnemyThing, type EnemyType, type Heading } from '@proc-fps/core';
 import type { BossPattern } from './boss.js';
 import type { World } from './world.js';
 
@@ -59,6 +59,9 @@ export interface PlayerState {
   reload: number;
   /** Ticks into a chainsword attack (1 on its first tick); 0 when not attacking. */
   melee: number;
+  /** Grenades carried (see GRENADE), and ticks until the launcher can fire again. */
+  grenades: number;
+  grenadeCooldown: number;
   /** Ticks spent on a damaging floor since it last hurt. */
   hazardTicks: number;
 }
@@ -125,6 +128,18 @@ export interface Projectile {
   unblockable?: boolean;
 }
 
+/** A grenade in flight (map units, per tick). */
+export interface Grenade {
+  x: number;
+  y: number;
+  z: number;
+  vx: number;
+  vy: number;
+  vz: number;
+  /** Ticks in flight. */
+  age: number;
+}
+
 /** Things that happened this tick, for the HUD and (later) sound. Cleared every tick. */
 export type SimEvent =
   | { type: 'door'; door: number }
@@ -138,6 +153,10 @@ export type SimEvent =
   | { type: 'switch'; weapon: number }
   /** A bolt burst at this point (map units; z is height). */
   | { type: 'blast'; x: number; y: number; z: number }
+  /** A grenade was lobbed; one burst here; one was picked up. */
+  | { type: 'grenade' }
+  | { type: 'explode'; x: number; y: number; z: number }
+  | { type: 'grenadePickup' }
   /** A reload started (the cell ran dry, or R), and finished. */
   | { type: 'reload' }
   | { type: 'reloaded' }
@@ -178,6 +197,8 @@ export interface SimState {
   secrets: number;
   enemies: EnemyState[];
   projectiles: Projectile[];
+  /** The player's grenades in flight. */
+  grenades: Grenade[];
   /** The player died; the sim ignores input from here. */
   dead: boolean;
   /** The player reached the exit; the sim ignores input from here. */
@@ -240,6 +261,8 @@ export function createSimState(world: World): SimState {
       shots: 0,
       reload: 0,
       melee: 0,
+      grenades: GRENADE.start,
+      grenadeCooldown: 0,
       hazardTicks: 0,
     },
     doors: world.doors.map(() => 0),
@@ -249,6 +272,7 @@ export function createSimState(world: World): SimState {
     secrets: 0,
     enemies,
     projectiles: [],
+    grenades: [],
     dead: false,
     won: false,
     events: [],

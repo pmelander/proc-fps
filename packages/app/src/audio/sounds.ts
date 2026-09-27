@@ -15,7 +15,8 @@ export type SoundId =
   | 'reload' | 'reloaded'
   | 'saw' | 'sawHit' | 'shielded'
   | 'bolt' | 'boltBlast' | 'switch'
-  | 'roar' | 'slam' | 'windupSlam' | 'summon' | 'bossDeath';
+  | 'roar' | 'slam' | 'windupSlam' | 'summon' | 'bossDeath'
+  | 'grenadeFire' | 'explode' | 'grenadePickup';
 
 type Recipe = Voice[];
 
@@ -57,6 +58,19 @@ const RECIPES: Record<SoundId, Recipe> = {
     { wave: 'saw', freq: 55, freqEnd: 25, attack: 0, sustain: 0.04, release: 0.25, volume: 0.4, lowpass: 300 },
     { wave: 'sine', freq: 60, freqEnd: 22, attack: 0, sustain: 0.05, release: 0.35, volume: 0.7 },
   ],
+  // The launcher: a hollow thunk and a pop.
+  grenadeFire: [
+    { wave: 'sine', freq: 200, freqEnd: 60, attack: 0, sustain: 0.03, release: 0.15, volume: 0.8 },
+    { wave: 'noise', freq: 1500, freqEnd: 400, attack: 0, sustain: 0.01, release: 0.1, volume: 0.35, lowpass: 2000 },
+  ],
+  // A grenade bursting: a long, deep blast with a rolling tail.
+  explode: [
+    { wave: 'noise', freq: 1200, freqEnd: 50, attack: 0, sustain: 0.08, release: 0.9, volume: 0.9, lowpass: 1600 },
+    { wave: 'saw', freq: 55, freqEnd: 22, attack: 0, sustain: 0.1, release: 0.6, volume: 0.5, lowpass: 280 },
+    { wave: 'sine', freq: 50, freqEnd: 18, attack: 0, sustain: 0.12, release: 0.9, volume: 1 },
+  ],
+  // Picking one up: a metallic clink.
+  grenadePickup: [{ wave: 'square', freq: 1100, freqEnd: 1100, attack: 0, sustain: 0.05, release: 0.1, volume: 0.25, duty: 0.25, arpeggio: [1, 1.5], arpeggioTime: 0.05 }],
   // A boss moving to its next phase: a long, torn roar.
   roar: [
     { wave: 'saw', freq: 110, freqEnd: 60, attack: 0.08, sustain: 0.7, release: 0.5, volume: 0.45, vibrato: { depth: 0.25, rate: 9 }, lowpass: 900 },

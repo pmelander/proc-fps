@@ -1,4 +1,4 @@
-import { PLAYER_HEIGHT,
+import { GRENADE, PLAYER_HEIGHT,
   DoorKind,
   HAZARD_DAMAGE,
   HAZARD_TICKS,
@@ -11,7 +11,7 @@ import { PLAYER_HEIGHT,
   isDamaging,
 } from '@proc-fps/core';
 import { stepEnemies } from './ai.js';
-import { hurtPlayer, playerFire, stepProjectiles } from './combat.js';
+import { hurtPlayer, playerFire, playerGrenade, stepGrenades, stepProjectiles } from './combat.js';
 import { quantizeInput, type InputFrame } from './input.js';
 import { callLift, floorNow, liftAtCell, liftMoving, stepLifts } from './lifts.js';
 import { stepPlayer, type MoveGate } from './player.js';
@@ -114,6 +114,11 @@ export function stepSim(world: World, state: SimState, input: InputFrame): void 
       const amount = Math.min(HEALTH_PICKUP, PLAYER_MAX_HEALTH - p.health);
       p.health += amount;
       state.events.push({ type: 'health', amount });
+    } else if (k.kind === 'grenade') {
+      // Stays on the floor while the player carries all they can.
+      if (p.grenades >= GRENADE.max) return;
+      p.grenades++;
+      state.events.push({ type: 'grenadePickup' });
     } else {
       state.keys |= 1 << k.key;
       state.events.push({ type: 'key', key: k.key });
@@ -130,8 +135,10 @@ export function stepSim(world: World, state: SimState, input: InputFrame): void 
   }
 
   playerFire(world, state, q.fire, q.reload, q.melee, q.weapon);
+  playerGrenade(state, q.grenade);
   stepEnemies(world, state);
   stepProjectiles(world, state);
+  stepGrenades(world, state);
 
   const arrived = p.stepTick === 0 || p.stepTick >= STEP_TICKS;
   if (!state.dead && world.exit && arrived && p.cx === world.exit[0] && p.cy === world.exit[1]) {

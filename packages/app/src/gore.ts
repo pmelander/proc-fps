@@ -99,6 +99,14 @@ export class Gore {
     }
   }
 
+  /** A grenade bursting: a big ball of fire, a ring of sparks and chips, and smoke-dark debris. */
+  explosion(x: number, y: number, z: number): void {
+    for (let i = 0; i < 7; i++) {
+      this.add({ x: x + (this.rand() - 0.5) * 40, y: y + (this.rand() - 0.5) * 40, z: z + 6 + this.rand() * 30, vx: 0, vy: 0, vz: 40, size: 34 + this.rand() * 30, kind: 'fire', age: this.rand() * 0.05 });
+    }
+    for (let k = 0; k < 3; k++) this.impact(x, y, z + 4, (this.rand() - 0.5) * 0.6, (this.rand() - 0.5) * 0.6, 1);
+  }
+
   /** A bolt bursting: a ball of fire that swells and fades, with sparks and chips. */
   blast(x: number, y: number, z: number): void {
     for (let i = 0; i < 3; i++) this.add({ x: x + (this.rand() - 0.5) * 10, y: y + (this.rand() - 0.5) * 10, z: z - 10 + this.rand() * 10, vx: 0, vy: 0, vz: 30, size: 18 + this.rand() * 14, kind: 'fire', age: 0 });

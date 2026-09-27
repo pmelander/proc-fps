@@ -4,6 +4,7 @@ import { BASELINE_LOOKS, HIDDEN_OFFSET, LevelRenderer, SpriteShape, THEME_COLORS
 import {
   PLAYER_MAX_HEALTH,
   castRay,
+  GRENADE,
   isBoss,
   SLAM_RADIUS,
   lineOfSight,
@@ -38,6 +39,7 @@ import { newRunId, runUrl, titleScreen } from './title.js';
 import { endRun, levelScore, loadBest, recordDeath, recordLevel, runFor, runScore, type RunRecord } from './run.js';
 import { endScreen, summaryScreen } from './screens.js';
 import { Bolter } from './bolter.js';
+import { Launcher } from './launcher.js';
 import { bossName } from './bossname.js';
 import { InputSampler } from './input.js';
 import { KEY_COLORS, KEY_NAMES } from './keys.js';
@@ -249,6 +251,16 @@ function buildSprites(
     const bob = 6 * Math.sin(performance.now() / 300 + i);
     sprites.push({ x: kx, y: ky, z: world.grid.floorAt(at[0], at[1]) + 18 + bob, width: 28, height: 28, shape: SpriteShape.Key + k.key, charge: 0, flash: 0, light: 1, tile: -1 });
   });
+  // Grenades in flight, and grenade pickups bobbing where they lie.
+  for (const n of state.grenades) {
+    sprites.push({ x: n.x, y: n.y, z: n.z - 7, width: 14, height: 14, shape: SpriteShape.Grenade, charge: 0, flash: 0, light: light(n.x, n.y), tile: -1 });
+  }
+  world.pickups.forEach((k, i) => {
+    if (k.kind !== 'grenade' || state.taken[i]) return;
+    const [gx, gy] = world.grid.center(k.cx, k.cy);
+    const bob = 4 * Math.sin(performance.now() / 350 + i);
+    sprites.push({ x: gx, y: gy, z: world.grid.floorAt(k.cx, k.cy) + 12 + bob, width: 22, height: 22, shape: SpriteShape.Grenade, charge: 0, flash: 0, light: light(gx, gy), tile: -1 });
+  });
   // A boss winding up a slam: a pulsing ring on the floor marks how far it will reach.
   for (const e of state.enemies) {
     if (e.mode !== 'windup' || !isBoss(e.type) || e.pattern !== 'slam') continue;
@@ -421,6 +433,9 @@ function main(): void {
   const weapon = new Weapon(document.getElementById('gun') as HTMLCanvasElement, theme.techLight);
   const bolter = new Bolter(document.getElementById('bolter') as HTMLCanvasElement, theme.techLight);
   const chainsword = new Chainsword(document.getElementById('saw') as HTMLCanvasElement);
+  const launcher = new Launcher(document.getElementById('launcher') as HTMLCanvasElement);
+  const ammoGrenades = document.querySelector('#ammo .grenades') as HTMLDivElement;
+  let shownGrenades = -1;
   // The ammo pips glow in the same colour as the gun's coils.
   document.documentElement.style.setProperty('--glow', `rgb(${theme.techLight.map((c) => Math.round(c * 255)).join(' ')})`);
   const world = createWorld(map);
@@ -650,6 +665,22 @@ function main(): void {
           switchFrom = e.weapon === WeaponId.Bolter ? WeaponId.Scattergun : WeaponId.Bolter;
           audio.play('switch');
         }
+        if (e.type === 'grenade') {
+          launcher.fire(now);
+          audio.play('grenadeFire');
+        }
+        if (e.type === 'explode') {
+          gore.explosion(e.x, e.y, e.z);
+          audio.play('explode', e, listener);
+          // The closer, the harder it shakes and flashes.
+          const near = Math.max(0, 1 - Math.hypot(e.x - state.player.x, e.y - state.player.y) / 1200);
+          renderer.flash = Math.max(renderer.flash, near);
+          if (near > 0.2) joltUntil = now + JOLT_SECONDS * (1 + 3 * near);
+        }
+        if (e.type === 'grenadePickup') {
+          audio.play('grenadePickup');
+          [notice, noticeUntil] = ['Picked up a grenade', now + NOTICE_SECONDS];
+        }
         if (e.type === 'phase') {
           const boss = enemyAt(e.enemy);
           const name = bossName(map.meta.seed ?? map.meta.name, boss.type);
@@ -742,6 +773,11 @@ function main(): void {
     weapon.update(now, dt, bobbing, p.mags[WeaponId.Scattergun]! / MAG_SIZE, lowerOf(WeaponId.Scattergun));
     bolter.update(now, dt, bobbing, p.mags[WeaponId.Bolter]! / WEAPONS[WeaponId.Bolter]!.magSize, lowerOf(WeaponId.Bolter));
     chainsword.update(now);
+    launcher.update(now);
+    if (p.grenades !== shownGrenades) {
+      shownGrenades = p.grenades;
+      ammoGrenades.innerHTML = `<span class="label">E grenades</span>` + Array.from({ length: GRENADE.max }, (_, i) => `<span class="nade${i < p.grenades ? ' full' : ''}"></span>`).join('');
+    }
     screenBlood.update(dt);
 
     if (p.health !== shownHealth) {
@@ -815,7 +851,7 @@ function main(): void {
     compassLetter.textContent = HEADING_LETTERS[p.heading];
 
     const want = doorPrompt(world, state);
-    const promptHtml = !want ? '' : want.kind === 'use' ? '<span class="keycap">E</span>' : KEY_ICON(KEY_COLORS[want.key]!);
+    const promptHtml = !want ? '' : want.kind === 'use' ? '<span class="keycap">Space</span>' : KEY_ICON(KEY_COLORS[want.key]!);
     if (promptHtml !== shownPrompt) {
       prompt.innerHTML = shownPrompt = promptHtml;
       prompt.hidden = !promptHtml;

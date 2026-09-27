@@ -62,3 +62,25 @@ export const WEAPONS: readonly WeaponDef[] = [
 
 /** Ticks a weapon switch takes: the old gun lowers for half, the new one rises for half. */
 export const WEAPON_SWITCH_TICKS = 24;
+
+/**
+ * The grenade launcher, in the left hand like the chainsword (E): it lobs a grenade in an arc that
+ * bursts on touching an enemy, a wall, a floor or a ceiling (or at the end of its fuse), hurting
+ * every enemy within `radius`, most at the centre. Grenades are scarce: the player starts with
+ * `start`, carries at most `max`, and finds more now and then in loot and secret rooms. It does
+ * not hurt the player. Speeds in map units per tick, gravity per tick squared.
+ */
+export const GRENADE = {
+  start: 1,
+  max: 3,
+  cooldown: 40,
+  speed: 12,
+  /** Upward share of the throw on top of the aim, so a level throw still arcs. */
+  lift: 0.33,
+  gravity: 0.12,
+  radius: 192,
+  /** Damage at the centre of the burst, and at its edge. */
+  damage: 90,
+  edgeDamage: 25,
+  fuse: 180,
+} as const;

@@ -358,6 +358,17 @@ void main() {
     outColor = vec4(mix(vec3(1.0, 0.97, 0.8), vec3(1.0, 0.55, 0.12), r), 1.0);
     return;
   }
+  if (vShape == 20) { // grenade: a dark ovoid casing with a brass band and a blinking red light
+    vec2 q = p - 0.5;
+    float d = length(q * vec2(1.25, 1.0)) - 0.42;
+    if (d > 0.0) discard;
+    vec3 c = mix(vec3(0.16, 0.18, 0.14), vec3(0.3, 0.33, 0.26), p.y);
+    if (abs(q.y) < 0.07) c = vec3(0.7, 0.56, 0.25);
+    c *= lightBand(vLight, vWorld, uEye);
+    if (length(q - vec2(0.0, 0.3)) < 0.08 && fract(uTime * 3.0) < 0.5) c = vec3(1.0, 0.25, 0.1);
+    outColor = vec4(c, 1.0);
+    return;
+  }
   if (vShape == 19) { // warning ring: a pulsing red-orange band at the rim
     float r = length(p - 0.5) * 2.0;
     if (r > 1.0 || r < 0.86) discard;

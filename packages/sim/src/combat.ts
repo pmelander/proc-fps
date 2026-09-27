@@ -1,4 +1,5 @@
 import {
+  GRENADE,
   defOf,
   falloffAt,
   WEAPONS,
@@ -198,6 +199,83 @@ function damage(world: World, state: SimState, hits: ReadonlyMap<number, number>
 }
 
 /** Moves projectiles; they stop at walls, floors, ceilings and closed doors, or hit the player. */
+/** Lobs a grenade on `throwIt`, if one is carried and the launcher is ready (never mid-swing). */
+export function playerGrenade(state: SimState, throwIt: boolean): void {
+  const p = state.player;
+  if (p.grenadeCooldown > 0) p.grenadeCooldown--;
+  if (!throwIt || p.grenades <= 0 || p.grenadeCooldown > 0 || p.melee > 0) return;
+  p.grenades--;
+  p.grenadeCooldown = GRENADE.cooldown;
+  const cp = dcos(p.pitch);
+  const dx = cp * dcos(p.angle);
+  const dy = cp * dsin(p.angle);
+  const dz = dsin(p.pitch) + GRENADE.lift;
+  state.grenades.push({
+    x: p.x + dx * 20, y: p.y + dy * 20, z: p.z + PLAYER_EYE_HEIGHT - 10,
+    vx: dx * GRENADE.speed, vy: dy * GRENADE.speed, vz: dz * GRENADE.speed, age: 0,
+  });
+  state.events.push({ type: 'grenade' });
+}
+
+/**
+ * Grenades in flight: they arc under gravity and burst on touching an enemy, a wall, a floor, a
+ * ceiling or a catwalk (or at the end of the fuse), hurting every enemy within GRENADE.radius:
+ * GRENADE.damage at the centre, falling to GRENADE.edgeDamage at the edge.
+ */
+export function stepGrenades(world: World, state: SimState): void {
+  const g = world.grid;
+  state.grenades = state.grenades.filter((n) => {
+    const [px, py, pz] = [n.x, n.y, n.z];
+    n.vz -= GRENADE.gravity;
+    n.x += n.vx;
+    n.y += n.vy;
+    n.z += n.vz;
+    n.age++;
+    let burst = n.age >= GRENADE.fuse;
+    const struck = state.enemies.some((e) => {
+      if (e.mode === 'dead') return false;
+      const def = defOf(world.enemyDefs, e);
+      const ex = n.x - e.x;
+      const ey = n.y - e.y;
+      return ex * ex + ey * ey <= (def.radius + 6) ** 2 && n.z >= e.z && n.z <= e.z + def.height;
+    });
+    const [cx, cy] = g.cellOf(n.x, n.y);
+    if (struck) burst = true;
+    else if (!cellOpen(world, state, cx, cy)) {
+      // Into a wall: burst where it was, on this side of it.
+      [n.x, n.y, n.z] = [px, py, pz];
+      burst = true;
+    } else {
+      const sec = world.map.sectors[g.sectorAt(cx, cy)]!;
+      const floor = floorNow(world, state, cx, cy);
+      if (n.z <= floor || n.z >= sec.ceil || (sec.slab && n.z >= sec.slab.bottom && n.z <= sec.slab.top)) {
+        n.z = Math.max(floor, Math.min(n.z, sec.ceil));
+        burst = true;
+      }
+    }
+    if (!burst) return true;
+    explode(world, state, n.x, n.y, n.z);
+    return false;
+  });
+}
+
+function explode(world: World, state: SimState, x: number, y: number, z: number): void {
+  state.events.push({ type: 'explode', x, y, z });
+  makeNoise(world, state);
+  const hits = new Map<number, number>();
+  state.enemies.forEach((e, i) => {
+    if (e.mode === 'dead') return;
+    const def = defOf(world.enemyDefs, e);
+    // Distance from the burst to the nearest point of the enemy's body.
+    const horizontal = Math.max(0, Math.sqrt((e.x - x) ** 2 + (e.y - y) ** 2) - def.radius);
+    const vertical = z < e.z ? e.z - z : z > e.z + def.height ? z - e.z - def.height : 0;
+    const d = Math.sqrt(horizontal * horizontal + vertical * vertical);
+    if (d > GRENADE.radius) return;
+    hits.set(i, Math.round(GRENADE.edgeDamage + (GRENADE.damage - GRENADE.edgeDamage) * (1 - d / GRENADE.radius)));
+  });
+  damage(world, state, hits);
+}
+
 export function stepProjectiles(world: World, state: SimState): void {
   const p = state.player;
   const g = world.grid;

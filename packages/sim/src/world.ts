@@ -47,7 +47,7 @@ export interface LiftInfo {
 
 /** Something picked up by walking over it. */
 export interface PickupInfo {
-  kind: 'key' | 'health';
+  kind: 'key' | 'health' | 'grenade';
   /** Key id, for keys. */
   key: number;
   /** Where it lies; a dropped key lies where its carrier died instead. */
@@ -100,8 +100,8 @@ export function createWorld(map: MapData): World {
       return key >= 0 ? [{ kind: 'key', key, cx, cy, carrier }] : [];
     }
     const key = keyOfThing(t.type);
-    if (key < 0 && t.type !== ThingType.Health) return [];
-    return [{ kind: key >= 0 ? 'key' : 'health', key, cx, cy, carrier: -1 }];
+    if (key < 0 && t.type !== ThingType.Health && t.type !== ThingType.Grenade) return [];
+    return [{ kind: key >= 0 ? 'key' : t.type === ThingType.Grenade ? 'grenade' : 'health', key, cx, cy, carrier: -1 }];
   });
   const lifts: LiftInfo[] = [];
   const liftAt = new Int32Array(grid.width * grid.height).fill(-1);

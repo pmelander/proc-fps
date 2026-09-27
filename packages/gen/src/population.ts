@@ -9,7 +9,7 @@ import type { RoomDesign } from './rooms.js';
  *   so rooms near the exit are fuller and nastier than rooms near the start. Snipers appear
  *   only deep in a level or from level 2.
  * - Health sits along the way (always one in the gate room before the boss) and in loot and
- *   secret rooms. Ammo is infinite.
+ *   secret rooms. Ammo is infinite; grenades are not, and half the loot and secret rooms hold one.
  * Things go on free base floor, never on a cell in front of a doorway, never two on a cell.
  * Start and exit rooms stay empty. Snipers prefer high ground: a room's catwalk tops (an atrium's
  * ring, the catwalk across a pit) are perches, and an atrium usually gets a sniper up there.
@@ -28,6 +28,8 @@ export interface PopulationInput {
   difficulty?: DifficultyDef;
 }
 
+/** Chance a loot or secret room also holds a grenade. */
+const GRENADE_CHANCE = 0.5;
 /** Chance an atrium gets a sniper on its ring, before the level adds to it. */
 const ATRIUM_SNIPER_CHANCE = 0.35;
 
@@ -155,6 +157,7 @@ export function populate(input: PopulationInput): Placed[] {
     }
   });
 
+  const grenades = rng.fork('grenades');
   // Health: the gate room before the boss always, loot and secret rooms as a reward, other rooms sometimes.
   const boss = mission.nodes.find((n) => n.kind === 'boss')!.id;
   const gate = mission.edges.find((e) => e.door === 'key' && (e.a === boss || e.b === boss));
@@ -163,6 +166,8 @@ export function populate(input: PopulationInput): Placed[] {
     if (node.kind === 'loot' || node.kind === 'secret') {
       const n = rng.int(1, 2);
       for (let k = 0; k < n; k++) put(id, ThingType.Health);
+      // Grenades are scarce: now and then one lies in a loot or secret room.
+      if (grenades.chance(GRENADE_CHANCE)) put(id, ThingType.Grenade);
     } else if (id === gateRoom) {
       put(id, ThingType.Health);
     } else if (node.kind === 'room' && rng.chance((ROOM_HEALTH_CHANCE + 0.15 * (depth[id]! / maxDepth)) * scale.health)) {

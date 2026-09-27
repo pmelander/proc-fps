@@ -58,7 +58,8 @@ export function titleScreen(): void {
   controls.innerHTML =
     `<p>WASD steps one square; the mouse looks. The arrow at the top shows where W goes.</p>` +
     `<p>Click to fire. Up close it swings the chainsword (or right-click / V): nothing hurts you while it grinds.</p>` +
-    `<p>1 / 2, the wheel or Q switch guns; R reloads. E or Space opens key doors and secret walls.</p>` +
+    `<p>1 / 2, the wheel or Q switch guns; R reloads. E lobs a grenade (scarce: find them in loot rooms).</p>` +
+    `<p>Space opens key doors and secret walls.</p>` +
     `<p>Tab holds the map. Esc pauses. M music, N sound, F3 performance, F8 saves a replay.</p>`;
   title.addEventListener('click', (e) => {
     const el = (e.target as HTMLElement).closest<HTMLElement>('[data-diff], [data-action]');

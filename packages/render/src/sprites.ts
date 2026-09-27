@@ -55,6 +55,8 @@ export const SpriteShape = {
   Chip: 18,
   /** A glowing ring on the floor: a boss's slam about to land within it (flat, self-lit, pulsing). */
   Warning: 19,
+  /** A grenade: lying as a pickup, or in flight. A dark casing, a brass band, a blinking light. */
+  Grenade: 20,
 } as const;
 
 export interface Sprite {

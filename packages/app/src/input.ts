@@ -86,7 +86,9 @@ export class InputSampler {
       look: 0,
       run: this.keys.has('ShiftLeft') || this.keys.has('ShiftRight'),
       fire: this.fire,
-      use: this.keys.has('KeyE') || this.keys.has('Space'),
+      // Space opens key doors and secret walls; E lobs a grenade.
+      use: this.keys.has('Space'),
+      grenade: this.keys.has('KeyE'),
       reload: this.keys.has('KeyR'),
       melee: this.melee || this.keys.has('KeyV'),
       weapon: this.wantSlot >= 0 && this.wantSlot < weapons ? this.wantSlot

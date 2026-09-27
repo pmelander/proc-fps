@@ -20,6 +20,8 @@ export interface InputFrame {
   melee: boolean;
   /** Switch to this weapon (see WEAPONS); -1 keeps the current one. */
   weapon: number;
+  /** Lob a grenade (see GRENADE). */
+  grenade: boolean;
 }
 
 export const EMPTY_INPUT: Readonly<InputFrame> = Object.freeze({
@@ -33,6 +35,7 @@ export const EMPTY_INPUT: Readonly<InputFrame> = Object.freeze({
   reload: false,
   melee: false,
   weapon: -1,
+  grenade: false,
 });
 
 /** Angles are quantized so replays are compact and independent of mouse float noise. */
@@ -53,5 +56,6 @@ export function quantizeInput(i: InputFrame): InputFrame {
     reload: i.reload ?? false,
     melee: i.melee ?? false,
     weapon: i.weapon ?? -1,
+    grenade: i.grenade ?? false,
   };
 }

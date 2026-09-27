@@ -97,6 +97,8 @@ export const ThingType = {
   Exit: 2,
   /** Restores health when walked over. */
   Health: 3,
+  /** A grenade for the launcher, picked up when walked over (see GRENADE). */
+  Grenade: 4,
 } as const;
 
 /** Enemy thing types. Stats and behaviour live in the sim (`ENEMY_DEFS`). */

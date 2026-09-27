@@ -27,7 +27,7 @@ This file summarises the decisions made so far, the current state of the code, a
 | Package | Contents |
 |---|---|
 | `core` | `map.ts` (format v1: slabs, `hashMap`), `cells.ts` (`CellPlan`: cells → sectors with automatic T-junction splits), `rng.ts` (sfc32 + named forks), `dmath.ts` (deterministic trig), `math.ts` (render-side mat4), `geometry.ts` (sector loops, `SectorLocator`), `builder.ts` (`MapBuilder`, `rect`), `grid.ts` (`CellGrid`, `validateGridAlignment`), `validate.ts`, `constants.ts`, `textures.ts`. `maps/test01.json` is built by `scripts/build-test-maps.ts`. |
-| `gen` | `generate.ts` (v0.19.0: mission → layout → room templates → cell plan → sectors), `mission.ts` (mission graph), `layout.ts` (grid embedding), `rooms.ts` (room templates), `population.ts` (enemies, health and ammo by level and depth), `validate.ts` (structural + grid + reachability + traps), `scripts/stats.ts` (headless health check). |
+| `gen` | `generate.ts` (v0.20.0: mission → layout → room templates → cell plan → sectors), `mission.ts` (mission graph), `layout.ts` (grid embedding), `rooms.ts` (room templates), `population.ts` (enemies, health and ammo by level and depth), `validate.ts` (structural + grid + reachability + traps), `scripts/stats.ts` (headless health check). |
 | `sim` | `input.ts` (`InputFrame`, quantization), `world.ts`, `state.ts`, `player.ts` (grid movement), `sim.ts`, `replay.ts`. |
 | `render` | `backend.ts` (interface), `webgl2.ts`, `mesh.ts` (map → per-sector mesh), `palette.ts` (64 colours), `shaders.ts`, `renderer.ts` (`LevelRenderer`). |
 | `app` | `main.ts` (loop, interpolation, HUD, compass), `input.ts` (DOM → `InputFrame`), `automap.ts`. |
@@ -85,13 +85,18 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 
 **Verified:**
 - The typecheck is clean.
-- 131 tests pass.
+- 134 tests pass.
 - 2000 seeds produce 0 validation failures (about 12 ms per map including validation).
 - The production build succeeds (about 45 kB JS).
 - Headless Chromium (SwiftShader) renders correctly.
 
 **Not yet verified:** real mouse and keyboard play. Pointer lock can't run headless.
 
+- Grenade launcher (M19):
+  - `GRENADE` (core/src/weapons.ts): E lobs a grenade from the left hand (a new replayed `grenade` input; never mid-swing, 40 ticks between throws). It flies in an arc (12 units a tick along the aim plus a third of that upwards, gravity 0.12) and bursts on touching an enemy, a wall, a floor, a ceiling or a catwalk (or after 3 s): every enemy within 192 units of the burst (measured to its body) takes 90 at the centre falling to 25 at the edge, and the noise wakes the level. It never hurts the player.
+  - Scarce: the player starts with 1 and carries at most 3 (`PlayerState.grenades`); half the loot and secret rooms hold one (`ThingType.Grenade`, a pickup that stays on the floor while the player is full).
+  - Doors and secret walls open with Space only now (E was both). The prompt says Space.
+  - App: a stubby brass-banded launcher in the left hand swings up, kicks and smokes on each throw (`launcher.ts`); the grenade is drawn in flight and as a bobbing pickup (a dark casing, a brass band, a blinking light); a burst is a big fireball with sparks and chips, a flash and a shake by distance, and a deep blast; the ammo panel counts grenades.
 - A calmer start room (generator v0.19.0): at most one doorless entrance (the mission gives every other connection out of the start an auto door), and nothing arrives by lift: the start and its neighbours share a storey (progress up to the farthest neighbour flattens to 0, the climb spreads over the rest). Vertical levels now draw 4–6 storeys before the two-storey jump limit trims them, landing on 3–6 (about 40 / 21 / 28 / 11%).
 - Boss fights (M18):
   - `sim/src/boss.ts`: the mini boss moves to its second phase at half health, the boss at two thirds and one third (`phase` events). Each phase rotates its attacks: aimed volleys; a ring burst (10 or 16 projectiles in every direction, the rotation alternating so the gaps move); a summon (two or three grunts erupting two to four steps away, at most 6 alive per boss, marked with `summoner`); a slam (a 48-tick wind-up, then 2.5× its damage to the player if within 2.2 cells on its floor). The rotation skips a slam when the player is out of reach and a summon at the cap. The boss's last phase is enraged: wind-ups at 80%, cooldowns at 60%, two more projectiles per volley.
@@ -229,6 +234,7 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 - **M14 — rendering performance:** ✅ complete. The palette post pass now runs at the scene's low resolution (the canvas holds 240 rows and CSS scales it up pixelated; same image, a twentieth of the fill at 1080p), portal culling draws only the sectors the camera can see (about 7% of a level's sectors), visible ranges draw in one call, sprite quads reuse one buffer, and F3 shows a perf overlay (F4 toggles culling).
 - **M15 — more weapons:** ✅ complete. The heavy bolter (fast, accurate, explosive bolts) beside the scattergun, weapon switching (1/2, wheel, Q), per-weapon magazines, its own view model, sounds, tracers and bursts, and a per-weapon ammo panel with weapon slots.
 - **M16 — enemy behaviour:** ✅ complete (generator v0.17.0). Enemies ride lifts and follow the player between storeys, snipers perch on catwalk tops, and some enemies flank.
+- **M19 — grenade launcher:** ✅ complete (generator v0.20.0). Scarce grenades, found in loot and secret rooms, lobbed from the left hand with E; doors and secret walls moved to Space.
 - **M18 — boss fights:** ✅ complete. Bosses fight in phases with rotating attacks (volleys, ring bursts, summoned packs, telegraphed slams), an enraged last phase, blows the chainsword cannot shield, a named boss bar, and deaths worth watching.
 - **M17 — run structure:** ✅ complete. A title screen, four difficulties, runs tracked across levels with a score, an end-of-level screen with the run so far, a run summary and the best runs.
 - **M11 — procedural enemies:** ✅ complete. Every generated level breeds its own mutants: seeded stat variants per role (core `enemyDefsFor`) and seeded body plans and skins that stand out from the theme (render `enemyLooks`). The exit gets a glowing pad, a light beacon and a hum.
@@ -260,4 +266,3 @@ In the map format a door is a one-cell sector with its kind in `Sector.special` 
 Ideas noted during play-testing, not yet scheduled. Each line points at whatever already exists for it.
 
 - **Projectile patterns.** Enemy fire is aimed fans (and the bosses' rings); more patterns would make fights read differently: spirals, a wall with a gap to find, slow homing orbs, lobbed arcs that land where the player was, delayed bursts. Could vary by enemy variant (core/bestiary.ts already gives grunts spit patterns) and by boss phase (sim/boss.ts).
-- **Grenade launcher, limited ammo.** A left-hand launcher like the chainsword, fired with E; grenades are scarce: one now and then in a loot room, a count on the HUD. Needs: a grenade pickup (thing type) placed by the generator in some loot rooms, a count in `PlayerState`, a lobbed projectile with an arc, a fuse or impact burst with splash (reuse the bolter's blast), a left-hand view model and sounds. Controls (decided): fire it with E, and doors move to Space only (today E and Space both open doors).

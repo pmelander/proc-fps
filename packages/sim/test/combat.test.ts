@@ -12,6 +12,7 @@ import {
   WEAPONS,
   WEAPON_SWITCH_TICKS,
   WeaponId,
+  GRENADE,
   falloffAt,
   flankSide,
   MELEE_DAMAGE,
@@ -567,5 +568,56 @@ describe('boss fights', async () => {
     expect(boss.phase).toBe(2);
     expect(state.projectiles.length).toBe(def.volley + 2);
     expect(state.projectiles.every((q) => q.unblockable)).toBe(true);
+  });
+});
+
+describe('grenades', () => {
+  it('lobs one of the grenades carried, arcing down to burst ahead, and none when out', () => {
+    const { state, step } = sim(arena({ w: 12, h: 3, py: 1 }));
+    expect(state.player.grenades).toBe(GRENADE.start);
+    step({ grenade: true });
+    expect(events(state, 'grenade')).toHaveLength(1);
+    expect(state.player.grenades).toBe(GRENADE.start - 1);
+    const n = state.grenades[0]!;
+    const vz = n.vz;
+    step({});
+    expect(n.vz).toBeLessThan(vz); // gravity
+    let burst: { x: number; z: number } | undefined;
+    for (let t = 0; t < GRENADE.fuse && !burst; t++) {
+      step({});
+      const e = state.events.find((x) => x.type === 'explode');
+      if (e?.type === 'explode') burst = e;
+    }
+    expect(burst).toBeDefined();
+    expect(burst!.x).toBeGreaterThan(state.player.x + 3 * C); // a level throw carries several cells
+    expect(burst!.z).toBeLessThanOrEqual(1); // it came down on the floor
+    step({ grenade: true }, GRENADE.cooldown);
+    expect(state.grenades).toHaveLength(0); // none left to throw
+  });
+
+  it('hurts enemies near the burst, most at its centre, and spares those beyond its reach', () => {
+    // Brutes 3 and 4 cells ahead, and one far down the room; the grenade bursts among the first two.
+    const { state, step } = sim(arena({ w: 16, h: 1, things: [[EnemyType.Brute, 3, 0], [EnemyType.Brute, 4, 0], [EnemyType.Brute, 12, 0]] }));
+    const hp = state.enemies.map((e) => e.hp);
+    step({ grenade: true, look: -0.1 });
+    let at = 0;
+    for (let t = 0; t < GRENADE.fuse && !at; t++) {
+      step({});
+      const e = state.events.find((x) => x.type === 'explode');
+      if (e?.type === 'explode') at = e.x;
+    }
+    const lost = state.enemies.map((e, i) => hp[i]! - e.hp);
+    const [near, next] = Math.abs(state.enemies[0]!.x - at) <= Math.abs(state.enemies[1]!.x - at) ? [0, 1] : [1, 0];
+    expect(lost[near]).toBeGreaterThan(0);
+    expect(lost[near]).toBeGreaterThanOrEqual(lost[next]!);
+    expect(Math.max(...lost)).toBeLessThanOrEqual(GRENADE.damage);
+    expect(lost[2]).toBe(0);
+  });
+
+  it('picks grenades up, up to the most that can be carried', () => {
+    const { state, step } = sim(arena({ w: 6, h: 1, things: [[ThingType.Grenade, 1, 0], [ThingType.Grenade, 2, 0], [ThingType.Grenade, 3, 0]] }));
+    for (let k = 0; k < 3; k++) step({ move: 1 }, STEP_TICKS + 1);
+    expect(state.player.grenades).toBe(GRENADE.max);
+    expect(state.taken.filter(Boolean).length).toBe(GRENADE.max - GRENADE.start);
   });
 });
