@@ -26,8 +26,9 @@ canvas[hidden] {
   pointer-events: none;
 }
 /* The weapon lowers while the automap is up, as in Doom; the HUD stays over the map. */
-#automap:not([hidden]) ~ #gun {
-  visibility: hidden;
+#automap:not([hidden]) ~ #gun,
+#automap:not([hidden]) ~ #saw {
+  visibility: hidden !important;
 }
 #hud {
   position: fixed;
@@ -267,6 +268,17 @@ canvas[hidden] {
   image-rendering: pixelated;
   pointer-events: none;
   transform-origin: 60% 100%;
+}
+/* The chainsword (chainsword.ts), left hand; shown only while it attacks. */
+#saw {
+  position: fixed;
+  inset: auto 50% -2vh auto;
+  width: auto;
+  height: 46vh;
+  aspect-ratio: 150 / 120;
+  image-rendering: pixelated;
+  pointer-events: none;
+  transform-origin: 20% 100%;
 }
 #hurt {
   position: fixed;

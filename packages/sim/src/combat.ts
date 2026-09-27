@@ -1,8 +1,12 @@
 import {
   FIRE_COOLDOWN,
   MAG_SIZE,
-  MELEE_COOLDOWN,
   MELEE_DAMAGE,
+  MELEE_FIRST_HIT,
+  MELEE_HITS,
+  MELEE_HIT_INTERVAL,
+  MELEE_IFRAMES,
+  MELEE_TICKS,
   MELEE_REACH,
   PELLETS,
   PELLET_SPREAD,
@@ -22,6 +26,8 @@ import type { SimState } from './state.js';
 import type { World } from './world.js';
 
 const PROJECTILE_RADIUS = 6;
+/** The chainsword's arc: just over 45° either side of the aim, so the diagonals ahead count exactly. */
+const MELEE_ARC_COS = 0.7;
 /** Projectiles expire after this many ticks, hit or not. */
 const PROJECTILE_TTL = 600;
 
@@ -29,6 +35,10 @@ const PROJECTILE_TTL = 600;
 export function hurtPlayer(state: SimState, amount: number, from?: { x: number; y: number }): void {
   if (state.dead) return;
   const p = state.player;
+  if (p.melee > 0 && p.melee <= MELEE_IFRAMES + 1) {
+    state.events.push(from ? { type: 'shielded', amount, from } : { type: 'shielded', amount });
+    return;
+  }
   p.health = Math.max(0, p.health - amount);
   state.events.push(from ? { type: 'hurt', amount, from } : { type: 'hurt', amount });
   if (p.health === 0) {
@@ -38,13 +48,13 @@ export function hurtPlayer(state: SimState, amount: number, from?: { x: number; 
 }
 
 /**
- * Fires when the trigger is held and the weapon is ready. An enemy right in front (within
- * MELEE_REACH and 45° of the aim) takes an automatic melee strike; otherwise the shotgun fires
- * PELLETS pellets in a fixed spread, each hitting the nearest enemy before any wall. Each shot
- * spends one of the cell's MAG_SIZE rounds; the last starts a RELOAD_TICKS reload (so does
- * `reload`, early), and nothing fires until it ends. Melee needs no rounds.
+ * The player's weapons. With an enemy right in front (within MELEE_REACH and 45° of the aim),
+ * firing swings the chainsword instead (so does `melee`, anywhere): see MELEE_TICKS. Otherwise the
+ * shotgun fires PELLETS pellets in a fixed spread, each hitting the nearest enemy before any wall.
+ * Each shot spends one of the cell's MAG_SIZE rounds; the last starts a RELOAD_TICKS reload (so
+ * does `reload`, early), and nothing fires until it ends. The chainsword needs no rounds.
  */
-export function playerFire(world: World, state: SimState, trigger: boolean, reload = false): void {
+export function playerFire(world: World, state: SimState, trigger: boolean, reload = false, melee = false): void {
   const p = state.player;
   if (p.fireCooldown > 0) p.fireCooldown--;
   if (p.reload > 0 && --p.reload === 0) {
@@ -56,25 +66,37 @@ export function playerFire(world: World, state: SimState, trigger: boolean, relo
     state.events.push({ type: 'reload' });
   };
   if (reload && p.reload === 0 && p.mag < MAG_SIZE) startReload();
-  if (!trigger || p.fireCooldown > 0) return;
 
+  // Everyone alive within the chainsword's reach and arc.
   const fx = dcos(p.angle);
   const fy = dsin(p.angle);
-  const close = state.enemies.findIndex((e) => {
-    if (e.mode === 'dead') return false;
-    const vx = e.x - p.x;
-    const vy = e.y - p.y;
-    const d = Math.sqrt(vx * vx + vy * vy);
-    return d <= MELEE_REACH && (d === 0 || (vx * fx + vy * fy) / d >= Math.SQRT1_2);
-  });
-  if (close >= 0) {
-    p.fireCooldown = MELEE_COOLDOWN;
-    state.events.push({ type: 'melee', enemy: close });
-    damage(world, state, new Map([[close, MELEE_DAMAGE]]));
+  const inReach = () =>
+    state.enemies.flatMap((e, i) => {
+      if (e.mode === 'dead') return [];
+      const vx = e.x - p.x;
+      const vy = e.y - p.y;
+      const d = Math.sqrt(vx * vx + vy * vy);
+      return d <= MELEE_REACH && (d === 0 || (vx * fx + vy * fy) / d >= MELEE_ARC_COS) ? [i] : [];
+    });
+  if (p.melee === 0 && p.fireCooldown === 0 && (melee || (trigger && inReach().length))) {
+    p.melee = 1;
+    state.events.push({ type: 'saw' });
+    makeNoise(world, state);
+  }
+  if (p.melee > 0) {
+    // Grinding: every hit lands on everyone in reach; nothing else until the attack ends.
+    const t = p.melee - 1 - MELEE_FIRST_HIT;
+    if (t >= 0 && t % MELEE_HIT_INTERVAL === 0 && t / MELEE_HIT_INTERVAL < MELEE_HITS) {
+      const struck = inReach();
+      for (const i of struck) state.events.push({ type: 'melee', enemy: i });
+      if (struck.length) damage(world, state, new Map(struck.map((i) => [i, MELEE_DAMAGE])));
+    }
+    if (++p.melee > MELEE_TICKS) p.melee = 0;
     return;
   }
+  if (!trigger || p.fireCooldown > 0) return;
 
-  // Melee needs no ammo; a shot needs a loaded cell.
+  // A shot needs a loaded cell.
   if (p.reload > 0) return;
   p.fireCooldown = FIRE_COOLDOWN;
   state.events.push({ type: 'shot' });

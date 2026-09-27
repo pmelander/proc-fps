@@ -18,6 +18,7 @@ export class InputSampler {
   private pendingTurn = 0;
   private pendingLook = 0;
   private fire = false;
+  private melee = false;
 
   constructor(private readonly element: HTMLElement) {
     addEventListener('keydown', (e) => {
@@ -33,9 +34,15 @@ export class InputSampler {
     });
     addEventListener('mousedown', (e) => {
       if (this.locked && e.button === 0) this.fire = true;
+      if (this.locked && e.button === 2) this.melee = true;
     });
     addEventListener('mouseup', (e) => {
       if (e.button === 0) this.fire = false;
+      if (e.button === 2) this.melee = false;
+    });
+    // The right button swings the chainsword: no context menu while playing.
+    addEventListener('contextmenu', (e) => {
+      if (this.locked) e.preventDefault();
     });
   }
 
@@ -59,6 +66,7 @@ export class InputSampler {
       fire: this.fire,
       use: this.keys.has('KeyE') || this.keys.has('Space'),
       reload: this.keys.has('KeyR'),
+      melee: this.melee || this.keys.has('KeyV'),
     };
     this.pendingTurn += -this.mouseDX * MOUSE_SENSITIVITY + (k('ArrowLeft') - k('ArrowRight')) * KEY_TURN;
     this.pendingLook += -this.mouseDY * MOUSE_SENSITIVITY;

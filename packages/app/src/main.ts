@@ -1,4 +1,4 @@
-import { CELL_SIZE, DoorKind, MAG_SIZE, RELOAD_TICKS, HEADING_DX, HEADING_DY, PLAYER_EYE_HEIGHT, STEP_TICKS, TICK_DT, isEnemyThing, type MapData } from '@proc-fps/core';
+import { CELL_SIZE, DoorKind, MAG_SIZE, MELEE_FIRST_HIT, MELEE_IFRAMES, MELEE_TICKS, RELOAD_TICKS, HEADING_DX, HEADING_DY, PLAYER_EYE_HEIGHT, STEP_TICKS, TICK_DT, isEnemyThing, type MapData } from '@proc-fps/core';
 import { GENERATOR_VERSION, generate, isLevelType, validateGenerated, type LevelType } from '@proc-fps/gen';
 import { BASELINE_LOOKS, HIDDEN_OFFSET, LevelRenderer, SpriteShape, THEME_COLORS, WebGL2Backend, enemyLooks, spriteTile, type Sprite } from '@proc-fps/render';
 import {
@@ -26,6 +26,7 @@ import test06 from '@proc-fps/core/maps/test06.json';
 import { AudioEngine } from './audio/engine.js';
 import type { SoundId } from './audio/sounds.js';
 import { drawAutomap } from './automap.js';
+import { Chainsword } from './chainsword.js';
 import { Gore } from './gore.js';
 import { Weapon } from './weapon.js';
 import { InputSampler } from './input.js';
@@ -245,13 +246,15 @@ function buildSprites(
  * A red glow on the screen edge a hit came from: ahead is the top, behind the bottom, left and
  * right the sides, and anything between leans that way. Each fades out by itself.
  */
-function showDamageFrom(from: { x: number; y: number }, p: PlayerState, layer: HTMLElement): void {
+function showDamageFrom(from: { x: number; y: number }, p: PlayerState, layer: HTMLElement, turnedAway = false): void {
   const rel = Math.atan2(from.y - p.y, from.x - p.x) - p.angle; // map angles grow to the left
   const x = 50 - 56 * Math.sin(rel);
   const y = 50 - 56 * Math.cos(rel);
   const hit = document.createElement('div');
   hit.className = 'hit';
-  hit.style.background = `radial-gradient(ellipse 55% 60% at ${x.toFixed(1)}% ${y.toFixed(1)}%, rgb(255 20 10 / 0.6), rgb(200 0 0 / 0.25) 45%, transparent 70%)`;
+  // Red for a hit taken; pale blue for one the chainsword's invulnerability turned away.
+  const [core, rim] = turnedAway ? ['rgb(150 210 255 / 0.55)', 'rgb(80 150 255 / 0.2)'] : ['rgb(255 20 10 / 0.6)', 'rgb(200 0 0 / 0.25)'];
+  hit.style.background = `radial-gradient(ellipse 55% 60% at ${x.toFixed(1)}% ${y.toFixed(1)}%, ${core}, ${rim} 45%, transparent 70%)`;
   hit.addEventListener('animationend', () => hit.remove());
   layer.append(hit);
 }
@@ -290,6 +293,7 @@ function main(): void {
   // The weapon's coils glow in the theme's light colour.
   const theme = THEME_COLORS[(map.meta.theme ?? 'base') as keyof typeof THEME_COLORS] ?? THEME_COLORS.base;
   const weapon = new Weapon(document.getElementById('gun') as HTMLCanvasElement, theme.techLight);
+  const chainsword = new Chainsword(document.getElementById('saw') as HTMLCanvasElement);
   // The ammo pips glow in the same colour as the gun's coils.
   document.documentElement.style.setProperty('--glow', `rgb(${theme.techLight.map((c) => Math.round(c * 255)).join(' ')})`);
   const world = createWorld(map);
@@ -406,10 +410,19 @@ function main(): void {
             if (e.type === 'hit') audio.play('hit', enemy, listener);
           }
         }
+        if (e.type === 'saw') {
+          // In step with the sim: up by the first hit, grinding through the invulnerability.
+          chainsword.attack(now, MELEE_TICKS * TICK_DT, MELEE_FIRST_HIT / MELEE_TICKS, MELEE_IFRAMES / MELEE_TICKS);
+          weapon.makeRoom(now, MELEE_TICKS * TICK_DT);
+          audio.play('saw');
+        }
         if (e.type === 'melee') {
-          weapon.melee();
-          audio.play('punch');
+          audio.play('sawHit', enemyAt(e.enemy), listener);
           joltUntil = now + JOLT_SECONDS;
+        }
+        if (e.type === 'shielded') {
+          audio.play('shielded');
+          if (e.from) showDamageFrom(e.from, state.player, damageLayer, true);
         }
         if (e.type === 'windup' || e.type === 'attack') {
           const enemy = enemyAt(e.enemy);
@@ -474,6 +487,7 @@ function main(): void {
     canvas.style.transform = now < joltUntil ? `translate(${(Math.random() - 0.5) * 10}px, ${(Math.random() - 0.5) * 8}px)` : '';
     renderer.render(view, now, [...buildSprites(world, state, prevEnemies, t, view, spawnAngles, throws, now), ...gore.sprites(goreWorld)]);
     weapon.update(now, dt, state.player.stepTick / STEP_TICKS, p.mag / MAG_SIZE);
+    chainsword.update(now);
 
     if (p.health !== shownHealth) {
       shownHealth = p.health;

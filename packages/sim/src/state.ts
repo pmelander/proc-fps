@@ -50,6 +50,8 @@ export interface PlayerState {
   mag: number;
   /** Ticks left of a reload in progress; 0 when not reloading. */
   reload: number;
+  /** Ticks into a chainsword attack (1 on its first tick); 0 when not attacking. */
+  melee: number;
   /** Ticks spent on a damaging floor since it last hurt. */
   hazardTicks: number;
 }
@@ -119,8 +121,11 @@ export type SimEvent =
   /** The player took damage; `from` is where it came from (none for a hazard floor). */
   | { type: 'hurt'; amount: number; from?: { x: number; y: number } }
   | { type: 'hit'; enemy: number }
-  /** An automatic melee strike landed. */
+  /** A chainsword attack started, and one of its grinding hits landed on an enemy. */
+  | { type: 'saw' }
   | { type: 'melee'; enemy: number }
+  /** The chainsword's invulnerability turned a hit away. */
+  | { type: 'shielded'; amount: number; from?: { x: number; y: number } }
   | { type: 'kill'; enemy: number }
   /** An enemy started its wind-up (the telegraph) or attacked. */
   | { type: 'windup'; enemy: number }
@@ -202,6 +207,7 @@ export function createSimState(world: World): SimState {
       fireCooldown: 0,
       mag: MAG_SIZE,
       reload: 0,
+      melee: 0,
       hazardTicks: 0,
     },
     doors: world.doors.map(() => 0),

@@ -10,6 +10,10 @@ import {
   MAG_SIZE,
   RELOAD_TICKS,
   MELEE_DAMAGE,
+  MELEE_FIRST_HIT,
+  MELEE_HITS,
+  MELEE_HIT_INTERVAL,
+  MELEE_TICKS,
   PELLETS,
   PLAYER_DAMAGE,
   PLAYER_MAX_HEALTH,
@@ -50,6 +54,8 @@ function sim(map: MapData) {
   return { world, state, step };
 }
 const events = (s: SimState, type: string) => s.events.filter((e) => e.type === type);
+/** Ticks after a swing starts during which the chainsword's invulnerability holds (see MELEE_IFRAMES). */
+const MELEE_IFRAMES_WINDOW = 28;
 
 describe('player weapon', () => {
   it('kills a brute outright with a close blast; at range only the central pellets connect', () => {
@@ -64,13 +70,63 @@ describe('player weapon', () => {
     expect(ENEMY_DEFS[EnemyType.Brute].hp - e.hp).toBeLessThan(PELLETS * PLAYER_DAMAGE);
   });
 
-  it('strikes an enemy right in front instead of shooting', () => {
+  it('swings the chainsword at an enemy right in front instead of shooting', () => {
     const { state, step } = sim(arena({ w: 6, h: 1, things: [[EnemyType.Grunt, 1, 0]] }));
     step({ fire: true });
-    expect(events(state, 'melee')).toEqual([{ type: 'melee', enemy: 0 }]);
+    expect(events(state, 'saw')).toEqual([{ type: 'saw' }]);
     expect(events(state, 'shot')).toEqual([]);
+    // The blade comes up, then its first grinding hit lands; a grunt does not survive the grind.
+    step({}, MELEE_FIRST_HIT);
+    expect(events(state, 'melee')).toEqual([{ type: 'melee', enemy: 0 }]);
+    expect(MELEE_DAMAGE * MELEE_HITS).toBeGreaterThan(ENEMY_DEFS[EnemyType.Grunt].hp);
+    step({}, MELEE_HIT_INTERVAL * MELEE_HITS);
     expect(state.enemies[0]!.mode).toBe('dead');
-    expect(MELEE_DAMAGE).toBeGreaterThan(ENEMY_DEFS[EnemyType.Grunt].hp);
+  });
+
+  it('grinds every enemy in the arc, several times, then recovers before anything else', () => {
+    const { state, step } = sim(arena({ w: 6, h: 3, py: 1, things: [[EnemyType.Brute, 1, 1], [EnemyType.Brute, 1, 2]] }));
+    const hits = new Map<number, number>();
+    let shots = 0;
+    for (let t = 0; t < MELEE_TICKS; t++) {
+      step({ fire: true });
+      for (const e of state.events) {
+        if (e.type === 'melee') hits.set(e.enemy, (hits.get(e.enemy) ?? 0) + 1);
+        if (e.type === 'shot') shots++;
+      }
+    }
+    // Both brutes (straight ahead, and ahead-left inside the 45° arc) take a hit on every grind
+    // until they fall; holding fire meanwhile shoots nothing.
+    const needed = Math.ceil(ENEMY_DEFS[EnemyType.Brute].hp / MELEE_DAMAGE);
+    expect([hits.get(0), hits.get(1)]).toEqual([needed, needed]);
+    expect(state.enemies.map((e) => e.mode)).toEqual(['dead', 'dead']);
+    expect(shots).toBe(0);
+    expect(state.player.melee).toBe(0);
+  });
+
+  it('swings on the melee input even with nothing in reach', () => {
+    const { state, step } = sim(arena({ w: 6, h: 1 }));
+    step({ melee: true });
+    expect(events(state, 'saw')).toEqual([{ type: 'saw' }]);
+    expect(state.player.melee).toBeGreaterThan(0);
+  });
+
+  it('turns hits away during the attack (invulnerability), not after it', () => {
+    const { state, step } = sim(arena({ w: 6, h: 1, things: [[EnemyType.Brute, 1, 0]] }));
+    // Face away (the grind would stun the brute out of its blow), wait for its wind-up, then
+    // swing: its blow lands while the chainsword runs.
+    step({ turn: Math.PI });
+    for (let t = 0; t < 300 && !events(state, 'windup').length; t++) step({});
+    step({ melee: true });
+    let shielded = 0;
+    let hurt = 0;
+    for (let t = 0; t < MELEE_IFRAMES_WINDOW; t++) {
+      step({});
+      shielded += events(state, 'shielded').length;
+      hurt += events(state, 'hurt').length;
+    }
+    expect(shielded).toBeGreaterThan(0);
+    expect(hurt).toBe(0);
+    expect(state.player.health).toBe(PLAYER_MAX_HEALTH);
   });
 
   it('misses when aiming away, and walls stop the shot', () => {
@@ -124,13 +180,13 @@ describe('player weapon', () => {
     expect([state.player.mag, state.player.reload]).toEqual([MAG_SIZE, 0]);
   });
 
-  it('still strikes in melee while reloading', () => {
+  it('still swings the chainsword while reloading', () => {
     const { state, step } = sim(arena({ w: 6, h: 1, things: [[EnemyType.Grunt, 1, 0]] }));
     state.player.mag = 1;
     step({ reload: true });
     expect(state.player.reload).toBeGreaterThan(0);
     step({ fire: true });
-    expect(events(state, 'melee')).toEqual([{ type: 'melee', enemy: 0 }]);
+    expect(events(state, 'saw')).toEqual([{ type: 'saw' }]);
   });
 
   it('wakes enemies with gunfire, but not through a closed door', () => {

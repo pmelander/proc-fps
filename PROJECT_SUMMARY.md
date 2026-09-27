@@ -85,13 +85,17 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 
 **Verified:**
 - The typecheck is clean.
-- 100 tests pass.
+- 103 tests pass.
 - 2000 seeds produce 0 validation failures (about 12 ms per map including validation).
 - The production build succeeds (about 45 kB JS).
 - Headless Chromium (SwiftShader) renders correctly.
 
 **Not yet verified:** real mouse and keyboard play. Pointer lock can't run headless.
 
+- The chainsword (after M12):
+  - Melee is a chainsword in the left hand, drawn only while it attacks. Firing with an enemy within `MELEE_REACH` (190: the cell ahead and both diagonals) and just over 45° of the aim swings it instead of shooting; right-click or V swings it anywhere (a new replayed `melee` input).
+  - An attack lasts `MELEE_TICKS` (48, 0.8 s): the blade comes up, then grinds `MELEE_HITS` (4) times, `MELEE_HIT_INTERVAL` (6) apart from tick `MELEE_FIRST_HIT` (8), each `MELEE_DAMAGE` (20) to everyone in the arc, and every hit makes them flinch, so a grind also stuns them out of their attacks. From the start through the grind (`MELEE_IFRAMES`, 30 ticks) nothing hurts the player: blows are turned away (`shielded` event, a clang and a pale blue glow from their direction). Nothing else fires until the attack ends; it needs no rounds and runs during a reload.
+  - The view model (`chainsword.ts`): an armoured red-and-gold housing and a toothed blade whose chain runs faster while grinding, swung up from below, shaken forward and lowered, while the scattergun steps aside. Sounds: a revving two-stroke, a biting grind per hit.
 - Tempo and damage direction (after M12):
   - A heavier, slower pace: player steps of 18 ticks (was 14). Enemies slowed with it (step timers about 25% longer, wind-ups about 15% longer, projectiles 20% slower, the hitscan wind-up floor 58), so the tuning rules still hold: enemies are slower than the player and a sidestep dodges any projectile.
   - Heavier mouse look: lower sensitivity (0.0019 rad/px) and a turn-rate cap in the input sampler (0.08 rad/tick turning, 0.05 looking). A faster flick is spread over the next ticks, not lost, so the aim lands where the mouse went; replays record the capped turn.
@@ -219,5 +223,4 @@ In the map format a door is a one-cell sector with its kind in `Sector.special` 
 Ideas noted during play-testing, not yet scheduled. Each line points at whatever already exists for it.
 
 - **Revisit procedural enemies.** Play-testing says the mutants need more variety, a more varied colour scheme, or both. Today (M11) each level breeds five silhouettes with seeded parts and hues kept away from the theme; more variety could mean more than one variant per role in a level, new body plans beyond the five silhouettes, wider palettes (two-tone, markings, saturation and value ranges), or per-room variants.
-- **Melee: a chainsword.** The automatic melee strike (M7: fire with an enemy within MELEE_REACH and 45° of the aim, 60 damage, works mid-reload) reads as missing in play. Make it a chainsword held in the left hand, drawn only while it attacks. A slower attack than today's MELEE_COOLDOWN, with invulnerability frames during the close attack so wading into a horde is a choice, not a death. Needs: sim (a longer melee timing, an i-frame window where `hurtPlayer` ignores damage, in replays like everything else), a view model beside the scattergun (weapon.ts), a chainsaw sound in the seeded set, and maybe knock-back or gore on the struck enemy.
 

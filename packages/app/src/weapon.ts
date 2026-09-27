@@ -5,7 +5,8 @@
  * Coils and an energy cell glow in the level theme's light colour; each shot flares them white-hot,
  * then a charge sweeps back up the coils through the cooldown. The energy cell on its side shows
  * the rounds left in the magazine; a reload dips the gun, tilts it and refills the cell. It kicks,
- * swings for melee strikes and bobs with the player's steps. Render-only: the sim never sees it.
+ * steps aside to the right while the chainsword (chainsword.ts) works, and bobs with the player's
+ * steps. Render-only: the sim never sees it.
  */
 const W = 160;
 const H = 110;
@@ -26,7 +27,9 @@ const TIP_H = 7;
 export class Weapon {
   private readonly ctx: CanvasRenderingContext2D;
   private kick = 0;
-  private swing = 0;
+  /** 0–1: how far the gun has moved aside for the chainsword. */
+  private aside = 0;
+  private asideUntil = -10;
   private shotAt = -10;
   private reloadAt = -10;
   private reloadSeconds = 1;
@@ -43,8 +46,9 @@ export class Weapon {
     this.shotAt = now;
   }
 
-  melee(): void {
-    this.swing = 1;
+  /** The chainsword attacks until `now + seconds`: the gun moves aside meanwhile. */
+  makeRoom(now: number, seconds: number): void {
+    this.asideUntil = now + seconds;
   }
 
   /** A reload lasting `seconds` starts now. */
@@ -59,7 +63,7 @@ export class Weapon {
    */
   update(now: number, dt: number, bob: number, mag = 1): void {
     this.kick *= Math.exp(-dt * 11);
-    this.swing *= Math.exp(-dt * 8);
+    this.aside += ((now < this.asideUntil ? 1 : 0) - this.aside) * Math.min(1, dt * 12);
     const since = now - this.shotAt;
     const flash = since < 0.06;
     // 0 just after a shot, 1 when fully charged; quantised so the canvas redraws only on change.
@@ -79,9 +83,9 @@ export class Weapon {
     const sway = Math.sin(bob * Math.PI);
     // The reload dips the gun down and rolls it inward, then brings it back up.
     const dip = reloading ? Math.sin(Math.PI * Math.min(1, r * 1.15)) : 0;
-    const x = -25 - this.swing * 18 + sway * 2 - dip * 6;
-    const y = this.kick * 14 + this.swing * 10 + sway * 3 + dip * 22;
-    this.canvas.style.transform = `translate(${x}%, ${y}%) rotate(${-this.kick * 5 - this.swing * 34 - dip * 16}deg)`;
+    const x = -25 + this.aside * 12 + sway * 2 - dip * 6;
+    const y = this.kick * 14 + this.aside * 18 + sway * 3 + dip * 22;
+    this.canvas.style.transform = `translate(${x}%, ${y}%) rotate(${-this.kick * 5 + this.aside * 8 - dip * 16}deg)`;
   }
 
   private draw(charge: number, heat: number, flash: boolean, pulse: number, cellFill: number): void {

@@ -11,8 +11,9 @@ export type SoundId =
   | 'door' | 'locked' | 'key' | 'health' | 'secret' | 'exit' | 'exitHum' | 'step'
   | 'windup' | 'windupMelee' | 'windupHitscan'
   | 'launch' | 'melee' | 'snipe'
-  | 'charge' | 'punch' | 'gib'
-  | 'reload' | 'reloaded';
+  | 'charge' | 'gib'
+  | 'reload' | 'reloaded'
+  | 'saw' | 'sawHit' | 'shielded';
 
 type Recipe = Voice[];
 
@@ -37,9 +38,21 @@ const RECIPES: Record<SoundId, Recipe> = {
     { wave: 'square', freq: 1300, freqEnd: 500, attack: 0, sustain: 0.01, release: 0.04, volume: 0.35, duty: 0.25 },
     { wave: 'noise', freq: 3000, freqEnd: 1200, attack: 0.05, sustain: 0.005, release: 0.04, volume: 0.3 },
   ],
-  punch: [
-    { wave: 'sine', freq: 140, freqEnd: 45, attack: 0, sustain: 0.02, release: 0.12, volume: 0.8 },
-    { wave: 'noise', freq: 900, freqEnd: 200, attack: 0, sustain: 0.01, release: 0.08, volume: 0.4 },
+  // The chainsword revving up and running: a putting two-stroke engine under a whining chain.
+  saw: [
+    { wave: 'saw', freq: 70, freqEnd: 120, attack: 0.02, sustain: 0.6, release: 0.18, volume: 0.35, vibrato: { depth: 0.35, rate: 34 }, lowpass: 1400 },
+    { wave: 'square', freq: 420, freqEnd: 780, attack: 0.08, sustain: 0.5, release: 0.15, volume: 0.1, duty: 0.2, vibrato: { depth: 0.06, rate: 50 } },
+    { wave: 'noise', freq: 1800, freqEnd: 900, attack: 0.05, sustain: 0.55, release: 0.15, volume: 0.18, lowpass: 2600 },
+  ],
+  // Teeth biting into flesh.
+  sawHit: [
+    { wave: 'noise', freq: 1200, freqEnd: 400, attack: 0, sustain: 0.05, release: 0.1, volume: 0.45, lowpass: 1800 },
+    { wave: 'saw', freq: 160, freqEnd: 90, attack: 0, sustain: 0.05, release: 0.08, volume: 0.3, vibrato: { depth: 0.2, rate: 60 } },
+  ],
+  // A blow turned away mid-attack: a ringing clang.
+  shielded: [
+    { wave: 'square', freq: 980, freqEnd: 900, attack: 0, sustain: 0.02, release: 0.25, volume: 0.25, duty: 0.3 },
+    { wave: 'triangle', freq: 1960, freqEnd: 1800, attack: 0, sustain: 0.01, release: 0.3, volume: 0.15 },
   ],
   gib: [
     { wave: 'noise', freq: 700, freqEnd: 120, attack: 0, sustain: 0.06, release: 0.4, volume: 0.5, lowpass: 1400 },

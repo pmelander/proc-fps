@@ -36,10 +36,21 @@ export const WEAPON_RANGE = 4096;
 export const PELLET_SPREAD: readonly (readonly [number, number])[] = [
   [0, 0], [-0.035, 0.012], [0.035, -0.012], [-0.07, 0], [0.07, 0.01], [-0.02, -0.03], [0.022, 0.03], [0, -0.018],
 ];
-export const MELEE_DAMAGE = 60;
-export const MELEE_COOLDOWN = 24;
-/** Melee reaches an enemy within this distance (map units) and 45° of the aim. */
-export const MELEE_REACH = 170;
+/**
+ * Melee: a chainsword in the left hand. An attack lasts MELEE_TICKS: the blade comes up, then
+ * grinds MELEE_HITS times, MELEE_HIT_INTERVAL apart from MELEE_FIRST_HIT, each hit MELEE_DAMAGE to
+ * every enemy within MELEE_REACH and 45° of the aim (each hit makes them flinch). Nothing can hurt
+ * the player from the start of an attack through the grind (MELEE_IFRAMES): wading into a horde
+ * is a choice. Slower than a shot, and it needs no rounds.
+ */
+export const MELEE_TICKS = 48;
+export const MELEE_FIRST_HIT = 8;
+export const MELEE_HIT_INTERVAL = 6;
+export const MELEE_HITS = 4;
+export const MELEE_DAMAGE = 20;
+export const MELEE_IFRAMES = 30;
+/** Melee reaches an enemy within this distance (map units) and 45° of the aim: the cell ahead and both diagonals ahead (181). */
+export const MELEE_REACH = 190;
 
 /** Max floor rise between adjacent cells the player can step up. Drops are unlimited. */
 export const MAX_STEP = 24;
