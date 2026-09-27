@@ -27,6 +27,7 @@ canvas[hidden] {
 }
 /* The weapon lowers while the automap is up, as in Doom; the HUD stays over the map. */
 #automap:not([hidden]) ~ #gun,
+#automap:not([hidden]) ~ #bolter,
 #automap:not([hidden]) ~ #saw {
   visibility: hidden !important;
 }
@@ -209,6 +210,25 @@ canvas[hidden] {
   border: 2px solid rgb(0 0 0 / 0.8);
   background: rgb(255 255 255 / 0.08);
 }
+#ammo .pips.thin {
+  gap: 2px;
+}
+#ammo .pips.thin .pip {
+  width: 3px;
+  border-width: 1px;
+}
+#ammo .slots {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 5px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgb(216 210 196 / 0.45);
+}
+#ammo .slots .on {
+  color: #f2b04a;
+}
 #ammo .pip.full {
   background: var(--glow, #33b3ff);
   box-shadow: 0 0 5px var(--glow, #33b3ff);
@@ -272,7 +292,8 @@ canvas[hidden] {
   color: #c8f0a0;
 }
 /* The shotgun view model (weapon.ts): pixel art, big and heavy. */
-#gun {
+#gun,
+#bolter {
   position: fixed;
   left: 50%;
   bottom: -2vh;

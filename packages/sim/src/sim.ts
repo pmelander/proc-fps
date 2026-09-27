@@ -129,7 +129,7 @@ export function stepSim(world: World, state: SimState, input: InputFrame): void 
     p.hazardTicks = 0;
   }
 
-  playerFire(world, state, q.fire, q.reload, q.melee);
+  playerFire(world, state, q.fire, q.reload, q.melee, q.weapon);
   stepEnemies(world, state);
   stepProjectiles(world, state);
 

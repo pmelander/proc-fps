@@ -19,10 +19,18 @@ export class InputSampler {
   private pendingLook = 0;
   private fire = false;
   private melee = false;
+  /** A weapon asked for since the last tick: a slot (1, 2, …), a step of the wheel, or Q for the last one. */
+  private wantSlot = -1;
+  private wantStep = 0;
+  private wantLast = false;
+  private lastWeapon = 0;
+  private heldWeapon = 0;
 
   constructor(private readonly element: HTMLElement) {
     addEventListener('keydown', (e) => {
       if (this.locked) this.keys.add(e.code);
+      if (this.locked && /^Digit[1-9]$/.test(e.code)) this.wantSlot = Number(e.code.slice(5)) - 1;
+      if (this.locked && e.code === 'KeyQ') this.wantLast = true;
       if (e.code === 'Tab' || e.code === 'F2' || e.code === 'F8') e.preventDefault();
     });
     addEventListener('keyup', (e) => this.keys.delete(e.code));
@@ -40,6 +48,9 @@ export class InputSampler {
       if (e.button === 0) this.fire = false;
       if (e.button === 2) this.melee = false;
     });
+    addEventListener('wheel', (e) => {
+      if (this.locked && e.deltaY !== 0) this.wantStep += e.deltaY > 0 ? 1 : -1;
+    });
     // The right button swings the chainsword: no context menu while playing.
     addEventListener('contextmenu', (e) => {
       if (this.locked) e.preventDefault();
@@ -50,10 +61,21 @@ export class InputSampler {
     return document.pointerLockElement === this.element;
   }
 
-  /** Consumes accumulated mouse motion; call once per sim tick. */
-  sample(): InputFrame {
+  /**
+   * Consumes accumulated mouse motion and weapon requests; call once per sim tick. `weapon` is the
+   * gun in hand and `weapons` how many there are: a request resolves to a weapon index here, so the
+   * recorded input (and the replay) holds the choice itself.
+   */
+  sample(weapon = 0, weapons = 1): InputFrame {
+    if (weapon !== this.heldWeapon) {
+      this.lastWeapon = this.heldWeapon;
+      this.heldWeapon = weapon;
+    }
     if (!this.locked) {
       this.pendingTurn = this.pendingLook = 0;
+      this.wantSlot = -1;
+      this.wantStep = 0;
+      this.wantLast = false;
       return { ...EMPTY_INPUT };
     }
     const k = (code: string) => (this.keys.has(code) ? 1 : 0);
@@ -67,7 +89,14 @@ export class InputSampler {
       use: this.keys.has('KeyE') || this.keys.has('Space'),
       reload: this.keys.has('KeyR'),
       melee: this.melee || this.keys.has('KeyV'),
+      weapon: this.wantSlot >= 0 && this.wantSlot < weapons ? this.wantSlot
+        : this.wantStep !== 0 ? (((weapon + this.wantStep) % weapons) + weapons) % weapons
+        : this.wantLast ? this.lastWeapon
+        : -1,
     };
+    this.wantSlot = -1;
+    this.wantStep = 0;
+    this.wantLast = false;
     this.pendingTurn += -this.mouseDX * MOUSE_SENSITIVITY + (k('ArrowLeft') - k('ArrowRight')) * KEY_TURN;
     this.pendingLook += -this.mouseDY * MOUSE_SENSITIVITY;
     frame.turn = Math.max(-MAX_TURN, Math.min(MAX_TURN, this.pendingTurn));

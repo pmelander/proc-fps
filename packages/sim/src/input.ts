@@ -18,6 +18,8 @@ export interface InputFrame {
   reload: boolean;
   /** Swing the chainsword (it also swings by itself when firing at an enemy in reach). */
   melee: boolean;
+  /** Switch to this weapon (see WEAPONS); -1 keeps the current one. */
+  weapon: number;
 }
 
 export const EMPTY_INPUT: Readonly<InputFrame> = Object.freeze({
@@ -30,6 +32,7 @@ export const EMPTY_INPUT: Readonly<InputFrame> = Object.freeze({
   use: false,
   reload: false,
   melee: false,
+  weapon: -1,
 });
 
 /** Angles are quantized so replays are compact and independent of mouse float noise. */
@@ -49,5 +52,6 @@ export function quantizeInput(i: InputFrame): InputFrame {
     // Replays recorded before magazines have no reload input.
     reload: i.reload ?? false,
     melee: i.melee ?? false,
+    weapon: i.weapon ?? -1,
   };
 }

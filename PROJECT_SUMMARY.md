@@ -85,13 +85,18 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 
 **Verified:**
 - The typecheck is clean.
-- 108 tests pass.
+- 113 tests pass.
 - 2000 seeds produce 0 validation failures (about 12 ms per map including validation).
 - The production build succeeds (about 45 kB JS).
 - Headless Chromium (SwiftShader) renders correctly.
 
 **Not yet verified:** real mouse and keyboard play. Pointer lock can't run headless.
 
+- More weapons (M15):
+  - Guns are data (`core/src/weapons.ts`, `WEAPONS`): cooldown, magazine, reload, damage, pellets and spread, and an optional burst. The scattergun as before; the heavy bolter fires every 9 ticks (6.7 a second), one bolt walking a small fixed pattern (`BOLT_SPREAD`, so replays hold), 14 damage, and each bolt bursts where it lands for 8 more to every enemy within 56 units of its body (a `blast` event). Its drum holds 30 and reloads in 2 s. Ammo stays infinite.
+  - Switching: 1 and 2, the mouse wheel, or Q for the last gun; the request resolves to a weapon index before it is recorded (a new `weapon` input), so replays hold. A switch takes `WEAPON_SWITCH_TICKS` (24): the old gun lowers, the new one rises, nothing fires meanwhile, a reload in progress is dropped, the new gun's cooldown starts clear, and each gun keeps its own magazine (`PlayerState.mags`). The chainsword works with either.
+  - The bolter view model (`bolter.ts`): a boxy gunmetal body with red and brass trim, a brass-banded drum on top, twin barrels firing in turn with a flash at that muzzle, and a glowing strip down its side that drains with the drum. Bolts leave a bright tracer and burst in a fireball with sparks and chips; sounds for the bolt, the burst and the switch.
+  - The ammo panel names the ammunition (scatter cell, bolt drum), shows a pip per round (thin ticks for the 30-round drum) and the weapon slots with the one in hand lit.
 - Rendering performance (M14):
   - The biggest cost was the palette post pass: it matched 64 colours per pixel at full screen resolution times the device pixel ratio. Its dither is per scene pixel, so quantizing at the scene's 240 rows gives the same image: the canvas now holds exactly the low-res scene and CSS scales it up pixelated (`image-rendering: pixelated`), about 20× less fill at 1080p and 80× on a high-DPI screen.
   - Portal culling (`visibility.ts`, `PortalGraph`): from the camera's sector the view floods through two-sided lines, each narrowing the horizontal angle window, with sectors within 24 units of the camera rooted too (standing on a portal mid-step). Heights and door states are ignored, so it is conservative. On generated levels it keeps about 7% of sectors and 7–10% of triangles, in 7–16 µs a frame. The visible sectors' index ranges are merged where contiguous and drawn in one call (`DrawCall.ranges`). A test casts rays across the field of view from random poses in generated levels: every sector a ray passes through must be kept.
@@ -208,7 +213,7 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 - **M12 — level types and verticality:** ✅ complete (generator v0.15.0). Compound, ascent and descent levels paced through a run; 3–5 storeys; one-way drops kept only where they cannot strand the player; atriums; validation over (cell, keys held) states.
 - **M13 — play-test polish II:** ✅ complete (generator v0.16.0). An 8-shot magazine with reload, the ammo panel and a top-centre health bar; a heavier, slower tempo; damage direction glows; the left-hand chainsword with invulnerability frames; much more gore (pools, wall and screen splatter); two enemy variants per role with leg types and glowing markings; a heavier shot with tracers and impact debris; the raised-lift clipping fix.
 - **M14 — rendering performance:** ✅ complete. The palette post pass now runs at the scene's low resolution (the canvas holds 240 rows and CSS scales it up pixelated; same image, a twentieth of the fill at 1080p), portal culling draws only the sectors the camera can see (about 7% of a level's sectors), visible ranges draw in one call, sprite quads reuse one buffer, and F3 shows a perf overlay (F4 toggles culling).
-- **M15 — more weapons:** planned. A second gun type (a heavy bolter or a plasma weapon) with its own feel, ammo display and view model, and weapon switching.
+- **M15 — more weapons:** ✅ complete. The heavy bolter (fast, accurate, explosive bolts) beside the scattergun, weapon switching (1/2, wheel, Q), per-weapon magazines, its own view model, sounds, tracers and bursts, and a per-weapon ammo panel with weapon slots.
 - **M16 — enemy behaviour:** planned. Enemies that ride lifts and follow the player between storeys, snipers placed on catwalks and ledges, flanking.
 - **M17 — run structure:** planned. A title screen, a run summary, score and kills tracked across a run, difficulty options.
 - **M11 — procedural enemies:** ✅ complete. Every generated level breeds its own mutants: seeded stat variants per role (core `enemyDefsFor`) and seeded body plans and skins that stand out from the theme (render `enemyLooks`). The exit gets a glowing pad, a light beacon and a hum.

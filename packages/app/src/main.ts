@@ -1,4 +1,4 @@
-import { CELL_SIZE, DoorKind, EnemyType, PELLETS, PELLET_SPREAD, WEAPON_RANGE, dcos, defOf, dsin, MAG_SIZE, MELEE_FIRST_HIT, MELEE_IFRAMES, MELEE_TICKS, RELOAD_TICKS, HEADING_DX, HEADING_DY, PLAYER_EYE_HEIGHT, STEP_TICKS, TICK_DT, isEnemyThing, type MapData } from '@proc-fps/core';
+import { CELL_SIZE, DoorKind, EnemyType, PELLETS, PELLET_SPREAD, WEAPONS, WEAPON_RANGE, WEAPON_SWITCH_TICKS, WeaponId, dcos, defOf, dsin, MAG_SIZE, MELEE_FIRST_HIT, MELEE_IFRAMES, MELEE_TICKS, RELOAD_TICKS, HEADING_DX, HEADING_DY, PLAYER_EYE_HEIGHT, STEP_TICKS, TICK_DT, isEnemyThing, type MapData } from '@proc-fps/core';
 import { GENERATOR_VERSION, generate, isLevelType, validateGenerated, type LevelType } from '@proc-fps/gen';
 import { BASELINE_LOOKS, HIDDEN_OFFSET, LevelRenderer, SpriteShape, THEME_COLORS, WebGL2Backend, enemyLooks, spriteRow, spriteTile, type Sprite } from '@proc-fps/render';
 import {
@@ -31,6 +31,7 @@ import { Chainsword } from './chainsword.js';
 import { Gore } from './gore.js';
 import { ScreenBlood } from './screenblood.js';
 import { Weapon } from './weapon.js';
+import { Bolter } from './bolter.js';
 import { InputSampler } from './input.js';
 import { KEY_COLORS, KEY_NAMES } from './keys.js';
 
@@ -252,6 +253,25 @@ function buildSprites(
 }
 
 /**
+ * A bolt's tracer, render-only: a bright streak from the muzzle along the bolt (the sim's walk of
+ * the aim; it bursts where it lands, which the sim reports as a `blast` event).
+ */
+function boltTracer(world: World, state: SimState, gore: Gore): void {
+  const p = state.player;
+  const gun = WEAPONS[WeaponId.Bolter]!;
+  const [yaw, pitch] = gun.spread[(p.shots - 1 + gun.spread.length) % gun.spread.length]!;
+  const cp = dcos(p.pitch + pitch);
+  const dx = cp * dcos(p.angle + yaw);
+  const dy = cp * dsin(p.angle + yaw);
+  const dz = dsin(p.pitch + pitch);
+  const oz = p.z + PLAYER_EYE_HEIGHT - 6;
+  const wall = castRay(world, state, p.x, p.y, oz, dx, dy, dz, WEAPON_RANGE);
+  const start = 40;
+  const speed = 3200;
+  if (wall > start) gore.tracer(p.x + dx * start, p.y + dy * start, oz + dz * start, dx * speed, dy * speed, dz * speed, (wall - start) / speed, 5);
+}
+
+/**
  * The shot's debris, render-only: a tracer spark along each pellet (the sim's fixed spread), and
  * where one strikes a wall or floor a burst of sparks and chips. Pellets that hit an enemy make
  * blood instead (the hit events), so they get no impact here.
@@ -320,6 +340,12 @@ function main(): void {
   const ammo = document.getElementById('ammo') as HTMLDivElement;
   const ammoPips = ammo.querySelector('.pips') as HTMLDivElement;
   const ammoCount = ammo.querySelector('.count b') as HTMLElement;
+  const ammoSize = ammo.querySelector('.count .size') as HTMLElement;
+  const ammoType = ammo.querySelector('.type .name') as HTMLElement;
+  const ammoSlots = ammo.querySelector('.slots') as HTMLDivElement;
+  /** When the last weapon switch started (seconds), for the lower-and-raise animation. */
+  let switchAt = -10;
+  let switchFrom = 0;
   let shownAmmo = '';
   const gore = new Gore();
   const screenBlood = new ScreenBlood(document.getElementById('bloodscreen') as HTMLCanvasElement);
@@ -342,6 +368,7 @@ function main(): void {
   // The weapon's coils glow in the theme's light colour.
   const theme = THEME_COLORS[(map.meta.theme ?? 'base') as keyof typeof THEME_COLORS] ?? THEME_COLORS.base;
   const weapon = new Weapon(document.getElementById('gun') as HTMLCanvasElement, theme.techLight);
+  const bolter = new Bolter(document.getElementById('bolter') as HTMLCanvasElement, theme.techLight);
   const chainsword = new Chainsword(document.getElementById('saw') as HTMLCanvasElement);
   // The ammo pips glow in the same colour as the gun's coils.
   document.documentElement.style.setProperty('--glow', `rgb(${theme.techLight.map((c) => Math.round(c * 255)).join(' ')})`);
@@ -438,7 +465,7 @@ function main(): void {
     while (acc >= TICK_DT) {
       prev = clonePlayer(state.player);
       prevEnemies = state.enemies.map((e) => ({ ...e }));
-      const f = input.sample();
+      const f = input.sample(state.player.weapon, WEAPONS.length);
       if (AUTOFIRE) f.fire = true;
       recorder.record(f);
       const wasStepping = state.player.stepTick;
@@ -485,6 +512,7 @@ function main(): void {
           // In step with the sim: up by the first hit, grinding through the invulnerability.
           chainsword.attack(now, MELEE_TICKS * TICK_DT, MELEE_FIRST_HIT / MELEE_TICKS, MELEE_IFRAMES / MELEE_TICKS);
           weapon.makeRoom(now, MELEE_TICKS * TICK_DT);
+          bolter.makeRoom(now, MELEE_TICKS * TICK_DT);
           audio.play('saw');
         }
         if (e.type === 'melee') {
@@ -514,7 +542,13 @@ function main(): void {
         if (e.type === 'locked') [notice, noticeUntil] = [`Needs the ${KEY_NAMES[e.key]} key`, now + NOTICE_SECONDS];
         if (e.type === 'secret') [notice, noticeUntil] = ['You found a secret!', now + NOTICE_SECONDS];
         if (e.type === 'health') [notice, noticeUntil] = [`+${e.amount} health`, now + NOTICE_SECONDS];
-        if (e.type === 'shot') {
+        if (e.type === 'shot' && e.weapon === WeaponId.Bolter) {
+          // A bolt: a sharp crack from alternating barrels, a lighter jolt, a tracer to its burst.
+          audio.play('bolt', undefined, undefined, 0.95 + Math.random() * 0.1);
+          bolter.fire(now, state.player.shots % 2);
+          renderer.flash = Math.max(renderer.flash, 0.55);
+          boltTracer(world, state, gore);
+        } else if (e.type === 'shot') {
           // Heavy, and never quite the same twice: a little lower or higher each time.
           audio.play('shot', undefined, undefined, 0.92 + Math.random() * 0.1);
           shatter(world, state, gore);
@@ -524,7 +558,21 @@ function main(): void {
           // The coils recharge between shots; the last shot's reload has its own sound.
           if (state.player.reload === 0) window.setTimeout(() => audio.play('charge'), 90);
         }
-        if (e.type === 'reload') weapon.reload(now, RELOAD_TICKS * TICK_DT);
+        if (e.type === 'blast') {
+          // A bolt bursting: a flash of fire, sparks and chips, and a thump from where it hit.
+          gore.blast(e.x, e.y, e.z);
+          audio.play('boltBlast', e, listener, 0.9 + Math.random() * 0.2);
+        }
+        if (e.type === 'switch') {
+          switchAt = now;
+          switchFrom = e.weapon === WeaponId.Bolter ? WeaponId.Scattergun : WeaponId.Bolter;
+          audio.play('switch');
+        }
+        if (e.type === 'reload') {
+          const seconds = WEAPONS[state.player.weapon]!.reloadTicks * TICK_DT;
+          if (state.player.weapon === WeaponId.Bolter) bolter.reload(now, seconds);
+          else weapon.reload(now, seconds);
+        }
         if (e.type === 'hurt') {
           if (e.from) showDamageFrom(e.from, state.player, damageLayer);
           hurtUntil = now + FLASH_SECONDS * 2;
@@ -578,7 +626,16 @@ function main(): void {
         `sectors ${s.sectors}/${s.totalSectors}  triangles ${s.triangles}/${s.totalTriangles}  ranges ${s.ranges}  sprites ${s.sprites}\n` +
         `canvas ${canvas.width}×${canvas.height}  culling ${renderer.culling ? 'on' : 'off'} (F4)`;
     }
-    weapon.update(now, dt, state.player.stepTick / STEP_TICKS, p.mag / MAG_SIZE);
+    // A switch lowers the old gun for its first half and raises the new one for its second.
+    const sw = (now - switchAt) / (WEAPON_SWITCH_TICKS * TICK_DT);
+    const lowerOf = (id: number) =>
+      sw < 0 || sw >= 1 ? (id === p.weapon ? 0 : 1)
+      : id === switchFrom && id !== p.weapon ? (sw < 0.5 ? sw * 2 : 1)
+      : id === p.weapon ? (sw < 0.5 ? 1 : 1 - (sw - 0.5) * 2)
+      : 1;
+    const bobbing = state.player.stepTick / STEP_TICKS;
+    weapon.update(now, dt, bobbing, p.mags[WeaponId.Scattergun]! / MAG_SIZE, lowerOf(WeaponId.Scattergun));
+    bolter.update(now, dt, bobbing, p.mags[WeaponId.Bolter]! / WEAPONS[WeaponId.Bolter]!.magSize, lowerOf(WeaponId.Bolter));
     chainsword.update(now);
     screenBlood.update(dt);
 
@@ -590,16 +647,24 @@ function main(): void {
       healthBar.classList.toggle('mid', f <= 0.5 && f > 0.25);
       healthBar.classList.toggle('low', f <= 0.25);
     }
-    // Ammo: a pip per round, or the reload's progress while the cell refills.
-    const reloadDone = p.reload > 0 ? Math.round((1 - p.reload / RELOAD_TICKS) * 20) * 5 : -1;
-    const ammoKey = `${p.mag}|${reloadDone}`;
+    // Ammo: the gun in hand, a pip per round (a thin tick each for a big drum), or the reload's
+    // progress while it refills; the weapon slots above, the one in hand lit.
+    const gun = WEAPONS[p.weapon]!;
+    const mag = p.mags[p.weapon]!;
+    const reloadDone = p.reload > 0 ? Math.round((1 - p.reload / gun.reloadTicks) * 20) * 5 : -1;
+    const ammoKey = `${p.weapon}|${mag}|${reloadDone}`;
     if (ammoKey !== shownAmmo) {
       shownAmmo = ammoKey;
+      const thin = gun.magSize > 12;
+      ammoPips.classList.toggle('thin', thin);
       ammoPips.innerHTML = reloadDone >= 0
         ? `<div class="reloading" style="--p: ${reloadDone}%">RELOADING</div>`
-        : Array.from({ length: MAG_SIZE }, (_, i) => `<div class="pip${i < p.mag ? ' full' : ''}"></div>`).join('');
-      ammoCount.textContent = String(p.mag);
-      ammo.classList.toggle('empty', p.mag === 0);
+        : Array.from({ length: gun.magSize }, (_, i) => `<div class="pip${i < mag ? ' full' : ''}"></div>`).join('');
+      ammoCount.textContent = String(mag);
+      ammoSize.textContent = String(gun.magSize);
+      ammoType.textContent = gun.ammo;
+      ammoSlots.innerHTML = WEAPONS.map((w, i) => `<span class="${i === p.weapon ? 'on' : ''}">${i + 1} ${w.name}</span>`).join('');
+      ammo.classList.toggle('empty', mag === 0);
     }
     hurtFlash.hidden = now >= hurtUntil;
     const ending = state.dead ? 'dead' : state.won ? 'won' : '';

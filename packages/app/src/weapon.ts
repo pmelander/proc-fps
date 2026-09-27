@@ -59,9 +59,10 @@ export class Weapon {
 
   /**
    * Per frame: `bob` is the step's progress (0–1, 0 when standing); `mag` the magazine's fill
-   * (rounds left / size).
+   * (rounds left / size); `lower` how far it has dropped out of view for a weapon switch (0 up … 1 gone).
    */
-  update(now: number, dt: number, bob: number, mag = 1): void {
+  update(now: number, dt: number, bob: number, mag = 1, lower = 0): void {
+    this.canvas.style.visibility = lower >= 0.999 ? 'hidden' : 'visible';
     this.kick *= Math.exp(-dt * 11);
     this.aside += ((now < this.asideUntil ? 1 : 0) - this.aside) * Math.min(1, dt * 12);
     const since = now - this.shotAt;
@@ -84,7 +85,7 @@ export class Weapon {
     // The reload dips the gun down and rolls it inward, then brings it back up.
     const dip = reloading ? Math.sin(Math.PI * Math.min(1, r * 1.15)) : 0;
     const x = -25 + this.aside * 12 + sway * 2 - dip * 6;
-    const y = this.kick * 14 + this.aside * 18 + sway * 3 + dip * 22;
+    const y = this.kick * 14 + this.aside * 18 + sway * 3 + dip * 22 + lower * 90;
     this.canvas.style.transform = `translate(${x}%, ${y}%) rotate(${-this.kick * 5 + this.aside * 8 - dip * 16}deg)`;
   }
 

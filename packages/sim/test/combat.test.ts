@@ -9,6 +9,9 @@ import {
   HEALTH_PICKUP,
   MAG_SIZE,
   RELOAD_TICKS,
+  WEAPONS,
+  WEAPON_SWITCH_TICKS,
+  WeaponId,
   MELEE_DAMAGE,
   MELEE_FIRST_HIT,
   MELEE_HITS,
@@ -157,7 +160,7 @@ describe('player weapon', () => {
     expect(shots.slice(0, MAG_SIZE + 1).map((t) => t - shots[0]!)).toEqual([...Array.from({ length: MAG_SIZE }, (_, i) => i * FIRE_COOLDOWN), (MAG_SIZE - 1) * FIRE_COOLDOWN + RELOAD_TICKS]);
     expect(reloadAt).toBe(shots[MAG_SIZE - 1]);
     expect(reloadedAt - reloadAt).toBe(RELOAD_TICKS);
-    expect(state.player.mag).toBe(MAG_SIZE - (shots.length - MAG_SIZE));
+    expect(state.player.mags[0]).toBe(MAG_SIZE - (shots.length - MAG_SIZE));
   });
 
   it('reloads early with R, and never with a full cell', () => {
@@ -166,7 +169,7 @@ describe('player weapon', () => {
     step({ reload: true });
     expect(events(state, 'reload')).toEqual([]);
     step({ fire: true });
-    expect(state.player.mag).toBe(MAG_SIZE - 1);
+    expect(state.player.mags[0]).toBe(MAG_SIZE - 1);
     step({ reload: true });
     expect(events(state, 'reload')).toHaveLength(1);
     // No shots through the reload, then a full cell.
@@ -177,12 +180,12 @@ describe('player weapon', () => {
     }
     expect(shot).toBe(false);
     step({}, 2);
-    expect([state.player.mag, state.player.reload]).toEqual([MAG_SIZE, 0]);
+    expect([state.player.mags[0], state.player.reload]).toEqual([MAG_SIZE, 0]);
   });
 
   it('still swings the chainsword while reloading', () => {
     const { state, step } = sim(arena({ w: 6, h: 1, things: [[EnemyType.Grunt, 1, 0]] }));
-    state.player.mag = 1;
+    state.player.mags[0] = 1;
     step({ reload: true });
     expect(state.player.reload).toBeGreaterThan(0);
     step({ fire: true });
@@ -251,6 +254,74 @@ describe('enemies', () => {
     step({ move: 1 }, STEP_TICKS * 2 + DOOR_OPEN_TICKS + 4); // …so walk up and open it
     step({}, 120);
     expect(state.enemies[0]!.mode).not.toBe('idle');
+  });
+});
+
+describe('weapons', () => {
+  const bolter = WEAPONS[WeaponId.Bolter]!;
+
+  it('switches guns in WEAPON_SWITCH_TICKS, firing nothing meanwhile, and each keeps its magazine', () => {
+    const { state, step } = sim(arena({ w: 8, h: 3, py: 1 }));
+    step({ turn: -Math.PI / 2 }); // face the wall
+    step({ fire: true });
+    expect(state.player.mags).toEqual([MAG_SIZE - 1, bolter.magSize]);
+    step({ weapon: WeaponId.Bolter });
+    expect(events(state, 'switch')).toEqual([{ type: 'switch', weapon: WeaponId.Bolter }]);
+    let shots = 0;
+    for (let t = 0; t < WEAPON_SWITCH_TICKS - 1; t++) {
+      step({ fire: true });
+      shots += events(state, 'shot').length;
+    }
+    expect(shots).toBe(0);
+    step({ fire: true }, 2);
+    expect(state.player.weapon).toBe(WeaponId.Bolter);
+    expect(state.player.mags).toEqual([MAG_SIZE - 1, bolter.magSize - 1]);
+  });
+
+  it('fires the bolter at its own rate, and drops a reload in progress on a switch', () => {
+    const { state, step } = sim(arena({ w: 8, h: 3, py: 1 }));
+    step({ turn: -Math.PI / 2 });
+    step({ weapon: WeaponId.Bolter }, WEAPON_SWITCH_TICKS + 1);
+    const at: number[] = [];
+    for (let t = 0; t < bolter.cooldown * 5; t++) {
+      step({ fire: true });
+      if (events(state, 'shot').length) at.push(state.tick);
+    }
+    expect(at.slice(1).map((t, i) => t - at[i]!)).toEqual([bolter.cooldown, bolter.cooldown, bolter.cooldown, bolter.cooldown]);
+    step({ reload: true }, 2);
+    expect(state.player.reload).toBeGreaterThan(0);
+    step({ weapon: WeaponId.Scattergun });
+    expect(state.player.reload).toBe(0);
+  });
+
+  it('bursts bolts where they hit, catching enemies packed beside the target', () => {
+    // Three grunts abreast two cells ahead; a bolt at the middle one hurts its neighbours too.
+    const { state, step } = sim(arena({ w: 8, h: 3, py: 1, things: [[EnemyType.Grunt, 3, 0], [EnemyType.Grunt, 3, 1], [EnemyType.Grunt, 3, 2]] }));
+    step({ weapon: WeaponId.Bolter }, WEAPON_SWITCH_TICKS + 1);
+    const hp = state.enemies.map((e) => e.hp);
+    step({ fire: true });
+    expect(events(state, 'blast')).toHaveLength(1);
+    const lost = state.enemies.map((e, i) => hp[i]! - e.hp);
+    expect(lost[1]).toBe(bolter.damage + bolter.splashDamage);
+    // The neighbours stand a cell away (128): outside the splash, unlike a packed horde.
+    expect(bolter.splashRadius + 20).toBeLessThan(128);
+  });
+
+  it('hurts an enemy beside the burst without a direct hit', () => {
+    // A bolt into the floor just in front of a grunt (it passes under its body) still catches it.
+    const { state, step } = sim(arena({ w: 4, h: 1, things: [[EnemyType.Grunt, 3, 0]] }));
+    step({ weapon: WeaponId.Bolter }, WEAPON_SWITCH_TICKS + 1);
+    const hp = state.enemies[0]!.hp;
+    step({ fire: true, look: -0.185 }); // the floor about 40 units short of the grunt
+    expect(events(state, 'blast')).toHaveLength(1);
+    expect(state.enemies[0]!.hp).toBeLessThan(hp);
+  });
+
+  it('keeps the scattergun burst-free', () => {
+    const { state, step } = sim(arena({ w: 8, h: 3, py: 1 }));
+    step({ fire: true });
+    expect(events(state, 'blast')).toEqual([]);
+    expect(events(state, 'shot')).toEqual([{ type: 'shot', weapon: WeaponId.Scattergun }]);
   });
 });
 

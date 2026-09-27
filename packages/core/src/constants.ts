@@ -18,9 +18,9 @@ export const LIFT_SPEED = 3;
 export const HAZARD_DAMAGE = 5;
 export const HAZARD_TICKS = 30;
 /**
- * Player weapon: a shotgun. PELLETS hitscan pellets in a fixed spread around the view direction
- * (fixed, so replays hold), PLAYER_DAMAGE each: devastating up close, a pump between shots.
- * With an enemy right in front, firing is an automatic melee strike instead.
+ * The scattergun (see weapons.ts for every gun): PELLETS hitscan pellets in a fixed spread around
+ * the view direction (fixed, so replays hold), PLAYER_DAMAGE each: devastating up close. With an
+ * enemy right in front, firing swings the chainsword instead.
  */
 export const FIRE_COOLDOWN = 36;
 /**

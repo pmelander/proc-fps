@@ -16,12 +16,14 @@
     <div id="prompt" hidden></div>
     <div id="crosshair"></div>
     <canvas id="gun"></canvas>
+    <canvas id="bolter"></canvas>
     <canvas id="saw"></canvas>
     <div id="healthbar"><div class="fill"></div><span class="value">100</span></div>
     <div id="ammo">
-      <div class="type"><span class="cell"></span>Scatter cell</div>
+      <div class="slots"></div>
+      <div class="type"><span class="cell"></span><span class="name">Scatter cell</span></div>
       <div class="pips"></div>
-      <div class="count"><b>8</b> / 8 <span class="reserve">∞</span></div>
+      <div class="count"><b>8</b> / <span class="size">8</span> <span class="reserve">∞</span></div>
     </div>
     <div id="keys"></div>
     <canvas id="bloodscreen"></canvas>
@@ -35,6 +37,7 @@
       <p>Click or hold the mouse button to shoot where you aim. Sidestep what enemies throw.</p>
       <p>Ammo is infinite, but a cell holds 8 shots: it reloads itself when empty, or press R.</p>
       <p>Up close, firing swings the chainsword instead (or right-click / V): nothing can hurt you while it grinds.</p>
+      <p>1 and 2 (or the mouse wheel, or Q for the last one) switch between the scattergun and the heavy bolter.</p>
       <p>Doors open when you walk into them. Key doors open with E or Space once you have the key.</p>
       <p>Each level of a run is harder. Hold Tab for the map, F2 starts a new run, F3 shows performance, F8 saves a replay. M music, N sound.</p>
       <p><a href="./browse.html">Seed browser</a></p>

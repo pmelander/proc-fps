@@ -1,4 +1,4 @@
-import { DEG_TO_RAD, MAG_SIZE, PLAYER_MAX_HEALTH, defOf, variantOf, ThingType, isEnemyThing, type EnemyType, type Heading } from '@proc-fps/core';
+import { DEG_TO_RAD, PLAYER_MAX_HEALTH, WEAPONS, defOf, variantOf, ThingType, isEnemyThing, type EnemyType, type Heading } from '@proc-fps/core';
 import type { World } from './world.js';
 
 /** No buffered step. */
@@ -46,9 +46,15 @@ export interface PlayerState {
   health: number;
   /** Ticks until the weapon can fire again. */
   fireCooldown: number;
-  /** Shots left in the weapon's cell (MAG_SIZE when full). */
-  mag: number;
-  /** Ticks left of a reload in progress; 0 when not reloading. */
+  /** The gun in hand (index into WEAPONS). */
+  weapon: number;
+  /** Rounds left in each gun's magazine (by weapon index). */
+  mags: number[];
+  /** Ticks left of a weapon switch; 0 when the gun is up. */
+  switching: number;
+  /** Shots fired: walks single-pellet guns through their spread pattern. */
+  shots: number;
+  /** Ticks left of a reload in progress (of the gun in hand); 0 when not reloading. */
   reload: number;
   /** Ticks into a chainsword attack (1 on its first tick); 0 when not attacking. */
   melee: number;
@@ -116,7 +122,11 @@ export type SimEvent =
   | { type: 'key'; key: number }
   | { type: 'health'; amount: number }
   | { type: 'secret'; secret: number }
-  | { type: 'shot' }
+  | { type: 'shot'; weapon: number }
+  /** The player switched to this gun. */
+  | { type: 'switch'; weapon: number }
+  /** A bolt burst at this point (map units; z is height). */
+  | { type: 'blast'; x: number; y: number; z: number }
   /** A reload started (the cell ran dry, or R), and finished. */
   | { type: 'reload' }
   | { type: 'reloaded' }
@@ -207,7 +217,10 @@ export function createSimState(world: World): SimState {
       pitch: 0,
       health: PLAYER_MAX_HEALTH,
       fireCooldown: 0,
-      mag: MAG_SIZE,
+      weapon: 0,
+      mags: WEAPONS.map((w) => w.magSize),
+      switching: 0,
+      shots: 0,
       reload: 0,
       melee: 0,
       hazardTicks: 0,
@@ -231,7 +244,7 @@ export function doorOffset(world: World, state: SimState, door: number): number 
 }
 
 export function clonePlayer(p: PlayerState): PlayerState {
-  return { ...p };
+  return { ...p, mags: [...p.mags] };
 }
 
 /** Exact-state fingerprint for replay regression tests. */

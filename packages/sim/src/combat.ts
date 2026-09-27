@@ -1,7 +1,7 @@
 import {
   defOf,
-  FIRE_COOLDOWN,
-  MAG_SIZE,
+  WEAPONS,
+  WEAPON_SWITCH_TICKS,
   MELEE_DAMAGE,
   MELEE_FIRST_HIT,
   MELEE_HITS,
@@ -9,13 +9,9 @@ import {
   MELEE_IFRAMES,
   MELEE_TICKS,
   MELEE_REACH,
-  PELLETS,
-  PELLET_SPREAD,
-  PLAYER_DAMAGE,
   PLAYER_EYE_HEIGHT,
   PLAYER_HEIGHT,
   PLAYER_RADIUS,
-  RELOAD_TICKS,
   WEAPON_RANGE,
   dcos,
   dsin,
@@ -49,24 +45,34 @@ export function hurtPlayer(state: SimState, amount: number, from?: { x: number; 
 }
 
 /**
- * The player's weapons. With an enemy right in front (within MELEE_REACH and 45° of the aim),
- * firing swings the chainsword instead (so does `melee`, anywhere): see MELEE_TICKS. Otherwise the
- * shotgun fires PELLETS pellets in a fixed spread, each hitting the nearest enemy before any wall.
- * Each shot spends one of the cell's MAG_SIZE rounds; the last starts a RELOAD_TICKS reload (so
- * does `reload`, early), and nothing fires until it ends. The chainsword needs no rounds.
+ * The player's weapons (see WEAPONS). With an enemy right in front (within MELEE_REACH and 45° of
+ * the aim), firing swings the chainsword instead (so does `melee`, anywhere): see MELEE_TICKS.
+ * Otherwise the gun in hand fires its pellets, each hitting the nearest enemy before any wall, and
+ * a bolt bursts where it hits. Each shot spends one round of that gun's magazine; the last starts
+ * its reload (so does `reload`, early), and nothing fires until it ends. `select` switches guns
+ * (WEAPON_SWITCH_TICKS, dropping a reload in progress). The chainsword needs no rounds.
  */
-export function playerFire(world: World, state: SimState, trigger: boolean, reload = false, melee = false): void {
+export function playerFire(world: World, state: SimState, trigger: boolean, reload = false, melee = false, select = -1): void {
   const p = state.player;
   if (p.fireCooldown > 0) p.fireCooldown--;
   if (p.reload > 0 && --p.reload === 0) {
-    p.mag = MAG_SIZE;
+    p.mags[p.weapon] = WEAPONS[p.weapon]!.magSize;
     state.events.push({ type: 'reloaded' });
   }
   const startReload = () => {
-    p.reload = RELOAD_TICKS;
+    p.reload = WEAPONS[p.weapon]!.reloadTicks;
     state.events.push({ type: 'reload' });
   };
-  if (reload && p.reload === 0 && p.mag < MAG_SIZE) startReload();
+  if (p.switching > 0 && --p.switching === 0 && p.mags[p.weapon] === 0) startReload();
+  if (select >= 0 && select < WEAPONS.length && select !== p.weapon && p.melee === 0) {
+    p.weapon = select;
+    p.switching = WEAPON_SWITCH_TICKS;
+    p.reload = 0;
+    p.fireCooldown = 0; // the new gun is ready once it is up
+    state.events.push({ type: 'switch', weapon: select });
+  }
+  const gun = WEAPONS[p.weapon]!;
+  if (reload && p.reload === 0 && p.switching === 0 && p.mags[p.weapon]! < gun.magSize) startReload();
 
   // Everyone alive within the chainsword's reach and arc.
   const fx = dcos(p.angle);
@@ -95,35 +101,57 @@ export function playerFire(world: World, state: SimState, trigger: boolean, relo
     if (++p.melee > MELEE_TICKS) p.melee = 0;
     return;
   }
-  if (!trigger || p.fireCooldown > 0) return;
+  if (!trigger || p.fireCooldown > 0 || p.switching > 0) return;
 
-  // A shot needs a loaded cell.
+  // A shot needs a loaded magazine.
   if (p.reload > 0) return;
-  p.fireCooldown = FIRE_COOLDOWN;
-  state.events.push({ type: 'shot' });
-  if (--p.mag === 0) startReload();
+  p.fireCooldown = gun.cooldown;
+  state.events.push({ type: 'shot', weapon: p.weapon });
+  p.mags[p.weapon]!--;
+  if (p.mags[p.weapon] === 0) startReload();
   makeNoise(world, state);
   const ox = p.x;
   const oy = p.y;
   const oz = p.z + PLAYER_EYE_HEIGHT;
   const hits = new Map<number, number>();
-  for (const [yaw, pitch] of PELLET_SPREAD.slice(0, PELLETS)) {
+  const add = (i: number, amount: number) => hits.set(i, (hits.get(i) ?? 0) + amount);
+  const pellets = gun.pellets === 1 ? [gun.spread[p.shots % gun.spread.length]!] : gun.spread.slice(0, gun.pellets);
+  p.shots++;
+  for (const [yaw, pitch] of pellets) {
     const cp = dcos(p.pitch + pitch);
     const dx = cp * dcos(p.angle + yaw);
     const dy = cp * dsin(p.angle + yaw);
     const dz = dsin(p.pitch + pitch);
-    const target = pelletTarget(world, state, ox, oy, oz, dx, dy, dz);
-    if (target >= 0) hits.set(target, (hits.get(target) ?? 0) + PLAYER_DAMAGE);
+    const { target, t } = pelletTarget(world, state, ox, oy, oz, dx, dy, dz);
+    if (target >= 0) add(target, gun.damage);
+    if (gun.splashRadius > 0 && t < WEAPON_RANGE) {
+      // The bolt bursts where it hit: everyone within the splash radius (of their body) is caught.
+      const bx = ox + dx * t;
+      const by = oy + dy * t;
+      const bz = oz + dz * t;
+      state.events.push({ type: 'blast', x: bx, y: by, z: bz });
+      state.enemies.forEach((e, i) => {
+        if (e.mode === 'dead') return;
+        const def = defOf(world.enemyDefs, e);
+        const ex = e.x - bx;
+        const ey = e.y - by;
+        const reach = gun.splashRadius + def.radius;
+        if (ex * ex + ey * ey <= reach * reach && bz >= e.z - gun.splashRadius && bz <= e.z + def.height + gun.splashRadius) add(i, gun.splashDamage);
+      });
+    }
   }
   damage(world, state, hits);
 }
 
-/** The enemy a ray hits before any wall, or -1. Rays test each enemy's upright cylinder (side only). */
-function pelletTarget(world: World, state: SimState, ox: number, oy: number, oz: number, dx: number, dy: number, dz: number): number {
+/**
+ * The enemy a ray hits before any wall (-1 if none), and how far along the ray it (or the wall)
+ * is. Rays test each enemy's upright cylinder (side only).
+ */
+function pelletTarget(world: World, state: SimState, ox: number, oy: number, oz: number, dx: number, dy: number, dz: number): { target: number; t: number } {
   let nearest = castRay(world, state, ox, oy, oz, dx, dy, dz, WEAPON_RANGE);
   let target = -1;
   const a = dx * dx + dy * dy;
-  if (a <= 1e-9) return -1;
+  if (a <= 1e-9) return { target: -1, t: nearest };
   state.enemies.forEach((e, i) => {
     if (e.mode === 'dead') return;
     const def = defOf(world.enemyDefs, e);
@@ -141,7 +169,7 @@ function pelletTarget(world: World, state: SimState, ox: number, oy: number, oz:
     nearest = t;
     target = i;
   });
-  return target;
+  return { target, t: nearest };
 }
 
 /** Applies a shot's (or strike's) damage per enemy: one hit event each, kills, flinches, wake-ups. */

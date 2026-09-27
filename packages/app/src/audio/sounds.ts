@@ -13,7 +13,8 @@ export type SoundId =
   | 'launch' | 'melee' | 'snipe'
   | 'charge' | 'gib'
   | 'reload' | 'reloaded'
-  | 'saw' | 'sawHit' | 'shielded';
+  | 'saw' | 'sawHit' | 'shielded'
+  | 'bolt' | 'boltBlast' | 'switch';
 
 type Recipe = Voice[];
 
@@ -39,6 +40,22 @@ const RECIPES: Record<SoundId, Recipe> = {
   reloaded: [
     { wave: 'square', freq: 1300, freqEnd: 500, attack: 0, sustain: 0.01, release: 0.04, volume: 0.35, duty: 0.25 },
     { wave: 'noise', freq: 3000, freqEnd: 1200, attack: 0.05, sustain: 0.005, release: 0.04, volume: 0.3 },
+  ],
+  // A heavy bolter round: a sharp crack and a short, punchy thump (it fires fast).
+  bolt: [
+    { wave: 'noise', freq: 3600, freqEnd: 900, attack: 0, sustain: 0.01, release: 0.05, volume: 0.6 },
+    { wave: 'square', freq: 420, freqEnd: 90, attack: 0, sustain: 0.01, release: 0.07, volume: 0.3, duty: 0.3 },
+    { wave: 'sine', freq: 90, freqEnd: 35, attack: 0, sustain: 0.03, release: 0.14, volume: 0.8 },
+  ],
+  // A bolt bursting where it hit.
+  boltBlast: [
+    { wave: 'noise', freq: 1400, freqEnd: 150, attack: 0, sustain: 0.03, release: 0.22, volume: 0.6, lowpass: 2200 },
+    { wave: 'sine', freq: 70, freqEnd: 30, attack: 0, sustain: 0.04, release: 0.2, volume: 0.55 },
+  ],
+  // Swapping guns: a heavy mechanical clunk and a latch.
+  switch: [
+    { wave: 'noise', freq: 600, freqEnd: 200, attack: 0, sustain: 0.03, release: 0.08, volume: 0.4, lowpass: 1200 },
+    { wave: 'square', freq: 180, freqEnd: 120, attack: 0.12, sustain: 0.02, release: 0.05, volume: 0.25, duty: 0.4 },
   ],
   // The chainsword revving up and running: a putting two-stroke engine under a whining chain.
   saw: [
