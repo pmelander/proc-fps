@@ -29,5 +29,5 @@ export const BaseTex = {
 } as const;
 
 /** Visual themes: each picks the colours of the baked texture set (render/src/themes.ts). */
-export const THEME_NAMES = ['base', 'tech', 'hell', 'crypt'] as const;
+export const THEME_NAMES = ['base', 'tech', 'hell', 'crypt', 'flooded'] as const;
 export type ThemeName = (typeof THEME_NAMES)[number];

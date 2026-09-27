@@ -85,7 +85,7 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 
 **Verified:**
 - The typecheck is clean.
-- 173 tests pass.
+- 175 tests pass.
 - 2000 seeds produce 0 validation failures (about 12 ms per map including validation).
 - The production build succeeds (about 45 kB JS).
 - Headless Chromium (SwiftShader) renders correctly.
@@ -93,6 +93,7 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 **Not yet verified:** real mouse and keyboard play. Pointer lock can't run headless.
 
 - The game is called **Null Sector** (chosen over Hellseed, Gridfall, Cursed Protocol and others; not yet checked against existing games or trademarks). The name shows on the title logo and the page titles; the repository, the `@proc-fps/*` packages and the browser-storage keys (`proc-fps.run`, `.best`, `.difficulty`, so saved runs carry over) keep the working name.
+- The flooded theme (M28): a fifth theme (`THEME_NAMES`, one level in five): wet teal-grey stone, rusted metal, sodium-yellow lamps, red warning paint (its palette follows, M23; so does the UI, whose rust turns red there), and water, the slime texture flowing in murky teal. Water is a new sector special (`SPECIAL_WATER`, bit 5, additive: older maps are unchanged): harmless, but every step into or out of it takes `WATER_STEP_SCALE` (1.6×) as long, for the player (`playerStepTicks`) and for enemies (a charger's rush too; `stepTicksBetween`). A flooded level's pits (plain and hazard alike) hold water instead of slime or lava, 40% of its corridors run wet between dry ends, and its room floors never use the flowing texture, so water always means water. Wading splashes instead of footsteps; the automap stipples water blue, and the seed browser shows it.
 - The railgun (M27, `WEAPONS[WeaponId.Railgun]`, slot 3): one slug at the aim every 54 ticks, 70 damage to every enemy it passes on its way to the first wall (`pierce`: `pierceTargets` in combat.ts, damage of kind `pierce`, which a warden's shield does not stop), four slugs to a magazine and a 2.5 s reload. Its job: a corridor of enemies at once, and wardens head on. View model (`railgun.ts`): two long rails over a breech block, coil rings in the theme's light that go dark on a shot and brighten as it recharges, a light per slug; a thick white-hot beam to the wall (`gore.beam` with a size), sparks where it strikes, a thunderclap, a hard kick and a rising whine when it is ready again. Perks and overcharge apply as to the other guns. The HUD's slot list uses short names (`WeaponDef.short`), and the switch animation now remembers the gun actually lowered (it assumed two guns).
 - Run upgrades (M26), `core/src/perks.ts`:
   - Ten perks (`PERKS`), each stacking up to its `max`: Ablative plating (start each level with 25 more armour, ×4), Thick hide (20 more health, at most and at the start, ×3), Deep pockets (a grenade more to carry and to start with, ×2), Quick hands (reloads a quarter faster, ×2), Drum magazines (half as many rounds again, ×1), Heavy slugs (guns 15% harder, ×3), Bloodlust (every chainsword hit heals 2, ×2), Overclock (berserk and overcharge half as long again, ×2), Scavenger (health packs half as much again, ×2), Undying (once a level a killing blow leaves you at 25, ×1).
@@ -288,7 +289,7 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 - **M24 — more enemy roles:** ✅ complete (generator v0.21.0). The charger (rushes down a straight lane), the bloater (bursts beside the player, or when killed, taking others with it) and the warden (a front shield, lowered only to fire).
 - **M26 — run upgrades:** ✅ complete. After each cleared level of a run, pick one of three perks to keep for the rest of it (ten perks, stacking up to their limits); the sim applies them and replays record them.
 - **M27 — a third weapon:** ✅ complete. The railgun (slot 3): slow, heavy slugs that go through every enemy in a line to the wall and ignore warden shields.
-- **M28 — a new level theme:** planned. Flooded or ice, with its own palette, textures and hazards.
+- **M28 — a new level theme:** ✅ complete (generator v0.24.0). Flooded: sewers of wet teal-grey stone under sodium lamps, where pits hold water and corridors run wet, and wading slows everyone.
 - **M29 — traps and hazards:** planned. Crushers, collapsing floors or turrets, placed by the generator and telegraphed.
 - **M25 — pickups:** ✅ complete (generator v0.22.0). Armour that soaks half of every hurt, berserk (a savage, healing chainsword) and overcharge (harder, faster guns).
 

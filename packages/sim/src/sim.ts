@@ -17,7 +17,7 @@ import { quantizeInput, type InputFrame } from './input.js';
 import { callLift, floorNow, liftAtCell, liftMoving, stepLifts } from './lifts.js';
 import { stepPlayer, type MoveGate } from './player.js';
 import { DOOR_OPEN_TICKS, type SimState } from './state.js';
-import { doorAtCell, pickupCell, type World } from './world.js';
+import { doorAtCell, pickupCell, playerStepTicks, type World } from './world.js';
 
 /** Advances the simulation by exactly one fixed tick. Mutates `state`. */
 export function stepSim(world: World, state: SimState, input: InputFrame): void {
@@ -160,7 +160,7 @@ export function stepSim(world: World, state: SimState, input: InputFrame): void 
   stepProjectiles(world, state);
   stepGrenades(world, state);
 
-  const arrived = p.stepTick === 0 || p.stepTick >= STEP_TICKS;
+  const arrived = p.stepTick === 0 || p.stepTick >= playerStepTicks(world, p);
   if (!state.dead && world.exit && arrived && p.cx === world.exit[0] && p.cy === world.exit[1]) {
     state.won = true;
     state.events.push({ type: 'exit' });

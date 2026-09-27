@@ -14,6 +14,9 @@ import {
   droppedKey,
   isEnemyThing,
   isLift,
+  isWater,
+  STEP_TICKS,
+  WATER_STEP_SCALE,
   keyOfThing,
   secretCount,
   WEAPONS,
@@ -93,6 +96,18 @@ export interface World {
   readonly perks: readonly PerkId[];
   readonly mods: Mods;
 }
+
+/** Whether a cell is water (its sector is). */
+export const waterAt = (world: World, cx: number, cy: number): boolean => {
+  const s = world.map.sectors[world.grid.sectorAt(cx, cy)];
+  return s !== undefined && isWater(s);
+};
+/** Ticks for a step between two cells: slower when either is water. */
+export const stepTicksBetween = (world: World, base: number, fx: number, fy: number, tx: number, ty: number): number =>
+  waterAt(world, fx, fy) || waterAt(world, tx, ty) ? Math.round(base * WATER_STEP_SCALE) : base;
+/** The player's current step's length (STEP_TICKS, longer through water). */
+export const playerStepTicks = (world: World, p: { fromCx: number; fromCy: number; cx: number; cy: number }): number =>
+  stepTicksBetween(world, STEP_TICKS, p.fromCx, p.fromCy, p.cx, p.cy);
 
 /** A gun's magazine and reload time, with the run's perks. */
 export const magSizeOf = (world: World, weapon: number): number => Math.max(1, Math.round(WEAPONS[weapon]!.magSize * world.mods.magScale));

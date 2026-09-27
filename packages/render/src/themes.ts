@@ -39,6 +39,13 @@ export const THEME_COLORS: Record<ThemeName, Theme> = {
     techLight: [0.55, 1.0, 0.45], floor: [0.28, 0.3, 0.22], ceiling: [0.2, 0.22, 0.18], hazard: [0.75, 0.7, 0.3],
     slime: [0.3, 0.5, 0.1], doorPlate: [0.28, 0.27, 0.22], doorTrim: [0.42, 0.44, 0.34],
   },
+  // Flooded: sewers and cisterns. Wet teal-grey stone, rusted metal, sodium-yellow lamps, red
+  // warning paint, and murky water (the slime texture, flowing) in the pits and corridors.
+  flooded: {
+    stone: [0.27, 0.36, 0.35], mortar: [0.05, 0.08, 0.08], metal: [0.4, 0.3, 0.24], techBase: [0.15, 0.14, 0.1],
+    techLight: [1.0, 0.82, 0.3], floor: [0.22, 0.27, 0.26], ceiling: [0.15, 0.19, 0.19], hazard: [0.85, 0.2, 0.12],
+    slime: [0.16, 0.46, 0.5], doorPlate: [0.3, 0.26, 0.22], doorTrim: [0.5, 0.36, 0.24],
+  },
 };
 
 /** Uniforms for the atlas bake: the theme's colours with a little seeded variation, plus the seed. */

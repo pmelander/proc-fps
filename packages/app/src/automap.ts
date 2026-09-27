@@ -1,4 +1,4 @@
-import { DoorKind, doorKindOf, isDamaging, isLift, secretOf, type MapData } from '@proc-fps/core';
+import { DoorKind, doorKindOf, isDamaging, isLift, isWater, secretOf, type MapData } from '@proc-fps/core';
 import { quantize } from '@proc-fps/render';
 import { pickupCell, type SimState, type World } from '@proc-fps/sim';
 
@@ -21,6 +21,8 @@ const FLOOR_LOW = [34, 44, 56] as const;
 const FLOOR_HIGH = [104, 124, 146] as const;
 const FLOOR_SHADES = 4;
 const HAZARD = rgba(96, 196, 44);
+/** Water: drawn like a hazard (a stippled fill), in blue. */
+const WATER = rgba(48, 110, 190);
 const LIFT = rgba(48, 196, 216);
 const CATWALK = rgba(150, 162, 178);
 const DOOR = rgba(206, 210, 218);
@@ -123,6 +125,7 @@ export function drawAutomap(canvas: HTMLCanvasElement, map: MapData, view: Autom
     else if (isLift(sec)) [k, c] = [Kind.Lift, LIFT];
     else if (sec.slab) [k, c] = [Kind.Catwalk, CATWALK];
     else if (isDamaging(sec)) [k, c] = [Kind.Hazard, HAZARD];
+    else if (isWater(sec)) [k, c] = [Kind.Hazard, WATER];
     kind[i] = k;
     color[i] = c;
     height[i] = top;

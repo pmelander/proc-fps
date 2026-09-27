@@ -1,7 +1,7 @@
-import { HEADING_HYSTERESIS, STEP_TICKS, clamp, wrapAngle, type Heading } from '@proc-fps/core';
+import { HEADING_HYSTERESIS, clamp, wrapAngle, type Heading } from '@proc-fps/core';
 import type { InputFrame } from './input.js';
 import { NO_QUEUE, headingFromAngle, type PlayerState } from './state.js';
-import type { World } from './world.js';
+import { playerStepTicks, type World } from './world.js';
 
 const MAX_PITCH = 1.3;
 const GRAVITY = 0.34; // units/tick², Doom's 1/tic² rescaled to 60 Hz
@@ -47,7 +47,7 @@ export function stepPlayer(world: World, p: PlayerState, input: InputFrame, gate
   const intent = resolveIntent(p.heading, m, s, p.lastAxis);
   if (p.stepTick > 0 && (movePressed || strafePressed) && intent !== NO_QUEUE) p.queued = intent;
 
-  if (p.stepTick >= STEP_TICKS) p.stepTick = 0; // arrived last tick
+  if (p.stepTick >= playerStepTicks(world, p)) p.stepTick = 0; // arrived last tick (water slows a step)
   if (p.stepTick > 0) p.stepTick++;
   else if (p.onGround) {
     // A fresh press beats a step still waiting on a door.
@@ -99,7 +99,7 @@ function updatePose(world: World, p: PlayerState, gate: MoveGate): void {
     if (p.onGround && gate.isLift(p.cx, p.cy)) p.z = toFloor; // riding: stay on the platform
     fall(p, toFloor);
   } else {
-    const t = p.stepTick / STEP_TICKS;
+    const t = p.stepTick / playerStepTicks(world, p);
     const e = smoothstep(t);
     const [fx, fy] = g.center(p.fromCx, p.fromCy);
     const fromFloor = gate.floorAt(p.fromCx, p.fromCy, p.fromLevel);

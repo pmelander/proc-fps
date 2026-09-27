@@ -68,5 +68,7 @@ export const TICK_DT = 1 / TICK_RATE;
  */
 export const CELL_SIZE = 128;
 export const STEP_TICKS = 18;
+/** Steps into or out of water (SPECIAL_WATER) take this much longer, for everyone. */
+export const WATER_STEP_SCALE = 1.6;
 /** Extra yaw beyond 45° before the movement heading switches cardinal (radians, ≈ 8°). */
 export const HEADING_HYSTERESIS = 0.14;

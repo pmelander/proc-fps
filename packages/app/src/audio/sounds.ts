@@ -21,7 +21,7 @@ export type SoundId =
   | 'menuMove' | 'menuChoose' | 'menuBack' | 'tally' | 'tallyDone'
   | 'chargeRoar' | 'chargeRush' | 'crash' | 'fuse' | 'shieldBlock'
   | 'armorPickup' | 'berserk' | 'overcharge' | 'powerDown'
-  | 'rail' | 'railReady';
+  | 'rail' | 'railReady' | 'wade';
 
 type Recipe = Voice[];
 
@@ -62,6 +62,11 @@ const RECIPES: Record<SoundId, Recipe> = {
     { wave: 'noise', freq: 1000, freqEnd: 80, attack: 0, sustain: 0.04, release: 0.35, volume: 0.7, lowpass: 1800 },
     { wave: 'saw', freq: 55, freqEnd: 25, attack: 0, sustain: 0.04, release: 0.25, volume: 0.4, lowpass: 300 },
     { wave: 'sine', freq: 60, freqEnd: 22, attack: 0, sustain: 0.05, release: 0.35, volume: 0.7 },
+  ],
+  // Wading: a slosh.
+  wade: [
+    { wave: 'noise', freq: 900, freqEnd: 300, attack: 0.02, sustain: 0.08, release: 0.2, volume: 0.35, lowpass: 1400 },
+    { wave: 'sine', freq: 180, freqEnd: 90, attack: 0.01, sustain: 0.05, release: 0.12, volume: 0.25 },
   ],
   // The railgun: a searing crack over a deep thunderclap, and a rising whine as it recharges.
   rail: [

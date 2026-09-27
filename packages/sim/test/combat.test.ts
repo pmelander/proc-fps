@@ -982,3 +982,52 @@ describe('railgun', () => {
     expect(shots).toBe(1);
   });
 });
+
+describe('water', async () => {
+  const { SPECIAL_WATER, WATER_STEP_SCALE } = await import('@proc-fps/core');
+  /** A row of cells, water from x = 2 on. */
+  const wetRow = (things: [number, number, number][] = []) => {
+    const plan = new CellPlan();
+    const dry = plan.spec({ floor: 0, ceil: 192, light: 200 });
+    const wet = plan.spec({ floor: 0, ceil: 192, light: 200, special: SPECIAL_WATER });
+    for (let x = 0; x < 8; x++) plan.set(x, 0, x >= 2 ? wet : dry);
+    const b = new MapBuilder();
+    emitCellPlan(b, plan, C);
+    b.thing(ThingType.PlayerStart, 0.5 * C, 0.5 * C, 0);
+    for (const [type, x, y] of things) b.thing(type, (x + 0.5) * C, (y + 0.5) * C, 180);
+    return b.build({ name: 'wet' });
+  };
+
+  it('slows the player\'s steps into and through it', () => {
+    const s = sim(wetRow());
+    /** Ticks one step takes: a single press, then waiting until the player stands still. */
+    const oneStep = () => {
+      s.step({ move: 1 });
+      let t = 1;
+      while (s.state.player.stepTick !== 0 && t < 200) {
+        s.step({});
+        t++;
+      }
+      return t;
+    };
+    const dry = oneStep();
+    const wet = oneStep();
+    expect(s.state.player.cx).toBe(2);
+    expect(wet).toBeGreaterThan(dry * (WATER_STEP_SCALE - 0.1));
+  });
+
+  it('slows enemies wading through it too', () => {
+    const s = sim(wetRow([[EnemyType.Grunt, 6, 0]]));
+    const grunt = s.state.enemies[0]!;
+    grunt.mode = 'chase';
+    grunt.cooldown = 10_000;
+    let steps = 0;
+    for (let t = 0; t < 200; t++) {
+      s.step({});
+      if (grunt.stepTick === 1) steps++;
+    }
+    const dryPace = Math.ceil(200 / (ENEMY_DEFS[EnemyType.Grunt].stepTicks + 1));
+    expect(steps).toBeLessThan(dryPace);
+    expect(steps).toBeGreaterThan(0);
+  });
+});

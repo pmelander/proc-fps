@@ -18,6 +18,8 @@ import {
   pickupCell,
   stepSim,
   magSizeOf,
+  playerStepTicks,
+  waterAt,
   reloadTicksOf,
   type EnemyState,
   type PlayerState,
@@ -68,8 +70,8 @@ const BOB_HEIGHT = 2.5;
 const HEADING_LETTERS = ['E', 'N', 'W', 'S'] as const;
 
 /** Render-only head bob from step progress. */
-function bob(p: PlayerState): number {
-  return p.stepTick === 0 ? 0 : Math.sin((Math.PI * p.stepTick) / STEP_TICKS) * BOB_HEIGHT;
+function bob(p: PlayerState, ticks = STEP_TICKS): number {
+  return p.stepTick === 0 ? 0 : Math.sin((Math.PI * Math.min(p.stepTick, ticks)) / ticks) * BOB_HEIGHT;
 }
 
 /**
@@ -733,7 +735,11 @@ async function main(): Promise<void> {
         audio.play('exitHum', exitAt, listener);
       }
       const enemyAt = (i: number) => state.enemies[i]!;
-      if (state.player.stepTick === 1 && wasStepping !== 1) audio.play('step');
+      // Footsteps; wading through water splashes instead.
+      if (state.player.stepTick === 1 && wasStepping !== 1) {
+        const wading = waterAt(world, state.player.cx, state.player.cy) || waterAt(world, state.player.fromCx, state.player.fromCy);
+        audio.play(wading ? 'wade' : 'step', undefined, undefined, 0.9 + Math.random() * 0.2);
+      }
       for (const e of state.events) {
         const sound = SOUND_OF[e.type];
         if (sound) audio.play(sound);
@@ -962,7 +968,7 @@ async function main(): Promise<void> {
     const view = {
       x: lerp(prev.x, p.x, t),
       y: lerp(prev.y, p.y, t),
-      eyeZ: (options.bob ? lerp(prev.z + bob(prev), p.z + bob(p), t) : lerp(prev.z, p.z, t)) + PLAYER_EYE_HEIGHT,
+      eyeZ: (options.bob ? lerp(prev.z + bob(prev, playerStepTicks(world, prev)), p.z + bob(p, playerStepTicks(world, p)), t) : lerp(prev.z, p.z, t)) + PLAYER_EYE_HEIGHT,
       yaw: lerpAngle(prev.angle, p.angle, t),
       pitch: lerp(prev.pitch, p.pitch, t),
     };
@@ -1001,7 +1007,7 @@ async function main(): Promise<void> {
       : id === switchFrom && id !== p.weapon ? (sw < 0.5 ? sw * 2 : 1)
       : id === p.weapon ? (sw < 0.5 ? 1 : 1 - (sw - 0.5) * 2)
       : 1;
-    const bobbing = state.player.stepTick / STEP_TICKS;
+    const bobbing = state.player.stepTick / playerStepTicks(world, state.player);
     weapon.update(now, dt, bobbing, p.mags[WeaponId.Scattergun]! / MAG_SIZE, lowerOf(WeaponId.Scattergun));
     bolter.update(now, dt, bobbing, p.mags[WeaponId.Bolter]! / magSizeOf(world, WeaponId.Bolter), lowerOf(WeaponId.Bolter));
     const railCooldown = p.weapon === WeaponId.Railgun ? p.fireCooldown / Math.max(1, WEAPONS[WeaponId.Railgun]!.cooldown) : 0;

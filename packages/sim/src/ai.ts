@@ -5,7 +5,7 @@ import { bossAttack, isBoss, nextPattern, patternCooldown, patternWindup, update
 import { clearLine } from './raycast.js';
 import { fireHoming, fireLob } from './shots.js';
 import { DOOR_OPEN_TICKS, type EnemyState, type SimState } from './state.js';
-import { doorAtCell, type World } from './world.js';
+import { doorAtCell, stepTicksBetween, type World } from './world.js';
 
 /** Enemy eye and projectile launch height, as a fraction of its height. */
 const EYE = 0.75;
@@ -35,7 +35,7 @@ export function stepEnemies(world: World, state: SimState): void {
     if (e.mode === 'dead') return;
     const def = defOf(world.enemyDefs, e);
     if (e.cooldown > 0) e.cooldown--;
-    if (e.stepTick > 0 && ++e.stepTick > stepTicksOf(e, def)) e.stepTick = 0;
+    if (e.stepTick > 0 && ++e.stepTick > stepTicksOf(world, e, def)) e.stepTick = 0;
     updatePose(world, state, e, def);
     if (def.shield && e.mode !== 'idle') turnShield(state, e);
     const boss = isBoss(e.type);
@@ -236,7 +236,7 @@ function updatePose(world: World, state: SimState, e: EnemyState, def: EnemyDef)
     [e.x, e.y, e.z] = [tx, ty, toZ];
     return;
   }
-  const t = e.stepTick / stepTicksOf(e, def);
+  const t = e.stepTick / stepTicksOf(world, e, def);
   const [fx, fy] = g.center(e.fromCx, e.fromCy);
   const fz = floorNow(world, state, e.fromCx, e.fromCy, e.fromLevel);
   e.x = fx + (tx - fx) * t;
@@ -373,8 +373,9 @@ function adjacent(e: EnemyState, x: number, y: number): boolean {
   return Math.abs(e.cx - x) + Math.abs(e.cy - y) === 1;
 }
 
-/** A charger rushes far faster than it walks. */
-const stepTicksOf = (e: EnemyState, def: EnemyDef) => (e.mode === 'charge' ? CHARGE_STEP_TICKS : def.stepTicks);
+/** A charger rushes far faster than it walks; water slows everyone. */
+const stepTicksOf = (world: World, e: EnemyState, def: EnemyDef) =>
+  stepTicksBetween(world, e.mode === 'charge' ? CHARGE_STEP_TICKS : def.stepTicks, e.fromCx, e.fromCy, e.cx, e.cy);
 
 /** A warden's shield turns towards the player, at most SHIELD_TURN a tick. */
 function turnShield(state: SimState, e: EnemyState): void {

@@ -12,6 +12,8 @@ import {
   Rng,
   SPECIAL_LIFT,
   SPECIAL_SECRET_AREA,
+  SPECIAL_DAMAGE,
+  SPECIAL_WATER,
   THEME_NAMES,
   ThingType,
   emitCellPlan,
@@ -30,7 +32,10 @@ import { ATRIUM_LIFT, atriumDesign, designRoom, plainDesign, type RoomDesign } f
  * Bump on ANY change that alters output for an existing seed.
  * seed + GENERATOR_VERSION must always reproduce the same map.
  */
-export const GENERATOR_VERSION = '0.23.0';
+/** In a flooded level, the chance a corridor runs with water. */
+const FLOODED_CORRIDOR_CHANCE = 0.4;
+
+export const GENERATOR_VERSION = '0.24.0';
 
 /** Layout attempts per mission, and missions tried, before giving up on a seed. */
 const LAYOUT_TRIES = 8;
@@ -153,6 +158,11 @@ function emit(seed: string, mission: Mission, layout: Layout, rng: Rng, level: n
   const C = CELL_SIZE;
   const deco = rng.fork('deco');
   const theme = rng.fork('theme');
+  // The theme picks the texture set's colours; its own stream, so it never shifts other choices. A
+  // flooded level also floods: its pits hold water (slowing, harmless) and some corridors run wet.
+  const style = rng.fork('style').pick(THEME_NAMES);
+  const flooded = style === 'flooded';
+  const flood = rng.fork('flood');
   const rooms = rng.fork('rooms');
   const storeys = assignStoreys(mission, rng.fork('storeys'), profile);
   const floorOf = (id: number) => STOREY_FLOOR + storeys[id]! * STOREY_HEIGHT;
@@ -274,7 +284,8 @@ function emit(seed: string, mission: Mission, layout: Layout, rng: Rng, level: n
     );
     const ceil = floorOf(id) + Math.round(deco.range(minHeight, Math.max(minHeight, 288)) / 8) * 8;
     const light = node.kind === 'loot' ? 232 : Math.round(deco.range(96, 232) / 8) * 8;
-    const floorTex = theme.pick([T.FloorTile, T.Slime, T.Tech]);
+    // (Flooded levels keep the flowing texture for water alone.)
+    const floorTex = theme.pick(flooded ? [T.FloorTile, T.Tech] : [T.FloorTile, T.Slime, T.Tech]);
     const wallTex = theme.pick(wallSet);
     const specs = design.regions.map((reg) =>
       plan.spec({
@@ -285,7 +296,7 @@ function emit(seed: string, mission: Mission, layout: Layout, rng: Rng, level: n
         ceilTex: T.Ceiling,
         wallTex: reg.wallTex ?? wallTex,
         ...secretArea(secretId.get(id)),
-        special: (reg.special ?? 0) | (secretId.has(id) ? SPECIAL_SECRET_AREA : 0),
+        special: (flooded && reg.floorTex === T.Slime ? ((reg.special ?? 0) & ~SPECIAL_DAMAGE) | SPECIAL_WATER : (reg.special ?? 0)) | (secretId.has(id) ? SPECIAL_SECRET_AREA : 0),
         ...(reg.slab
           ? { slab: { bottom: floorOf(id) + reg.slab.bottom, top: floorOf(id) + reg.slab.top, topTex: T.Grate, bottomTex: T.Metal, sideTex: T.Metal } }
           : {}),
@@ -366,11 +377,16 @@ function emit(seed: string, mission: Mission, layout: Layout, rng: Rng, level: n
     const up = raised(ci);
     const high = Math.max(floorOf(edge.a), floorOf(edge.b));
     const low = up ? high : Math.min(floorOf(edge.a), floorOf(edge.b));
-    const spec = (floorTex: TextureId) =>
-      plan.spec({ floor: low, ceil: low + CORRIDOR_HEIGHT, light: 144, floorTex, ceilTex: T.Ceiling, wallTex: T.Metal, ...secretArea(secret) });
-    // Hazard stripes mark only a corridor's two ends, so at most 2 striped tiles ever touch.
+    const spec = (floorTex: TextureId, wet = false) =>
+      plan.spec({
+        floor: low, ceil: low + CORRIDOR_HEIGHT, light: 144, floorTex, ceilTex: T.Ceiling, wallTex: T.Metal, ...secretArea(secret),
+        ...(wet ? { special: SPECIAL_WATER | (secret === undefined ? 0 : SPECIAL_SECRET_AREA) } : {}),
+      });
+    // Hazard stripes mark only a corridor's two ends, so at most 2 striped tiles ever touch. In a
+    // flooded level some corridors run with water between their dry ends.
     const ends = spec(T.Trim);
-    const middle = spec(T.Tech);
+    const wet = flooded && !up && c.cells.length > 2 && flood.chance(FLOODED_CORRIDOR_CHANCE);
+    const middle = wet ? spec(T.Slime, true) : spec(T.Tech);
     c.cells.forEach(([x, y], k) => plan.set(x, y, k === 0 || k === c.cells.length - 1 ? ends : middle));
 
     const upperIsA = floorOf(edge.a) > floorOf(edge.b);
@@ -407,8 +423,6 @@ function emit(seed: string, mission: Mission, layout: Layout, rng: Rng, level: n
   const b = new MapBuilder();
   emitCellPlan(b, plan, C);
   for (const [type, x, y, angle, flags] of things) b.thing(type, (x + 0.5) * C, (y + 0.5) * C, angle, flags ?? 0);
-  // The theme picks the texture set's colours; its own stream, so it never shifts other choices.
-  const style = rng.fork('style').pick(THEME_NAMES);
   return {
     // Normal maps record no difficulty, so they stay exactly what they were before difficulties.
     map: b.build({ name: `gen-${seed}`, seed, generatorVersion: GENERATOR_VERSION, theme: style, level, levelType: profile.type, ...(difficulty === 'normal' ? {} : { difficulty }) }),

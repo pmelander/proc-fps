@@ -74,8 +74,8 @@ export interface Sector {
   /**
    * Bitfield for sector specials. Bits 0–1: door kind (see DoorKind); a key door's key id
    * is the sector's `tag`. Bit 2: secret area (SPECIAL_SECRET_AREA), with the secret's id in
-   * `tag`. Bit 3: lift (SPECIAL_LIFT). Bit 4: damaging floor (SPECIAL_DAMAGE). Other bits
-   * reserved (flicker…).
+   * `tag`. Bit 3: lift (SPECIAL_LIFT). Bit 4: damaging floor (SPECIAL_DAMAGE). Bit 5: water
+   * (SPECIAL_WATER). Other bits reserved (flicker…).
    */
   special: number;
   /** A catwalk or bridge across the sector (format 1). */
@@ -187,6 +187,10 @@ export const liftFloorNear = (s: Sector, height: number): number => Math.max(s.f
 /** A floor that hurts whoever stands on it: slime or lava. */
 export const SPECIAL_DAMAGE = 1 << 4;
 export const isDamaging = (s: Sector): boolean => (s.special & SPECIAL_DAMAGE) !== 0;
+
+/** Standing water: harmless, but wading slows every step into or out of it (WATER_STEP_SCALE). */
+export const SPECIAL_WATER = 1 << 5;
+export const isWater = (s: Sector): boolean => (s.special & SPECIAL_WATER) !== 0;
 
 /** Number of secrets in a map (ids are 0 … n - 1). */
 export function secretCount(map: MapData): number {
