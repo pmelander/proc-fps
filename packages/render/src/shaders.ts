@@ -401,6 +401,18 @@ void main() {
     outColor = vec4(kc * (0.9 + 0.5 * p.y) * (1.0 - 0.4 * smoothstep(-0.03, 0.0, k)), 1.0);
     return;
   }
+  if (vShape == 24) { // barrier: a rounded wall of light, bright at its rim, scanlines rolling up it
+    vec2 q = (p - 0.5) * 2.0;
+    float edge = length(q * vec2(1.0, 0.8));
+    if (edge > 1.0) discard;
+    ivec2 pix = ivec2(gl_FragCoord.xy);
+    float rim = step(0.8, edge);
+    // Every third scene row open, rolling upwards: the body behind shows through the gaps.
+    if (rim < 0.5 && (pix.y + int(uTime * 24.0)) % 3 == 0) discard;
+    float shimmer = 0.8 + 0.2 * sin(uTime * 9.0 + p.y * 14.0 + p.x * 6.0);
+    outColor = vec4(mix(vec3(0.3, 0.75, 1.0), vec3(0.85, 1.0, 1.0), rim) * shimmer, 1.0);
+    return;
+  }
   if (vShape == 21) { // lob: a dark lumpy glob with a burning green-yellow core
     vec2 q = p - 0.5;
     float wob = 0.05 * sin(atan(q.y, q.x) * 5.0 + uTime * 9.0);
@@ -473,13 +485,13 @@ void main() {
 
 /**
  * Sprite atlas: row = enemy kind, column = direction × SPRITE_FRAMES + frame. The rows are the
- * three ordinary roles twice (each level's two variants: grunt, grunt, brute, brute, sniper,
- * sniper), then the mini boss and the boss; see spriteRow.
+ * three first ordinary roles twice (each level's two variants: grunt, grunt, brute, brute, sniper,
+ * sniper), then the mini boss, the boss, the charger, the bloater and the warden; see spriteRow.
  */
 export const SPRITE_TILE = 64;
 export const SPRITE_DIRECTIONS = 8;
 export const SPRITE_FRAMES = 4;
-export const SPRITE_ROWS = 8;
+export const SPRITE_ROWS = 11;
 /** vec4s of body plan per sprite row (see enemyLooks in bestiary.ts). */
 export const SPRITE_PLAN_VEC4S = 6;
 
@@ -789,8 +801,11 @@ void main() {
   ivec2 tile = px / ${SPRITE_TILE};
   int row = tile.y;
   if (row != uRow) discard;
-  // Rows: grunt, grunt, brute, brute, sniper, sniper (two variants each), mini boss, boss.
-  int shape = row < 6 ? row / 2 : row - 3;
+  // Rows: grunt, grunt, brute, brute, sniper, sniper (two variants each), mini boss, boss, then
+  // the charger, bloater and warden, built on the brute, grunt and sniper silhouettes (their plans
+  // make them their own: horns and a hunch, a bloated glowing belly, an upright guard); no new
+  // silhouettes keeps the bake quick to compile.
+  int shape = row < 6 ? row / 2 : row < 8 ? row - 3 : row == 8 ? 1 : row == 9 ? 0 : 2;
   int dir = tile.x / ${SPRITE_FRAMES};
   int frame = tile.x % ${SPRITE_FRAMES};
   vec2 uv = (vec2(px % ${SPRITE_TILE}) + 0.5) / ${SPRITE_TILE}.0;

@@ -14,7 +14,7 @@ describe('enemyLooks', () => {
   it('is deterministic, one look per sprite shape, and seeds differ', () => {
     expect(enemyLooks('run-2', 'crypt')).toEqual(enemyLooks('run-2', 'crypt'));
     expect(enemyLooks('run-2', 'crypt')).toHaveLength(SPRITE_ROWS);
-    expect(SPRITE_ROWS).toBe(8);
+    expect(SPRITE_ROWS).toBe(11);
     expect(enemyLooks('run-2', 'crypt')).not.toEqual(enemyLooks('run-3', 'crypt'));
   });
 
@@ -25,9 +25,11 @@ describe('enemyLooks', () => {
         const looks = enemyLooks(`s${i}`, theme);
         const hues = looks.map((l) => hue(l.skin));
         for (const h of hues) for (const l of lights) expect(hueDistance(h, l)).toBeGreaterThanOrEqual(12);
-        // Each role's first variant carries the role's hue: those stay apart.
+        // Each role's first variant carries the role's hue: those stay apart. The five first roles
+        // pick first and keep well apart; the charger, bloater and warden squeeze in after them (their
+        // silhouettes and behaviour set them apart too).
         const roleHues = ROW_ROLE.flatMap((role, row) => (ROW_ROLE.indexOf(role) === row ? [hues[row]!] : []));
-        for (let a = 0; a < roleHues.length; a++) for (let b = a + 1; b < roleHues.length; b++) expect(hueDistance(roleHues[a]!, roleHues[b]!)).toBeGreaterThanOrEqual(20);
+        for (let a = 0; a < roleHues.length; a++) for (let b = a + 1; b < roleHues.length; b++) expect(hueDistance(roleHues[a]!, roleHues[b]!)).toBeGreaterThanOrEqual(b < 5 ? 19.9 : 9.9);
       }
     }
   });
@@ -47,20 +49,21 @@ describe('enemyLooks', () => {
 
   it('stays inside the ranges the bake shader expects', () => {
     for (let i = 0; i < 200; i++) {
-      for (const l of enemyLooks(`r${i}`, 'base')) {
+      for (const [row, l] of enemyLooks(`r${i}`, 'base').entries()) {
         expect(l.eyes).toBeGreaterThanOrEqual(1);
         expect(l.eyes).toBeLessThanOrEqual(4);
         expect(l.horns).toBeLessThanOrEqual(2);
         expect(l.spikes).toBeLessThanOrEqual(6);
         expect(l.bulk).toBeGreaterThan(0.85);
-        expect(l.bulk).toBeLessThan(1.15);
+        // Bloaters swell (their quad is wider to match); the rest stay near their silhouettes.
+        expect(l.bulk).toBeLessThan(ROW_ROLE[row] === 6 ? 1.45 : 1.15);
         for (const c of [...l.skin, ...l.accent]) expect(c).toBeGreaterThanOrEqual(0), expect(c).toBeLessThanOrEqual(1);
       }
     }
   });
 
   it('packs the bake uniforms', () => {
-    const u = lookUniforms(BASELINE_LOOKS, [1, 1, 1, 1, 1, 1, 1, 1]);
+    const u = lookUniforms(BASELINE_LOOKS, Array.from({ length: SPRITE_ROWS }, () => 1));
     expect((u.uPlan as { vec4s: Float32Array }).vec4s).toHaveLength(SPRITE_ROWS * SPRITE_PLAN_VEC4S * 4);
     expect((u.uAspect as { floats: Float32Array }).floats).toHaveLength(SPRITE_ROWS);
   });

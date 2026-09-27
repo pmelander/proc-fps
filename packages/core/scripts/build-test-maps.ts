@@ -194,7 +194,34 @@ export function buildTest06(): MapData {
   return b.build({ name: 'test06', theme: 'base' });
 }
 
-const maps: Record<string, () => MapData> = { test01: buildTest01, test02: buildTest02, test03: buildTest03, test04: buildTest04, test05: buildTest05, test06: buildTest06 };
+/**
+ * test07: the M24 roles (cells; y grows north). Arena (0–13, 0–8), start (0, 4) facing east, a
+ * pillar pair for cover at (4, 2) and (4, 6). A charger in the start's row at (9, 4); bloaters at
+ * (6, 1) and (6, 7), each beside a grunt at (7, 1) and (7, 7) (shoot one, catch both); wardens at
+ * (8, 2) and (8, 6); health at (1, 0) and (1, 8); the exit (13, 4).
+ */
+export function buildTest07(): MapData {
+  const plan = new CellPlan();
+  const arena = plan.spec({ floor: 0, ceil: 256, light: 176, floorTex: T.FloorTile, ceilTex: T.Ceiling, wallTex: T.Stone });
+  for (let y = 0; y < 9; y++) for (let x = 0; x < 14; x++) if (!(x === 4 && (y === 2 || y === 6))) plan.set(x, y, arena);
+  const b = new MapBuilder();
+  emitCellPlan(b, plan, CELL_SIZE);
+  const at = (type: number, x: number, y: number, angle = 180) => b.thing(type, (x + 0.5) * CELL_SIZE, (y + 0.5) * CELL_SIZE, angle);
+  at(ThingType.PlayerStart, 0, 4, 0);
+  at(EnemyType.Charger, 9, 4);
+  at(EnemyType.Bloater, 6, 1);
+  at(EnemyType.Grunt, 7, 1);
+  at(EnemyType.Bloater, 6, 7);
+  at(EnemyType.Grunt, 7, 7);
+  at(EnemyType.Warden, 8, 2);
+  at(EnemyType.Warden, 8, 6);
+  at(ThingType.Health, 1, 0);
+  at(ThingType.Health, 1, 8);
+  at(ThingType.Exit, 13, 4);
+  return b.build({ name: 'test07', theme: 'hell' });
+}
+
+const maps: Record<string, () => MapData> = { test01: buildTest01, test02: buildTest02, test03: buildTest03, test04: buildTest04, test05: buildTest05, test06: buildTest06, test07: buildTest07 };
 
 for (const [name, fn] of Object.entries(maps)) {
   const map = fn();

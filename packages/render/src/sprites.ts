@@ -12,8 +12,9 @@ export function spriteTile(row: number, direction: number, frame: number): numbe
 }
 
 /**
- * The atlas row for an enemy shape (SpriteShape.Grunt … Boss) and its variant: the three ordinary
- * roles have two rows each (the level's two variants), then the mini boss and the boss.
+ * The atlas row for an enemy shape (SpriteShape.Grunt … Warden) and its variant: the three first
+ * ordinary roles have two rows each (the level's two variants), then the mini boss, the boss, and
+ * the charger, bloater and warden (one variant each).
  */
 export function spriteRow(shape: number, variant: number): number {
   return shape <= SpriteShape.Sniper ? shape * 2 + (variant ? 1 : 0) : shape + 3;
@@ -41,6 +42,9 @@ export const SpriteShape = {
   Sniper: 2,
   MiniBoss: 3,
   Boss: 4,
+  Charger: 5,
+  Bloater: 6,
+  Warden: 7,
   Projectile: 8,
   Corpse: 9,
   /** Keys: Key + key id (0–3), in the key's colour. */
@@ -63,6 +67,8 @@ export const SpriteShape = {
   Homing: 22,
   /** A split shot: a big white-hot orb, cracked with lines of fire, about to burst (self-lit). */
   Split: 23,
+  /** A warden's shield: a shimmering wall of light before it, screen-door transparent (self-lit). */
+  Barrier: 24,
 } as const;
 
 export interface Sprite {

@@ -1,4 +1,8 @@
 import {
+  BLAST_EDGE,
+  BLAST_RADIUS,
+  type EnemyDef,
+  SHIELD_ARC_COS,
   GRENADE,
   defOf,
   falloffAt,
@@ -22,7 +26,7 @@ import { alert, makeNoise } from './ai.js';
 import { floorNow } from './lifts.js';
 import { castRay, cellOpen } from './raycast.js';
 import { HOMING, steer } from './shots.js';
-import type { Projectile, SimState } from './state.js';
+import type { EnemyState, Projectile, SimState } from './state.js';
 import type { World } from './world.js';
 
 const PROJECTILE_RADIUS = 6;
@@ -102,7 +106,7 @@ export function playerFire(world: World, state: SimState, trigger: boolean, relo
     if (t >= 0 && t % MELEE_HIT_INTERVAL === 0 && t / MELEE_HIT_INTERVAL < MELEE_HITS) {
       const struck = inReach();
       for (const i of struck) state.events.push({ type: 'melee', enemy: i });
-      if (struck.length) damage(world, state, new Map(struck.map((i) => [i, MELEE_DAMAGE])));
+      if (struck.length) damage(world, state, new Map(struck.map((i) => [i, MELEE_DAMAGE])), 'melee');
     }
     if (++p.melee > MELEE_TICKS) p.melee = 0;
     return;
@@ -119,8 +123,10 @@ export function playerFire(world: World, state: SimState, trigger: boolean, relo
   const ox = p.x;
   const oy = p.y;
   const oz = p.z + PLAYER_EYE_HEIGHT;
+  // Direct hits and bursts are kept apart: a warden's shield stops the first, not the second.
   const hits = new Map<number, number>();
-  const add = (i: number, amount: number) => hits.set(i, (hits.get(i) ?? 0) + amount);
+  const splashed = new Map<number, number>();
+  const add = (i: number, amount: number, into = hits) => into.set(i, (into.get(i) ?? 0) + amount);
   const pellets = gun.pellets === 1 ? [gun.spread[p.shots % gun.spread.length]!] : gun.spread.slice(0, gun.pellets);
   p.shots++;
   for (const [yaw, pitch] of pellets) {
@@ -142,11 +148,12 @@ export function playerFire(world: World, state: SimState, trigger: boolean, relo
         const ex = e.x - bx;
         const ey = e.y - by;
         const reach = gun.splashRadius + def.radius;
-        if (ex * ex + ey * ey <= reach * reach && bz >= e.z - gun.splashRadius && bz <= e.z + def.height + gun.splashRadius) add(i, gun.splashDamage);
+        if (ex * ex + ey * ey <= reach * reach && bz >= e.z - gun.splashRadius && bz <= e.z + def.height + gun.splashRadius) add(i, gun.splashDamage, splashed);
       });
     }
   }
-  damage(world, state, hits);
+  damage(world, state, hits, 'shot');
+  damage(world, state, splashed, 'splash');
 }
 
 /**
@@ -178,17 +185,38 @@ function pelletTarget(world: World, state: SimState, ox: number, oy: number, oz:
   return { target, t: nearest };
 }
 
-/** Applies a shot's (or strike's) damage per enemy: one hit event each, kills, flinches, wake-ups. */
-function damage(world: World, state: SimState, hits: ReadonlyMap<number, number>): void {
+/** Whether a warden's shield is up and faces the player: up unless it is winding up a shot, flinching or dead. */
+export function shieldStops(state: SimState, e: EnemyState, def: EnemyDef): boolean {
+  if (!def.shield || e.mode === 'windup' || e.mode === 'pain' || e.mode === 'dead') return false;
+  const p = state.player;
+  const dx = p.x - e.x;
+  const dy = p.y - e.y;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  return len > 0 && ((e.fx ?? 1) * dx + (e.fy ?? 0) * dy) / len >= SHIELD_ARC_COS;
+}
+
+/**
+ * Applies damage per enemy: one hit event each, kills, flinches, wake-ups. `kind` says what dealt
+ * it: a warden's shield stops the player's direct shots (not bursts, blasts or the chainsword), and
+ * a bloater killed by anything bursts.
+ */
+function damage(world: World, state: SimState, hits: ReadonlyMap<number, number>, kind: 'shot' | 'splash' | 'melee' | 'blast'): void {
+  const burst: number[] = [];
   for (const [i, amount] of hits) {
     const e = state.enemies[i]!;
+    if (e.mode === 'dead') continue;
     const def = defOf(world.enemyDefs, e);
+    if (kind === 'shot' && shieldStops(state, e, def)) {
+      state.events.push({ type: 'blocked', enemy: i });
+      continue;
+    }
     e.hp -= amount;
     state.events.push({ type: 'hit', enemy: i });
     if (e.hp <= 0) {
       e.mode = 'dead';
       e.stepTick = 0;
       state.events.push({ type: 'kill', enemy: i });
+      if (def.attack === 'blast') burst.push(i);
     } else if (e.mode === 'idle') {
       alert(e, 1);
     } else if (def.pain > 0) {
@@ -197,6 +225,43 @@ function damage(world: World, state: SimState, hits: ReadonlyMap<number, number>
       e.timer = def.pain;
     }
   }
+  for (const i of burst) blast(world, state, i);
+}
+
+/** A bloater bursts where it stands (next to the player, its fuse run out): it dies in its own blast. */
+export function detonate(world: World, state: SimState, index: number): void {
+  const e = state.enemies[index]!;
+  if (e.mode === 'dead') return;
+  e.hp = 0;
+  e.mode = 'dead';
+  e.stepTick = 0;
+  state.events.push({ type: 'kill', enemy: index });
+  blast(world, state, index);
+}
+
+/**
+ * A dead bloater's burst: everyone within BLAST_RADIUS of it (to their body) takes its damage,
+ * falling to BLAST_EDGE at the edge, the player included (the chainsword's invulnerability turns
+ * it away); other bloaters caught go up in turn.
+ */
+function blast(world: World, state: SimState, index: number): void {
+  const e = state.enemies[index]!;
+  const def = defOf(world.enemyDefs, e);
+  const z = e.z + def.height * 0.5;
+  state.events.push({ type: 'explode', x: e.x, y: e.y, z });
+  makeNoise(world, state);
+  const falloff = (d: number) => Math.round(def.damage * (BLAST_EDGE + (1 - BLAST_EDGE) * (1 - d / BLAST_RADIUS)));
+  const p = state.player;
+  const pd = Math.max(0, Math.sqrt((p.x - e.x) ** 2 + (p.y - e.y) ** 2) - PLAYER_RADIUS);
+  if (pd <= BLAST_RADIUS && Math.abs(p.z - e.z) <= PLAYER_HEIGHT) hurtPlayer(state, falloff(pd), { x: e.x, y: e.y });
+  const hits = new Map<number, number>();
+  state.enemies.forEach((o, i) => {
+    if (i === index || o.mode === 'dead') return;
+    const od = defOf(world.enemyDefs, o);
+    const d = Math.max(0, Math.sqrt((o.x - e.x) ** 2 + (o.y - e.y) ** 2) - od.radius);
+    if (d <= BLAST_RADIUS && Math.abs(o.z - e.z) <= PLAYER_HEIGHT) hits.set(i, falloff(d));
+  });
+  damage(world, state, hits, 'blast');
 }
 
 /** Moves projectiles; they stop at walls, floors, ceilings and closed doors, or hit the player. */
@@ -274,7 +339,7 @@ function explode(world: World, state: SimState, x: number, y: number, z: number)
     if (d > GRENADE.radius) return;
     hits.set(i, Math.round(GRENADE.edgeDamage + (GRENADE.damage - GRENADE.edgeDamage) * (1 - d / GRENADE.radius)));
   });
-  damage(world, state, hits);
+  damage(world, state, hits, 'blast');
 }
 
 export function stepProjectiles(world: World, state: SimState): void {

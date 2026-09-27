@@ -721,3 +721,91 @@ describe('projectile patterns', async () => {
     expect(s.state.emitters).toHaveLength(0);
   });
 });
+
+describe('new roles', () => {
+  it('chargers wind up in a lane and rush down it: a hit on a player who stays', () => {
+    const s = sim(arena({ w: 10, h: 3, py: 1, things: [[EnemyType.Charger, 6, 1]] }));
+    const charger = s.state.enemies[0]!;
+    for (let t = 0; t < 300 && !events(s.state, 'charge').length; t++) s.step({});
+    expect(events(s.state, 'charge')).toHaveLength(1);
+    let hurt = 0;
+    for (let t = 0; t < 120 && charger.mode === 'charge'; t++) hurt += events(s.step({}), 'hurt').length;
+    expect(hurt).toBe(1);
+    expect(s.state.player.health).toBe(PLAYER_MAX_HEALTH - ENEMY_DEFS[EnemyType.Charger].damage);
+    expect(Math.abs(charger.cx - s.state.player.cx) + Math.abs(charger.cy - s.state.player.cy)).toBe(1);
+  });
+
+  it('chargers miss a player who steps out of the lane, crash into the wall and lie stunned', () => {
+    const s = sim(arena({ w: 10, h: 3, py: 1, things: [[EnemyType.Charger, 6, 1]] }));
+    const charger = s.state.enemies[0]!;
+    for (let t = 0; t < 300 && !events(s.state, 'windup').length; t++) s.step({});
+    s.step({ strafe: 1 }, STEP_TICKS + 2);
+    let crashed = false;
+    for (let t = 0; t < 200 && !crashed; t++) crashed = events(s.step({}), 'crash').length > 0;
+    expect(crashed).toBe(true);
+    expect(charger.cx).toBe(0);
+    expect(charger.mode).toBe('pain');
+    expect(s.state.player.health).toBe(PLAYER_MAX_HEALTH);
+  });
+
+  it('bloaters burst next to the player; getting away in time escapes it', () => {
+    const stay = sim(arena({ w: 10, h: 1, things: [[EnemyType.Bloater, 4, 0]] }));
+    for (let t = 0; t < 400 && !events(stay.state, 'explode').length; t++) stay.step({});
+    expect(events(stay.state, 'explode')).toHaveLength(1);
+    expect(stay.state.enemies[0]!.mode).toBe('dead');
+    expect(stay.state.player.health).toBeLessThan(PLAYER_MAX_HEALTH);
+
+    const run = sim(arena({ w: 12, h: 1, things: [[EnemyType.Bloater, 8, 0]] }));
+    run.state.player.cx = run.state.player.fromCx = 5;
+    for (let t = 0; t < 400 && !events(run.state, 'windup').length; t++) run.step({});
+    let exploded = false;
+    for (let t = 0; t < 120 && !exploded; t++) exploded = events(run.step({ move: -1 }), 'explode').length > 0;
+    expect(exploded).toBe(true);
+    expect(run.state.player.health).toBe(PLAYER_MAX_HEALTH);
+  });
+
+  it('a bloater shot among others takes them with it', () => {
+    const s = sim(arena({ w: 8, h: 3, py: 1, things: [[EnemyType.Bloater, 3, 1], [EnemyType.Grunt, 3, 2], [EnemyType.Grunt, 4, 1]] }));
+    s.step({ fire: true });
+    expect(s.state.enemies[0]!.mode).toBe('dead');
+    expect(events(s.state, 'explode')).toHaveLength(1);
+    const hurt = s.state.enemies.slice(1).filter((e) => e.mode === 'dead' || e.hp < ENEMY_DEFS[EnemyType.Grunt].hp);
+    expect(hurt).toHaveLength(2);
+    expect(s.state.player.health).toBe(PLAYER_MAX_HEALTH);
+  });
+
+  it('wardens stop shots from the front, not from behind, and not while they wind up', () => {
+    const map = arena({ w: 8, h: 3, py: 1, things: [[EnemyType.Warden, 3, 1]] });
+    const front = sim(map);
+    const warden = front.state.enemies[0]!;
+    expect(warden.fx).toBeCloseTo(-1); // placed facing west, at the player
+    front.step({ fire: true });
+    expect(events(front.state, 'blocked')).toHaveLength(1);
+    expect(warden.hp).toBe(ENEMY_DEFS[EnemyType.Warden].hp);
+
+    const behind = sim(map);
+    [behind.state.enemies[0]!.fx, behind.state.enemies[0]!.fy] = [1, 0];
+    behind.step({ fire: true });
+    expect(events(behind.state, 'blocked')).toHaveLength(0);
+    expect(behind.state.enemies[0]!.hp).toBeLessThan(ENEMY_DEFS[EnemyType.Warden].hp);
+
+    const winding = sim(map);
+    Object.assign(winding.state.enemies[0]!, { mode: 'windup', timer: 20 });
+    winding.step({ fire: true });
+    expect(events(winding.state, 'blocked')).toHaveLength(0);
+    expect(winding.state.enemies[0]!.hp).toBeLessThan(ENEMY_DEFS[EnemyType.Warden].hp);
+  });
+
+  it('wardens turn their shield towards the player, slowly', () => {
+    const s = sim(arena({ w: 8, h: 5, py: 2, things: [[EnemyType.Warden, 4, 2]] }));
+    const w = s.state.enemies[0]!;
+    [w.fx, w.fy] = [0, 1]; // facing north, the player due west
+    w.mode = 'chase';
+    w.cooldown = 1000;
+    s.step({});
+    expect(w.fx!).toBeLessThan(0);
+    expect(w.fx!).toBeGreaterThan(-0.1); // one tick turns it only a little
+    s.step({}, 120);
+    expect(w.fx!).toBeLessThan(-0.99);
+  });
+});

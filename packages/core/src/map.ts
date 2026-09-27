@@ -109,6 +109,12 @@ export const EnemyType = {
   Brute: 33,
   /** Rare: charges up a visible hitscan shot; break line of sight to dodge it. */
   Sniper: 34,
+  /** Lowers its horns when the player is in a straight lane, then charges down it: step out of the lane. */
+  Charger: 35,
+  /** Waddles up and bursts when next to the player (or when killed): get away, or shoot it among its friends. */
+  Bloater: 36,
+  /** Holds an energy shield to its front, lowered only to fire: get round it, or catch it shooting. */
+  Warden: 37,
   MiniBoss: 40,
   Boss: 41,
 } as const;

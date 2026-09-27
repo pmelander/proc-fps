@@ -1,4 +1,4 @@
-import { DEG_TO_RAD, GRENADE, PLAYER_MAX_HEALTH, WEAPONS, defOf, isHigh, variantOf, ThingType, isEnemyThing, type EnemyType, type Heading } from '@proc-fps/core';
+import { DEG_TO_RAD, GRENADE, PLAYER_MAX_HEALTH, WEAPONS, dcos, dsin, defOf, isHigh, variantOf, ThingType, isEnemyThing, type EnemyType, type Heading } from '@proc-fps/core';
 import type { BossPattern } from './boss.js';
 import type { Emitter, ShotKind } from './shots.js';
 import type { World } from './world.js';
@@ -67,7 +67,8 @@ export interface PlayerState {
   hazardTicks: number;
 }
 
-export type EnemyMode = 'idle' | 'alert' | 'chase' | 'windup' | 'pain' | 'dead';
+/** `charge`: a charger rushing down its lane (see ai.ts). */
+export type EnemyMode = 'idle' | 'alert' | 'chase' | 'windup' | 'charge' | 'pain' | 'dead';
 
 export interface EnemyState {
   type: EnemyType;
@@ -99,6 +100,11 @@ export interface EnemyState {
   pattern: BossPattern;
   /** The boss that summoned it (an index into enemies), if any. */
   summoner?: number;
+  /** Chargers: the heading of the lane it winds up for and rushes down. */
+  heading?: number;
+  /** Wardens: the way its shield faces (a unit vector, turned towards the player a little each tick). */
+  fx?: number;
+  fy?: number;
 }
 
 export interface LiftState {
@@ -190,6 +196,11 @@ export type SimEvent =
   | { type: 'summon'; enemy: number; count: number }
   | { type: 'slam'; enemy: number }
   | { type: 'attack'; enemy: number }
+  /** A charger started its rush; crashed into something that was not the player. */
+  | { type: 'charge'; enemy: number }
+  | { type: 'crash'; enemy: number }
+  /** A warden's shield stopped a shot. */
+  | { type: 'blocked'; enemy: number }
   | { type: 'lift'; lift: number }
   | { type: 'death' }
   | { type: 'exit' };
@@ -239,10 +250,14 @@ export function createSimState(world: World): SimState {
     const [px, py] = world.grid.center(ex, ey);
     // A perched enemy starts on the catwalk (the cell's slab), if it has one.
     const level = isHigh(t) && world.grid.walkable(ex, ey, 1) ? 1 : 0;
+    const shield = defOf(world.enemyDefs, { type: t.type, variant: variantOf(t) }).shield
+      ? { fx: dcos(t.angle * DEG_TO_RAD), fy: dsin(t.angle * DEG_TO_RAD) }
+      : {};
     return [{
       type: t.type, variant: variantOf(t), cx: ex, cy: ey, fromCx: ex, fromCy: ey, level, fromLevel: level, stepTick: 0,
       x: px, y: py, z: world.grid.floorAt(ex, ey, level),
       hp: defOf(world.enemyDefs, { type: t.type, variant: variantOf(t) }).hp, mode: 'idle', timer: 0, cooldown: 0, phase: 0, attacks: 0, pattern: 'volley',
+      ...shield,
     }];
   });
   return {

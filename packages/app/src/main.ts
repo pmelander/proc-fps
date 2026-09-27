@@ -28,6 +28,7 @@ import test03 from '@proc-fps/core/maps/test03.json';
 import test04 from '@proc-fps/core/maps/test04.json';
 import test05 from '@proc-fps/core/maps/test05.json';
 import test06 from '@proc-fps/core/maps/test06.json';
+import test07 from '@proc-fps/core/maps/test07.json';
 import { AudioEngine } from './audio/engine.js';
 import type { SoundId } from './audio/sounds.js';
 import { drawAutomap } from './automap.js';
@@ -49,7 +50,7 @@ import { bossName } from './bossname.js';
 import { InputSampler } from './input.js';
 import { KEY_COLORS, KEY_NAMES } from './keys.js';
 
-const TEST_MAPS: Record<string, MapData> = { test01: test01 as MapData, test02: test02 as MapData, test03: test03 as MapData, test04: test04 as MapData, test05: test05 as MapData, test06: test06 as MapData };
+const TEST_MAPS: Record<string, MapData> = { test01: test01 as MapData, test02: test02 as MapData, test03: test03 as MapData, test04: test04 as MapData, test05: test05 as MapData, test06: test06 as MapData, test07: test07 as MapData };
 const NOTICE_SECONDS = 2.5;
 /** The exit hums every so often while the player is within range (map units), under a beacon of light. */
 const EXIT_HUM_TICKS = 96;
@@ -167,6 +168,9 @@ const SHAPE: Record<number, number> = {
   32: SpriteShape.Grunt,
   33: SpriteShape.Brute,
   34: SpriteShape.Sniper,
+  35: SpriteShape.Charger,
+  36: SpriteShape.Bloater,
+  37: SpriteShape.Warden,
   40: SpriteShape.MiniBoss,
   41: SpriteShape.Boss,
 };
@@ -175,6 +179,7 @@ const PROJECTILE_SIZE = 14;
 const SPRITE_ROWS_OF: readonly (readonly [EnemyType, number])[] = [
   [EnemyType.Grunt, 0], [EnemyType.Grunt, 1], [EnemyType.Brute, 0], [EnemyType.Brute, 1],
   [EnemyType.Sniper, 0], [EnemyType.Sniper, 1], [EnemyType.MiniBoss, 0], [EnemyType.Boss, 0],
+  [EnemyType.Charger, 0], [EnemyType.Bloater, 0], [EnemyType.Warden, 0],
 ];
 /** Events that play a sound with no position (the player's own). */
 const SOUND_OF: Partial<Record<string, SoundId>> = {
@@ -200,6 +205,9 @@ const OCTANT = Math.PI / 4;
  * once it has noticed them, along its step while walking, its spawn facing otherwise.
  */
 function facing(e: EnemyState, spawnAngle: number, player: { x: number; y: number }): number {
+  // A warden faces where its shield does; a charger down its lane while it winds up and rushes.
+  if (e.fx !== undefined && e.fy !== undefined && e.mode !== 'idle' && e.mode !== 'dead') return Math.atan2(e.fy, e.fx);
+  if (e.heading !== undefined && (e.mode === 'charge' || e.mode === 'windup')) return (e.heading * Math.PI) / 2;
   if (e.mode === 'alert' || e.mode === 'chase' || e.mode === 'windup' || e.mode === 'pain') {
     if (e.stepTick === 0 || e.mode === 'windup') return Math.atan2(player.y - e.y, player.x - e.x);
   }
@@ -236,12 +244,31 @@ function buildSprites(
     // View direction: the camera's bearing from the enemy, relative to where it faces, in octants.
     const rel = Math.atan2(cam.y - y, cam.x - x) - facing(e, spawnAngles[i] ?? 0, state.player);
     const direction = (((Math.round(rel / OCTANT) % 8) + 8) % 8);
-    const frame = e.mode === 'dead' ? 3 : e.mode === 'windup' ? 2 : e.stepTick > 0 ? Math.floor((2 * e.stepTick) / def.stepTicks) % 2 : 0;
-    const charge = e.mode === 'windup' ? 1 - e.timer / def.windup : 0;
+    const frame = e.mode === 'dead' ? 3 : e.mode === 'windup' || e.mode === 'charge' ? 2 : e.stepTick > 0 ? Math.floor((2 * e.stepTick) / def.stepTicks) % 2 : 0;
+    const charge = e.mode === 'windup' ? 1 - e.timer / def.windup : e.mode === 'charge' ? 1 : 0;
+    // A bloater's fuse: it flashes faster and faster as it runs out.
+    const fuse = def.attack === 'blast' && e.mode === 'windup' ? (Math.floor((now * (4 + 14 * charge))) % 2) : 0;
     return {
       x, y, z, width: def.radius * SPRITE_WIDTH, height: def.height, shape,
-      charge, flash: e.mode === 'pain' ? 1 : 0, light: light(x, y), tile: spriteTile(spriteRow(shape, e.variant), direction, frame),
+      charge, flash: e.mode === 'pain' ? 1 : fuse, light: light(x, y), tile: spriteTile(spriteRow(shape, e.variant), direction, frame),
     };
+  });
+  // Wardens' shields: a wall of light before each, narrower seen from the side, down while it fires.
+  state.enemies.forEach((e, i) => {
+    const def = defOf(world.enemyDefs, e);
+    if (!def.shield || e.mode === 'windup' || e.mode === 'pain' || e.mode === 'dead') return;
+    const body = sprites[i]!;
+    const fx = e.fx ?? 1;
+    const fy = e.fy ?? 0;
+    const tx = cam.x - body.x;
+    const ty = cam.y - body.y;
+    const toCam = (fx * tx + fy * ty) / Math.max(1, Math.hypot(tx, ty));
+    const out = def.radius + 10;
+    sprites.push({
+      x: body.x + fx * out, y: body.y + fy * out, z: body.z + def.height * 0.12,
+      width: def.radius * 2.6 * Math.max(0.25, Math.abs(toCam)), height: def.height * 0.66,
+      shape: SpriteShape.Barrier, charge: 0, flash: 0, light: 1, tile: -1,
+    });
   });
   // Keys: bobbing and glowing where they lie (a carried key appears where its carrier died).
   world.pickups.forEach((k, i) => {
@@ -692,8 +719,8 @@ function main(): void {
           const def = defOf(world.enemyDefs, enemy);
           const kind = def.attack;
           const id: SoundId = e.type === 'windup'
-            ? e.type === 'windup' && e.pattern === 'slam' ? 'windupSlam' : kind === 'melee' ? 'windupMelee' : kind === 'hitscan' ? 'windupHitscan' : 'windup'
-            : kind === 'melee' ? 'melee' : kind === 'hitscan' ? 'snipe' : def.shot === 'lob' ? 'lob' : def.shot === 'homing' || enemy.pattern === 'homing' ? 'homing' : 'launch';
+            ? e.type === 'windup' && e.pattern === 'slam' ? 'windupSlam' : kind === 'melee' ? 'windupMelee' : kind === 'hitscan' ? 'windupHitscan' : kind === 'charge' ? 'chargeRoar' : kind === 'blast' ? 'fuse' : 'windup'
+            : kind === 'melee' || kind === 'charge' ? 'melee' : kind === 'hitscan' ? 'snipe' : def.shot === 'lob' ? 'lob' : def.shot === 'homing' || enemy.pattern === 'homing' ? 'homing' : 'launch';
           audio.play(id, enemy, listener);
           // A sniper's shot shows: a glowing line from its eye to the player, or to the wall if
           // they broke line of sight in time.
@@ -760,6 +787,23 @@ function main(): void {
           say(e.phase === 2 || boss.type === EnemyType.MiniBoss ? `${name} is enraged!` : `${name} grows furious`, now);
           renderer.flash = Math.max(renderer.flash, 0.6);
           joltUntil = now + JOLT_SECONDS * 2;
+        }
+        if (e.type === 'charge') audio.play('chargeRush', enemyAt(e.enemy), listener);
+        if (e.type === 'crash') {
+          const charger = enemyAt(e.enemy);
+          audio.play('crash', charger, listener);
+          gore.impact(charger.x, charger.y, charger.z + 30, 0, 0, 0.6);
+          if (Math.hypot(charger.x - state.player.x, charger.y - state.player.y) < 600) joltUntil = now + JOLT_SECONDS * 2;
+        }
+        if (e.type === 'blocked') {
+          // Sparks off the shield, back towards the shooter, and a ringing clang.
+          const warden = enemyAt(e.enemy);
+          const wd = defOf(world.enemyDefs, warden);
+          const bx = warden.x + (warden.fx ?? 1) * (wd.radius + 10);
+          const by = warden.y + (warden.fy ?? 0) * (wd.radius + 10);
+          const len = Math.max(1, Math.hypot(state.player.x - bx, state.player.y - by));
+          gore.impact(bx, by, warden.z + wd.height * 0.5, (state.player.x - bx) / len, (state.player.y - by) / len, 0.2);
+          audio.play('shieldBlock', warden, listener, 0.9 + Math.random() * 0.2);
         }
         if (e.type === 'slam') {
           const boss = enemyAt(e.enemy);

@@ -18,7 +18,8 @@ export type SoundId =
   | 'roar' | 'slam' | 'windupSlam' | 'summon' | 'bossDeath'
   | 'grenadeFire' | 'explode' | 'grenadePickup'
   | 'lob' | 'splash' | 'homing' | 'split'
-  | 'menuMove' | 'menuChoose' | 'menuBack' | 'tally' | 'tallyDone';
+  | 'menuMove' | 'menuChoose' | 'menuBack' | 'tally' | 'tallyDone'
+  | 'chargeRoar' | 'chargeRush' | 'crash' | 'fuse' | 'shieldBlock';
 
 type Recipe = Voice[];
 
@@ -59,6 +60,28 @@ const RECIPES: Record<SoundId, Recipe> = {
     { wave: 'noise', freq: 1000, freqEnd: 80, attack: 0, sustain: 0.04, release: 0.35, volume: 0.7, lowpass: 1800 },
     { wave: 'saw', freq: 55, freqEnd: 25, attack: 0, sustain: 0.04, release: 0.25, volume: 0.4, lowpass: 300 },
     { wave: 'sine', freq: 60, freqEnd: 22, attack: 0, sustain: 0.05, release: 0.35, volume: 0.7 },
+  ],
+  // A charger lowering its horns: a rising, rasping bellow.
+  chargeRoar: [
+    { wave: 'saw', freq: 70, freqEnd: 150, attack: 0.05, sustain: 0.35, release: 0.15, volume: 0.35, lowpass: 900, vibrato: { depth: 0.06, rate: 18 } },
+    { wave: 'noise', freq: 400, freqEnd: 900, attack: 0.05, sustain: 0.3, release: 0.1, volume: 0.25, lowpass: 1200 },
+  ],
+  // Its rush: pounding hooves under a roar.
+  chargeRush: [
+    { wave: 'noise', freq: 500, freqEnd: 150, attack: 0.02, sustain: 0.4, release: 0.2, volume: 0.35, lowpass: 700 },
+    { wave: 'square', freq: 60, freqEnd: 60, attack: 0, sustain: 0.45, release: 0.1, volume: 0.25, duty: 0.3, lowpass: 400, arpeggio: [1, 0.5], arpeggioTime: 0.07 },
+  ],
+  // Its crash into a wall: a heavy thud and rubble.
+  crash: [
+    { wave: 'sine', freq: 90, freqEnd: 28, attack: 0, sustain: 0.08, release: 0.35, volume: 0.9 },
+    { wave: 'noise', freq: 900, freqEnd: 120, attack: 0, sustain: 0.05, release: 0.3, volume: 0.45, lowpass: 1500 },
+  ],
+  // A bloater's fuse: a quickening, wet alarm.
+  fuse: [{ wave: 'square', freq: 900, freqEnd: 1500, attack: 0, sustain: 0.5, release: 0.05, volume: 0.2, duty: 0.25, arpeggio: [1, 1.5, 1, 1.5, 1, 1.5, 1, 1.5], arpeggioTime: 0.06 }],
+  // A shot ringing off a warden's shield.
+  shieldBlock: [
+    { wave: 'square', freq: 1900, freqEnd: 1500, attack: 0, sustain: 0.02, release: 0.18, volume: 0.22, duty: 0.2 },
+    { wave: 'noise', freq: 5000, freqEnd: 2500, attack: 0, sustain: 0.01, release: 0.06, volume: 0.15 },
   ],
   // Menus: a dry click to move, a heavy clunk to choose, a falling blip to back out.
   menuMove: [{ wave: 'square', freq: 520, freqEnd: 480, attack: 0, sustain: 0.015, release: 0.03, volume: 0.16, duty: 0.25 }],

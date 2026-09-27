@@ -1,5 +1,5 @@
-import { ALERT_TICKS, CELL_SIZE, CellGrid, DoorKind, defOf, HEADING_DX, HEADING_DY, MAX_STEP, NOISE_CELLS, PLAYER_HEIGHT, SIGHT_CELLS, dcos, dsin, type EnemyDef, type Heading } from '@proc-fps/core';
-import { hurtPlayer } from './combat.js';
+import { ALERT_TICKS, CELL_SIZE, CHARGE_STEP_TICKS, CHARGE_STUN, CellGrid, DoorKind, defOf, HEADING_DX, HEADING_DY, MAX_STEP, NOISE_CELLS, PLAYER_HEIGHT, SHIELD_TURN, SIGHT_CELLS, dcos, dsin, type EnemyDef, type Heading } from '@proc-fps/core';
+import { detonate, hurtPlayer } from './combat.js';
 import { callLift, floorNow, liftAtCell, liftMoving } from './lifts.js';
 import { bossAttack, isBoss, nextPattern, patternCooldown, patternWindup, updatePhase, volleyBonus } from './boss.js';
 import { lineOfSight } from './raycast.js';
@@ -20,6 +20,9 @@ const AIM_HEIGHT = 44;
  * are walls to them. They ride lifts like the player (calling one that is not level, never one
  * the player is on), so they follow between storeys. Some flank (see FLANK_*): while still far,
  * they make for a point beside the player, so a horde comes round a loop from both sides.
+ * Chargers wind up when the player stands in a straight, clear lane from them, then rush down it
+ * (`charge`): the player in the way is struck, anything else stuns them. Bloaters burst next to
+ * the player (combat.ts `detonate`). Wardens turn their shield towards the player, slowly.
  */
 export function stepEnemies(world: World, state: SimState): void {
   const occupied = occupancy(state);
@@ -32,8 +35,9 @@ export function stepEnemies(world: World, state: SimState): void {
     if (e.mode === 'dead') return;
     const def = defOf(world.enemyDefs, e);
     if (e.cooldown > 0) e.cooldown--;
-    if (e.stepTick > 0 && ++e.stepTick > def.stepTicks) e.stepTick = 0;
+    if (e.stepTick > 0 && ++e.stepTick > stepTicksOf(e, def)) e.stepTick = 0;
     updatePose(world, state, e, def);
+    if (def.shield && e.mode !== 'idle') turnShield(state, e);
     const boss = isBoss(e.type);
     if (boss) updatePhase(state, e, def, i);
 
@@ -47,14 +51,29 @@ export function stepEnemies(world: World, state: SimState): void {
         break;
       case 'windup':
         if (--e.timer > 0) break;
+        if (def.attack === 'charge') {
+          e.mode = 'charge';
+          e.timer = def.range + 4; // the most cells it rushes
+          state.events.push({ type: 'charge', enemy: i });
+          break;
+        }
+        if (def.attack === 'blast') {
+          detonate(world, state, i);
+          break;
+        }
         if (boss && e.pattern !== 'volley') bossAttack(world, state, e, def, i, e.pattern);
         else attack(world, state, e, def, i);
         e.cooldown = boss ? patternCooldown(e, def) : def.cooldown;
         e.mode = 'chase';
         break;
+      case 'charge':
+        if (e.stepTick === 0) rush(world, state, e, def, i, occupied);
+        break;
       case 'chase': {
         if (e.stepTick !== 0) break;
-        if (e.cooldown === 0 && canAttack(world, state, e, def)) {
+        if (e.cooldown === 0 && canAttack(world, state, e, def, occupied)) {
+          const lane = def.attack === 'charge' ? chargeLane(world, state, e, def, occupied) : undefined;
+          if (lane !== undefined) e.heading = lane;
           e.mode = 'windup';
           if (boss) {
             e.pattern = nextPattern(state, e, i);
@@ -138,7 +157,8 @@ const cellKey = (x: number, y: number) => `${x},${y}`;
 function occupancy(state: SimState): Set<string> {
   const out = new Set<string>();
   const p = state.player;
-  out.add(cellKey(p.cx, p.cy)).add(cellKey(p.fromCx, p.fromCy));
+  out.add(cellKey(p.cx, p.cy));
+  if (p.stepTick > 0) out.add(cellKey(p.fromCx, p.fromCy));
   for (const e of state.enemies) {
     if (e.mode === 'dead') continue;
     out.add(cellKey(e.cx, e.cy));
@@ -216,7 +236,7 @@ function updatePose(world: World, state: SimState, e: EnemyState, def: EnemyDef)
     [e.x, e.y, e.z] = [tx, ty, toZ];
     return;
   }
-  const t = e.stepTick / def.stepTicks;
+  const t = e.stepTick / stepTicksOf(e, def);
   const [fx, fy] = g.center(e.fromCx, e.fromCy);
   const fz = floorNow(world, state, e.fromCx, e.fromCy, e.fromLevel);
   e.x = fx + (tx - fx) * t;
@@ -340,9 +360,99 @@ function adjacent(e: EnemyState, x: number, y: number): boolean {
   return Math.abs(e.cx - x) + Math.abs(e.cy - y) === 1;
 }
 
-function canAttack(world: World, state: SimState, e: EnemyState, def: EnemyDef): boolean {
-  // Melee needs the player next to it at about the same height (not on the catwalk above).
-  if (def.attack === 'melee') return adjacent(e, state.player.cx, state.player.cy) && Math.abs(state.player.z - e.z) <= MAX_STEP * 2;
+/** A charger rushes far faster than it walks. */
+const stepTicksOf = (e: EnemyState, def: EnemyDef) => (e.mode === 'charge' ? CHARGE_STEP_TICKS : def.stepTicks);
+
+/** A warden's shield turns towards the player, at most SHIELD_TURN a tick. */
+function turnShield(state: SimState, e: EnemyState): void {
+  const p = state.player;
+  const tx = p.x - e.x;
+  const ty = p.y - e.y;
+  const len = Math.sqrt(tx * tx + ty * ty);
+  if (len < 1) return;
+  const fx = e.fx ?? 1;
+  const fy = e.fy ?? 0;
+  const ux = tx / len;
+  const uy = ty / len;
+  if (fx * ux + fy * uy >= dcos(SHIELD_TURN)) {
+    [e.fx, e.fy] = [ux, uy];
+    return;
+  }
+  const a = fx * uy - fy * ux >= 0 ? SHIELD_TURN : -SHIELD_TURN;
+  const c = dcos(a);
+  const s = dsin(a);
+  [e.fx, e.fy] = [fx * c - fy * s, fx * s + fy * c];
+}
+
+/**
+ * The heading of a straight lane from a charger to the player (same row or column, 2 to its range
+ * cells away, on its level, every cell between open and free), or undefined.
+ */
+function chargeLane(world: World, state: SimState, e: EnemyState, def: EnemyDef, occupied: Set<string>): number | undefined {
+  const p = state.player;
+  if (p.cx !== e.cx && p.cy !== e.cy) return undefined;
+  if (Math.abs(p.z - e.z) > MAX_STEP * 2) return undefined;
+  const dist = Math.abs(p.cx - e.cx) + Math.abs(p.cy - e.cy);
+  if (dist < 2 || dist > def.range) return undefined;
+  const h = (p.cx > e.cx ? 0 : p.cy > e.cy ? 1 : p.cx < e.cx ? 2 : 3) as Heading;
+  let [x, y, level] = [e.cx, e.cy, e.level];
+  for (let k = 1; k < dist; k++) {
+    if (!laneOpen(world, state, x, y, level, h, occupied)) return undefined;
+    x += HEADING_DX[h];
+    y += HEADING_DY[h];
+  }
+  return h;
+}
+
+/** Whether a rush can step from (x, y) along h: on the same level, no closed door, nobody there. */
+function laneOpen(world: World, state: SimState, x: number, y: number, level: number, h: Heading, occupied: Set<string>): boolean {
+  const nx = x + HEADING_DX[h];
+  const ny = y + HEADING_DY[h];
+  if (world.grid.stepTarget(x, y, level, h) !== level || occupied.has(cellKey(nx, ny))) return false;
+  if (liftAtCell(world, nx, ny) >= 0 || liftAtCell(world, x, y) >= 0) return false;
+  const door = doorAtCell(world, nx, ny);
+  return door < 0 || state.doors[door]! >= DOOR_OPEN_TICKS;
+}
+
+/**
+ * One cell of a charger's rush: the player in the next cell is struck (the rush ends), anything
+ * else in the way stuns it (a crash); otherwise on it goes, until the rush runs out.
+ */
+function rush(world: World, state: SimState, e: EnemyState, def: EnemyDef, index: number, occupied: Set<string>): void {
+  const p = state.player;
+  const h = (e.heading ?? 0) as Heading;
+  const nx = e.cx + HEADING_DX[h];
+  const ny = e.cy + HEADING_DY[h];
+  const end = () => {
+    e.mode = 'chase';
+    e.cooldown = def.cooldown;
+  };
+  if ((nx === p.cx && ny === p.cy) || (p.stepTick > 0 && nx === p.fromCx && ny === p.fromCy)) {
+    state.events.push({ type: 'attack', enemy: index });
+    if (Math.abs(p.z - e.z) <= MAX_STEP * 2) hurtPlayer(state, def.damage, { x: e.x, y: e.y });
+    return end();
+  }
+  if (e.timer-- <= 0) return end();
+  if (!laneOpen(world, state, e.cx, e.cy, e.level, h, occupied)) {
+    state.events.push({ type: 'crash', enemy: index });
+    e.mode = 'pain';
+    e.timer = CHARGE_STUN;
+    e.cooldown = def.cooldown;
+    return;
+  }
+  occupied.add(cellKey(nx, ny));
+  e.fromCx = e.cx;
+  e.fromCy = e.cy;
+  e.fromLevel = e.level;
+  e.cx = nx;
+  e.cy = ny;
+  e.stepTick = 1;
+}
+
+function canAttack(world: World, state: SimState, e: EnemyState, def: EnemyDef, occupied: Set<string>): boolean {
+  // Melee (and a bloater's burst) needs the player next to it at about the same height (not on the catwalk above).
+  if (def.attack === 'melee' || def.attack === 'blast') return adjacent(e, state.player.cx, state.player.cy) && Math.abs(state.player.z - e.z) <= MAX_STEP * 2;
+  if (def.attack === 'charge') return chargeLane(world, state, e, def, occupied) !== undefined;
   return sees(world, state, e, def, def.range);
 }
 

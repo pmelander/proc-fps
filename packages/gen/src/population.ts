@@ -39,7 +39,9 @@ export type Placed = [type: number, x: number, y: number, angle: number, flags?:
 const CELLS_PER_ENEMY = 6;
 const MAX_ROOM_ENEMIES = 10;
 /** Budget points per enemy. */
-const COST: Partial<Record<EnemyType, number>> = { [EnemyType.Grunt]: 1, [EnemyType.Brute]: 1.5, [EnemyType.Sniper]: 2 };
+const COST: Partial<Record<EnemyType, number>> = {
+  [EnemyType.Grunt]: 1, [EnemyType.Brute]: 1.5, [EnemyType.Sniper]: 2, [EnemyType.Charger]: 1.5, [EnemyType.Bloater]: 1, [EnemyType.Warden]: 2,
+};
 const ROOM_HEALTH_CHANCE = 0.25;
 
 /** How much harder each level after the first is. */
@@ -90,6 +92,10 @@ export function populate(input: PopulationInput): Placed[] {
       [EnemyType.Grunt, 1],
       [EnemyType.Brute, 0.5 + 0.5 * deep],
       [EnemyType.Sniper, level >= 2 || deep > 0.5 ? 0.12 + 0.08 * (level - 1) : 0],
+      // The newer roles join as the run goes on: chargers and bloaters from level 2, wardens from 3.
+      [EnemyType.Charger, level >= 2 ? 0.14 + 0.04 * (level - 2) + 0.1 * deep : 0],
+      [EnemyType.Bloater, level >= 2 ? 0.16 + 0.04 * (level - 2) : 0],
+      [EnemyType.Warden, level >= 3 ? 0.1 + 0.04 * (level - 3) + 0.1 * deep : 0],
     ];
     let roll = rng.range(0, weights.reduce((s, [, w]) => s + w, 0));
     return weights.find(([, w]) => (roll -= w) < 0)?.[0] ?? EnemyType.Grunt;

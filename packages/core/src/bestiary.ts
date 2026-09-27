@@ -33,7 +33,7 @@ const GRUNT_PATTERNS = 5;
 /** Roles that come in two variants per level. */
 export const VARIANT_TYPES: readonly EnemyType[] = [EnemyType.Grunt, EnemyType.Brute, EnemyType.Sniper];
 
-const TYPES = [EnemyType.Grunt, EnemyType.Brute, EnemyType.Sniper, EnemyType.MiniBoss, EnemyType.Boss] as const;
+const TYPES = [EnemyType.Grunt, EnemyType.Brute, EnemyType.Sniper, EnemyType.Charger, EnemyType.Bloater, EnemyType.Warden, EnemyType.MiniBoss, EnemyType.Boss] as const;
 const round = Math.round;
 
 /** The baseline: every role's tuned stats, the same for both variants. */
@@ -61,6 +61,13 @@ function variant(type: EnemyType, r: Rng, speed: number, pattern: number): Enemy
       break;
     case EnemyType.Brute:
       def.damage = round(base.damage * r.range(0.85, 1.2));
+      break;
+    case EnemyType.Charger:
+    case EnemyType.Bloater:
+      def.damage = round(base.damage * r.range(0.85, 1.15));
+      break;
+    case EnemyType.Warden:
+      def.windup = round(base.windup * r.range(0.9, 1.2));
       break;
     case EnemyType.Sniper:
       def.windup = Math.max(MIN_HITSCAN_WINDUP, def.windup);

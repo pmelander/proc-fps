@@ -19,6 +19,7 @@ const renderer = new LevelRenderer(backend);
 const order: [EnemyType, number][] = [
   [EnemyType.Grunt, 0], [EnemyType.Grunt, 1], [EnemyType.Brute, 0], [EnemyType.Brute, 1],
   [EnemyType.Sniper, 0], [EnemyType.Sniper, 1], [EnemyType.MiniBoss, 0], [EnemyType.Boss, 0],
+  [EnemyType.Charger, 0], [EnemyType.Bloater, 0], [EnemyType.Warden, 0],
 ];
 const defs = enemyDefsFor(seed);
 const looks = seed ? enemyLooks(seed, theme) : BASELINE_LOOKS;
@@ -36,7 +37,7 @@ info.innerHTML =
     .map(([type, variant], i) => {
       const d = defOf(defs, { type, variant });
       const l = looks[i]!;
-      const attack = d.attack === 'melee' ? `melee ${d.damage}` : d.attack === 'hitscan' ? `hitscan ${d.damage}` : `${d.volley}× ${d.damage} @ ${d.projectileSpeed.toFixed(1)}`;
+      const attack = d.attack === 'projectile' ? `${d.volley}× ${d.damage} @ ${d.projectileSpeed.toFixed(1)}${d.shot ? ` ${d.shot}` : ''}${d.shield ? ' shield' : ''}` : `${d.attack} ${d.damage}`;
       const plan = [
         `${l.eyes} eye${l.eyes > 1 ? 's' : ''}`,
         l.horns ? `${l.horns} horn pair${l.horns > 1 ? 's' : ''}` : '',

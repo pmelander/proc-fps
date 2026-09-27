@@ -12,7 +12,11 @@ import { EnemyType } from './map.js';
  * Hordes, not bullet sponges: ordinary enemies die to a close shotgun blast (8 × 12); the
  * difficulty is their number (see gen/src/population.ts). They are deliberately slow.
  */
-export type AttackKind = 'melee' | 'projectile' | 'hitscan';
+/**
+ * melee: a blow to an adjacent player. projectile / hitscan: shots. charge: a rush down a straight
+ * lane (CHARGE_*). blast: a burst when next to the player, killing itself (BLAST_*).
+ */
+export type AttackKind = 'melee' | 'projectile' | 'hitscan' | 'charge' | 'blast';
 
 export interface EnemyDef {
   name: string;
@@ -39,6 +43,8 @@ export interface EnemyDef {
   shot?: 'lob' | 'homing';
   /** Ticks stunned when hit (0 = never flinches). */
   pain: number;
+  /** Carries a shield that stops shots from the front while it is up (SHIELD_*). */
+  shield?: boolean;
 }
 
 const base = { projectileSpeed: 0, volley: 1, spread: 0 };
@@ -56,6 +62,18 @@ export const ENEMY_DEFS: Record<EnemyType, EnemyDef> = {
     ...base, name: 'sniper', hp: 20, radius: 22, height: 78, stepTicks: 40,
     attack: 'hitscan', windup: 70, cooldown: 120, damage: 25, range: 14, pain: 12,
   },
+  [EnemyType.Charger]: {
+    ...base, name: 'charger', hp: 50, radius: 26, height: 80, stepTicks: 32,
+    attack: 'charge', windup: 36, cooldown: 100, damage: 30, range: 6, pain: 0,
+  },
+  [EnemyType.Bloater]: {
+    ...base, name: 'bloater', hp: 16, radius: 24, height: 72, stepTicks: 22,
+    attack: 'blast', windup: 34, cooldown: 0, damage: 35, range: 1, pain: 0,
+  },
+  [EnemyType.Warden]: {
+    ...base, name: 'warden', hp: 50, radius: 22, height: 78, stepTicks: 38,
+    attack: 'projectile', windup: 32, cooldown: 100, damage: 10, range: 10, projectileSpeed: 3.4, volley: 3, spread: 0.16, pain: 8, shield: true,
+  },
   [EnemyType.MiniBoss]: {
     ...base, name: 'mini boss', hp: 260, radius: 32, height: 96, stepTicks: 35,
     attack: 'projectile', windup: 34, cooldown: 80, damage: 12, range: 12, projectileSpeed: 4.4, volley: 3, spread: 0.22, pain: 0,
@@ -65,6 +83,19 @@ export const ENEMY_DEFS: Record<EnemyType, EnemyDef> = {
     attack: 'projectile', windup: 46, cooldown: 90, damage: 14, range: 14, projectileSpeed: 4, volley: 5, spread: 0.18, pain: 0,
   },
 };
+
+/** A charger's rush: ticks per cell (far faster than walking; the wind-up and the lane are the warning). */
+export const CHARGE_STEP_TICKS = 7;
+/** Ticks a charger lies stunned after crashing into something that is not the player. */
+export const CHARGE_STUN = 70;
+/** A bloater's burst: everyone within this many map units (of their body) is caught, the most at the centre. */
+export const BLAST_RADIUS = 176;
+/** At the burst's edge, this share of its damage. */
+export const BLAST_EDGE = 0.3;
+/** A warden's shield stops shots from within this cosine of its facing (about 60° either side). */
+export const SHIELD_ARC_COS = 0.5;
+/** Radians a tick a warden turns towards the player: slow enough to get round up close. */
+export const SHIELD_TURN = 0.025;
 
 /** How far an idle enemy sees the player, in cells. */
 export const SIGHT_CELLS = 10;

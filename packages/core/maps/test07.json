@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "meta": {"name":"test07","theme":"hell"},
+  "vertices": [
+    {"x":0,"y":0},
+    {"x":1792,"y":0},
+    {"x":1792,"y":1152},
+    {"x":0,"y":1152},
+    {"x":640,"y":256},
+    {"x":512,"y":256},
+    {"x":512,"y":384},
+    {"x":640,"y":384},
+    {"x":640,"y":768},
+    {"x":512,"y":768},
+    {"x":512,"y":896},
+    {"x":640,"y":896}
+  ],
+  "linedefs": [
+    {"v1":0,"v2":1,"front":{"sector":0,"upper":1,"middle":1,"lower":1},"flags":0,"tag":0},
+    {"v1":1,"v2":2,"front":{"sector":0,"upper":1,"middle":1,"lower":1},"flags":0,"tag":0},
+    {"v1":2,"v2":3,"front":{"sector":0,"upper":1,"middle":1,"lower":1},"flags":0,"tag":0},
+    {"v1":3,"v2":0,"front":{"sector":0,"upper":1,"middle":1,"lower":1},"flags":0,"tag":0},
+    {"v1":4,"v2":5,"front":{"sector":0,"upper":1,"middle":1,"lower":1},"flags":0,"tag":0},
+    {"v1":5,"v2":6,"front":{"sector":0,"upper":1,"middle":1,"lower":1},"flags":0,"tag":0},
+    {"v1":6,"v2":7,"front":{"sector":0,"upper":1,"middle":1,"lower":1},"flags":0,"tag":0},
+    {"v1":7,"v2":4,"front":{"sector":0,"upper":1,"middle":1,"lower":1},"flags":0,"tag":0},
+    {"v1":8,"v2":9,"front":{"sector":0,"upper":1,"middle":1,"lower":1},"flags":0,"tag":0},
+    {"v1":9,"v2":10,"front":{"sector":0,"upper":1,"middle":1,"lower":1},"flags":0,"tag":0},
+    {"v1":10,"v2":11,"front":{"sector":0,"upper":1,"middle":1,"lower":1},"flags":0,"tag":0},
+    {"v1":11,"v2":8,"front":{"sector":0,"upper":1,"middle":1,"lower":1},"flags":0,"tag":0}
+  ],
+  "sectors": [
+    {"floor":0,"ceil":256,"light":176,"floorTex":4,"ceilTex":5,"tag":0,"special":0}
+  ],
+  "things": [
+    {"type":1,"x":64,"y":576,"angle":0,"flags":0},
+    {"type":35,"x":1216,"y":576,"angle":180,"flags":0},
+    {"type":36,"x":832,"y":192,"angle":180,"flags":0},
+    {"type":32,"x":960,"y":192,"angle":180,"flags":0},
+    {"type":36,"x":832,"y":960,"angle":180,"flags":0},
+    {"type":32,"x":960,"y":960,"angle":180,"flags":0},
+    {"type":37,"x":1088,"y":320,"angle":180,"flags":0},
+    {"type":37,"x":1088,"y":832,"angle":180,"flags":0},
+    {"type":3,"x":192,"y":64,"angle":180,"flags":0},
+    {"type":3,"x":192,"y":1088,"angle":180,"flags":0},
+    {"type":2,"x":1728,"y":576,"angle":180,"flags":0}
+  ]
+}
