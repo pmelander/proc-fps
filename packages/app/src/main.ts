@@ -1,4 +1,4 @@
-import { CELL_SIZE, DoorKind, EnemyType, PELLETS, PELLET_SPREAD, WEAPONS, WEAPON_RANGE, WEAPON_SWITCH_TICKS, WeaponId, dcos, defOf, dsin, MAG_SIZE, MELEE_FIRST_HIT, MELEE_IFRAMES, MELEE_TICKS, RELOAD_TICKS, HEADING_DX, HEADING_DY, PLAYER_EYE_HEIGHT, STEP_TICKS, TICK_DT, isEnemyThing, type MapData } from '@proc-fps/core';
+import { CELL_SIZE, DIFFICULTY, DoorKind, isDifficulty, type Difficulty, EnemyType, PELLETS, PELLET_SPREAD, WEAPONS, WEAPON_RANGE, WEAPON_SWITCH_TICKS, WeaponId, dcos, defOf, dsin, MAG_SIZE, MELEE_FIRST_HIT, MELEE_IFRAMES, MELEE_TICKS, RELOAD_TICKS, HEADING_DX, HEADING_DY, PLAYER_EYE_HEIGHT, STEP_TICKS, TICK_DT, isEnemyThing, type MapData } from '@proc-fps/core';
 import { GENERATOR_VERSION, generate, isLevelType, validateGenerated, type LevelType } from '@proc-fps/gen';
 import { BASELINE_LOOKS, HIDDEN_OFFSET, LevelRenderer, SpriteShape, THEME_COLORS, WebGL2Backend, enemyLooks, spriteRow, spriteTile, type Sprite } from '@proc-fps/render';
 import {
@@ -32,6 +32,9 @@ import { Chainsword } from './chainsword.js';
 import { Gore } from './gore.js';
 import { ScreenBlood } from './screenblood.js';
 import { Weapon } from './weapon.js';
+import { newRunId, runUrl, titleScreen } from './title.js';
+import { endRun, levelScore, loadBest, recordDeath, recordLevel, runFor, runScore, type RunRecord } from './run.js';
+import { endScreen, summaryScreen } from './screens.js';
 import { Bolter } from './bolter.js';
 import { InputSampler } from './input.js';
 import { KEY_COLORS, KEY_NAMES } from './keys.js';
@@ -61,7 +64,8 @@ function bob(p: PlayerState): number {
  *   level type follows the run's pacing (compound, ascent, compound, descent, …).
  * - ?seed=<s>[&level=<n>][&type=compound|ascent|descent]: one seed (level 1 unless given).
  * - ?map=<name>: a hand-made test map.
- * - nothing: a fresh run at level 1.
+ * - nothing: the title screen (title.ts), which starts runs.
+ * Runs carry their difficulty as &diff=easy|hard|brutal (normal when absent).
  */
 interface Where {
   run?: string;
@@ -69,25 +73,25 @@ interface Where {
   level: number;
   /** Overrides the pacing's level type. */
   type?: LevelType;
+  difficulty: Difficulty;
+  /** No level asked for: show the title screen. */
+  title?: boolean;
 }
 
 function where(): Where & { map?: string } {
   const params = new URLSearchParams(location.search);
   const level = Math.max(1, Number(params.get('level') ?? 1) || 1);
+  const diff = params.get('diff');
+  const difficulty: Difficulty = isDifficulty(diff) ? diff : 'normal';
   const map = params.get('map');
-  if (map) return { map, level };
+  if (map) return { map, level, difficulty };
   const run = params.get('run');
-  if (run) return { run, level };
+  if (run) return { run, level, difficulty };
   const seed = params.get('seed');
   const type = params.get('type');
-  if (seed) return isLevelType(type) ? { seed, level, type } : { seed, level };
-  const fresh = newRunId();
-  history.replaceState(null, '', `?${new URLSearchParams({ run: fresh, level: '1' }).toString()}`);
-  return { run: fresh, level: 1 };
+  if (seed) return isLevelType(type) ? { seed, level, type, difficulty } : { seed, level, difficulty };
+  return { level: 1, difficulty, title: true };
 }
-
-/** UI-level randomness only; the sim never sees it. */
-const newRunId = () => Math.random().toString(36).slice(2, 8);
 
 function loadMap(w: Where & { map?: string }): MapData {
   if (w.map) {
@@ -96,20 +100,20 @@ function loadMap(w: Where & { map?: string }): MapData {
     return m;
   }
   const seed = w.run ? `${w.run}-${w.level}` : w.seed!;
-  const map = generate(seed, w.type ? { level: w.level, type: w.type } : { level: w.level });
+  const map = generate(seed, { level: w.level, difficulty: w.difficulty, ...(w.type ? { type: w.type } : {}) });
   const errors = validateGenerated(map);
   if (errors.length) console.warn(`seed ${seed} failed validation:`, errors);
   return map;
 }
 
-/** A fresh run at level 1. */
-function newRun(): void {
-  location.search = new URLSearchParams({ run: newRunId(), level: '1' }).toString();
+/** A fresh run at level 1, at the same difficulty. */
+function newRun(w: Where): void {
+  location.href = runUrl(newRunId(), 1, w.difficulty);
 }
 
 /** The next level of this run (a single seed becomes a run named after it). */
 function nextLevel(w: Where): void {
-  location.search = new URLSearchParams({ run: w.run ?? w.seed ?? newRunId(), level: String(w.level + 1) }).toString();
+  location.href = runUrl(w.run ?? w.seed ?? newRunId(), w.level + 1, w.difficulty);
 }
 
 function clock(ticks: number): string {
@@ -380,7 +384,18 @@ function main(): void {
   let shownPrompt = '';
 
   const here = where();
+  if (here.title) {
+    titleScreen();
+    return;
+  }
   const map = loadMap(here);
+  // The run this level belongs to (none for a single seed or a test map).
+  let run: RunRecord | null = here.run ? runFor(here.run, here.difficulty) : null;
+  const runLine = document.getElementById('runline') as HTMLParagraphElement;
+  runLine.textContent = run
+    ? `${DIFFICULTY[run.difficulty].label} run · level ${here.level} · score ${runScore(run).toLocaleString('en-US')}`
+    : `${here.map ? `Test map ${here.map}` : `Seed ${here.seed}`}`;
+  document.getElementById('quit')!.addEventListener('click', (e) => e.stopPropagation());
   // The weapon's coils glow in the theme's light colour.
   const theme = THEME_COLORS[(map.meta.theme ?? 'base') as keyof typeof THEME_COLORS] ?? THEME_COLORS.base;
   const weapon = new Weapon(document.getElementById('gun') as HTMLCanvasElement, theme.techLight);
@@ -424,18 +439,33 @@ function main(): void {
     audio.unlock(); // browsers allow audio only after a gesture
     void canvas.requestPointerLock();
   });
-  document.addEventListener('pointerlockchange', () => (start.hidden = input.locked));
+  // The pause screen shows whenever the mouse is free, except over the end-of-level screen.
+  document.addEventListener('pointerlockchange', () => (start.hidden = input.locked || state.dead || state.won));
+  end.addEventListener('click', (e) => {
+    const action = (e.target as HTMLElement).closest<HTMLElement>('[data-action]')?.dataset.action;
+    if (action === 'next') nextLevel(here);
+    if (action === 'retry') location.reload();
+    if (action === 'new') newRun(here);
+    if (action === 'title') location.href = './index.html';
+    if (action === 'end' && run) {
+      const rank = endRun(run);
+      end.innerHTML = summaryScreen(run, rank, loadBest());
+      end.classList.add('summary');
+      run = null;
+    }
+  });
 
   addEventListener('keydown', (e) => {
     // After death or the exit, E (or Space) moves on: retry the level, or a new one.
-    if ((state.dead || state.won) && (e.code === 'KeyE' || e.code === 'Space')) {
+    // (Not once the run is over and its summary shows: that screen has its own buttons.)
+    if ((state.dead || state.won) && !end.classList.contains('summary') && (e.code === 'KeyE' || e.code === 'Space')) {
       if (state.won && !here.map) nextLevel(here);
       else location.reload();
     }
     if (e.code === 'Tab') automap.hidden = false;
     if (e.code === 'KeyM') audio.toggleMusic();
     if (e.code === 'KeyN') audio.toggleSound();
-    if (e.code === 'F2') newRun();
+    if (e.code === 'F2') newRun(here);
     if (e.code === 'F4') {
       e.preventDefault();
       renderer.culling = !renderer.culling;
@@ -690,12 +720,24 @@ function main(): void {
     if (end.dataset.state !== ending) {
       end.dataset.state = ending;
       end.hidden = !ending;
-      const kills = state.enemies.filter((x) => x.mode === 'dead').length;
-      const secrets = world.secrets ? ` · secrets ${popcount(state.secrets)}/${world.secrets}` : '';
-      const stats = `<p class="stats">kills ${kills}/${state.enemies.length}${secrets} · time ${clock(state.tick)}</p>`;
-      end.innerHTML = state.dead
-        ? `<p class="title">You died</p>${stats}<p>Press E to try level ${here.level} again.</p>`
-        : `<p class="title">Level ${here.level} complete</p>${stats}<p>Press E for ${here.map ? 'another go' : `level ${here.level + 1}`}.</p>`;
+      if (ending) {
+        const kills = state.enemies.filter((x) => x.mode === 'dead').length;
+        const secretsFound = popcount(state.secrets);
+        const secrets = world.secrets ? ` · secrets ${secretsFound}/${world.secrets}` : '';
+        const stats = `<p class="stats">kills ${kills}/${state.enemies.length}${secrets} · time ${clock(state.tick)}</p>`;
+        // File the level with the run: a clear and its score, or one more death.
+        if (run && ending === 'won') {
+          const seconds = state.tick * TICK_DT;
+          run = recordLevel(run, {
+            level: here.level, type: map.meta.levelType ?? '', kills, enemies: state.enemies.length, secrets: secretsFound, secretTotal: world.secrets,
+            seconds, deaths: run.deaths, score: levelScore({ level: here.level, kills, secrets: secretsFound, seconds }, run.difficulty),
+          });
+        }
+        if (run && ending === 'dead') run = recordDeath(run);
+        end.innerHTML = endScreen(ending, here, stats, run);
+        // Free the mouse for the buttons (E still moves on).
+        if (document.pointerLockElement) document.exitPointerLock();
+      }
     }
 
     // Compass: where W will take you, relative to where you're looking.
@@ -716,7 +758,7 @@ function main(): void {
       keysHud.innerHTML = KEY_COLORS.filter((_, k) => state.keys & (1 << k)).map((c) => KEY_ICON(c)).join('');
     }
     hud.textContent =
-      `${map.meta.seed ? `level ${here.level} ${map.meta.levelType ?? ''}  seed ${map.meta.seed}  gen ${GENERATOR_VERSION}` : `map ${map.meta.name}`}  ${map.meta.theme ?? ''}\n` +
+      `${map.meta.seed ? `level ${here.level} ${map.meta.levelType ?? ''} ${here.difficulty}  seed ${map.meta.seed}  gen ${GENERATOR_VERSION}` : `map ${map.meta.name}`}  ${map.meta.theme ?? ''}\n` +
       `${fps.toFixed(0)} fps  tick ${state.tick}  sector ${p.sector}\n` +
       `cell ${p.cx}, ${p.cy}  z ${p.z.toFixed(0)}` +
       (world.secrets ? `\nsecrets ${popcount(state.secrets)}/${world.secrets}` : '') +

@@ -2,7 +2,9 @@ import {
   BaseTex as T,
   CELL_SIZE,
   CellPlan,
+  DIFFICULTY,
   DoorKind,
+  type Difficulty,
   EnemyType,
   HEADING_DX,
   HEADING_DY,
@@ -90,6 +92,8 @@ export interface GenerateOptions {
   level?: number;
   /** Level type; defaults to the run's pacing for `level` (levelTypeFor). */
   type?: LevelType;
+  /** Run difficulty: more or fewer enemies and less or more health (normal by default). */
+  difficulty?: Difficulty;
 }
 
 export function generate(seed: string, options: GenerateOptions = {}): MapData {
@@ -111,7 +115,7 @@ export function generateDetailed(seed: string, options: GenerateOptions = {}): G
         failures[layout]++;
         continue;
       }
-      return { ...emit(seed, mission, layout, rng, level, profile), mission, layout, attempts, failures, type: profile.type };
+      return { ...emit(seed, mission, layout, rng, level, profile, options.difficulty ?? 'normal'), mission, layout, attempts, failures, type: profile.type };
     }
   }
   throw new Error(`seed ${seed}: no layout after ${attempts} attempts`);
@@ -139,7 +143,7 @@ const GUARDED: readonly RoomKind[] = ['miniboss', 'boss', 'loot', 'exit'];
 
 type Emitted = Pick<Generated, 'map' | 'designs' | 'storeys' | 'drops' | 'atriums' | 'bridges'>;
 
-function emit(seed: string, mission: Mission, layout: Layout, rng: Rng, level: number, profile: LevelProfile): Emitted {
+function emit(seed: string, mission: Mission, layout: Layout, rng: Rng, level: number, profile: LevelProfile, difficulty: Difficulty): Emitted {
   const C = CELL_SIZE;
   const deco = rng.fork('deco');
   const theme = rng.fork('theme');
@@ -346,7 +350,7 @@ function emit(seed: string, mission: Mission, layout: Layout, rng: Rng, level: n
   for (const bridge of bridges.values()) for (const [x, y] of [...bridge.catwalk, bridge.lift]) occupied.add(`${x},${y}`);
   const nearDoor = new Set<string>();
   doorways.forEach((list) => list.forEach(([x, y, h]) => nearDoor.add(`${x - HEADING_DX[h as 0]},${y - HEADING_DY[h as 0]}`)));
-  things.push(...populate({ mission, layout, designs, occupied, nearDoor, rng: rng.fork('population'), level }));
+  things.push(...populate({ mission, layout, designs, occupied, nearDoor, rng: rng.fork('population'), level, difficulty: DIFFICULTY[difficulty] }));
 
   layout.corridors.forEach((c, ci) => {
     const edge = mission.edges[c.edge]!;
@@ -400,7 +404,8 @@ function emit(seed: string, mission: Mission, layout: Layout, rng: Rng, level: n
   // The theme picks the texture set's colours; its own stream, so it never shifts other choices.
   const style = rng.fork('style').pick(THEME_NAMES);
   return {
-    map: b.build({ name: `gen-${seed}`, seed, generatorVersion: GENERATOR_VERSION, theme: style, level, levelType: profile.type }),
+    // Normal maps record no difficulty, so they stay exactly what they were before difficulties.
+    map: b.build({ name: `gen-${seed}`, seed, generatorVersion: GENERATOR_VERSION, theme: style, level, levelType: profile.type, ...(difficulty === 'normal' ? {} : { difficulty }) }),
     designs,
     storeys,
     drops: drops.size,

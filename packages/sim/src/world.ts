@@ -1,6 +1,9 @@
 import {
   CellGrid,
   enemyDefsFor,
+  scaleDamage,
+  DIFFICULTY,
+  difficultyOf,
   type EnemyDefs,
   DoorKind,
   LIFT_SPEED,
@@ -114,7 +117,7 @@ export function createWorld(map: MapData): World {
   });
   const exitThing = map.things.find((t) => t.type === ThingType.Exit);
   const exit = exitThing ? grid.cellOf(exitThing.x, exitThing.y) : null;
-  return { map, locator: new SectorLocator(map), grid, doors, doorAt, lifts, liftAt, pickups, exit, secrets: secretCount(map), enemyDefs: enemyDefsFor(map.meta.seed) };
+  return { map, locator: new SectorLocator(map), grid, doors, doorAt, lifts, liftAt, pickups, exit, secrets: secretCount(map), enemyDefs: scaleDamage(enemyDefsFor(map.meta.seed), DIFFICULTY[difficultyOf(map)].damage) };
 }
 
 /** True for things that are floor pickups (keys and health; carried keys come from enemies). */

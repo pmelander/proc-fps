@@ -46,6 +46,31 @@ describe('level types', () => {
   });
 });
 
+describe('difficulty', () => {
+  it('leaves normal maps exactly as they were, and scales enemies, health and damage', async () => {
+    const { createWorld, defOf } = await import('@proc-fps/sim').then(async (m) => ({ ...m, defOf: (await import('@proc-fps/core')).defOf }));
+    expect(JSON.stringify(generate('diff-a', { difficulty: 'normal' }))).toBe(JSON.stringify(generate('diff-a')));
+    let easy = [0, 0];
+    let brutal = [0, 0];
+    for (let i = 0; i < 30; i++) {
+      const count = (m: ReturnType<typeof generate>) => [m.things.filter((t) => isEnemyThing(t.type)).length, m.things.filter((t) => t.type === ThingType.Health).length];
+      const e = count(generate(`diff-${i}`, { difficulty: 'easy', type: 'compound' }));
+      const b = generate(`diff-${i}`, { difficulty: 'brutal', type: 'compound' });
+      const c = count(b);
+      easy = [easy[0]! + e[0]!, easy[1]! + e[1]!];
+      brutal = [brutal[0]! + c[0]!, brutal[1]! + c[1]!];
+      expect(b.meta.difficulty).toBe('brutal');
+      expect(validateGenerated(b)).toEqual([]);
+    }
+    expect(brutal[0]).toBeGreaterThan(easy[0]! * 1.5);
+    expect(brutal[1]).toBeLessThan(easy[1]!);
+    const hard = createWorld(generate('diff-dmg', { difficulty: 'brutal' }));
+    const soft = createWorld(generate('diff-dmg'));
+    const grunt = { type: EnemyType.Grunt, variant: 0 };
+    expect(defOf(hard.enemyDefs, grunt).damage).toBe(Math.round(defOf(soft.enemyDefs, grunt).damage * 1.4));
+  });
+});
+
 describe('snipers on high ground', () => {
   it('perches some snipers on catwalk tops, where the sim starts them up on the slab', async () => {
     const { createWorld, createSimState } = await import('@proc-fps/sim');

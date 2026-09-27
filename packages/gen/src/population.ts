@@ -1,4 +1,4 @@
-import { EnemyType, THING_HIGH, THING_VARIANT, ThingType, VARIANT_TYPES, dropsKeyFlags, type Rng } from '@proc-fps/core';
+import { EnemyType, THING_HIGH, THING_VARIANT, ThingType, VARIANT_TYPES, dropsKeyFlags, type DifficultyDef, type Rng } from '@proc-fps/core';
 import type { Layout } from './layout.js';
 import type { Mission } from './mission.js';
 import type { RoomDesign } from './rooms.js';
@@ -24,6 +24,8 @@ export interface PopulationInput {
   nearDoor: ReadonlySet<string>;
   rng: Rng;
   level: number;
+  /** Run difficulty: scales the enemy budget and escorts, and the chance of health in a room. */
+  difficulty?: DifficultyDef;
 }
 
 /** Chance an atrium gets a sniper on its ring, before the level adds to it. */
@@ -47,7 +49,8 @@ export function populate(input: PopulationInput): Placed[] {
   const depth = graphDepth(mission);
   const exit = mission.nodes.find((n) => n.kind === 'exit')!.id;
   const maxDepth = Math.max(1, depth[exit]!);
-  const difficulty = levelDifficulty(level);
+  const scale = input.difficulty ?? { enemies: 1, health: 1 };
+  const difficulty = levelDifficulty(level) * scale.enemies;
 
   // Free cells per room, drawn from as things are placed.
   const free = mission.nodes.map((_, id) => {
@@ -143,11 +146,11 @@ export function populate(input: PopulationInput): Placed[] {
       if (designs[id]!.template === 'atrium' && variants.chance(ATRIUM_SNIPER_CHANCE + 0.1 * (level - 1))) perch(id);
     } else if (node.kind === 'miniboss') {
       putCentral(id, EnemyType.MiniBoss);
-      const escort = rng.int(2, 3 + Math.floor(level / 2));
+      const escort = Math.round(rng.int(2, 3 + Math.floor(level / 2)) * scale.enemies);
       for (let n = 0; n < escort; n++) putEnemy(id, rng.chance(0.3 * (level - 1)) ? EnemyType.Brute : EnemyType.Grunt);
     } else if (node.kind === 'boss') {
       putCentral(id, EnemyType.Boss);
-      const escort = Math.min(8, rng.int(1, 1 + level));
+      const escort = Math.round(Math.min(8, rng.int(1, 1 + level)) * scale.enemies);
       for (let n = 0; n < escort; n++) putEnemy(id, EnemyType.Grunt);
     }
   });
@@ -162,7 +165,7 @@ export function populate(input: PopulationInput): Placed[] {
       for (let k = 0; k < n; k++) put(id, ThingType.Health);
     } else if (id === gateRoom) {
       put(id, ThingType.Health);
-    } else if (node.kind === 'room' && rng.chance(ROOM_HEALTH_CHANCE + 0.15 * (depth[id]! / maxDepth))) {
+    } else if (node.kind === 'room' && rng.chance((ROOM_HEALTH_CHANCE + 0.15 * (depth[id]! / maxDepth)) * scale.health)) {
       put(id, ThingType.Health);
     }
   });

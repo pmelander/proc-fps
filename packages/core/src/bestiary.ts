@@ -98,6 +98,16 @@ export function enemyDefsFor(seed: string | undefined): EnemyDefs {
   return out;
 }
 
+/** Every role's stats with their damage scaled (difficulty); the same object when the scale is 1. */
+export function scaleDamage(defs: EnemyDefs, scale: number): EnemyDefs {
+  if (scale === 1) return defs;
+  const out = {} as Record<EnemyType, EnemyDef[]>;
+  for (const [type, list] of Object.entries(defs) as unknown as [EnemyType, readonly EnemyDef[]][]) {
+    out[type] = list.map((d) => ({ ...d, damage: Math.max(1, Math.round(d.damage * scale)) }));
+  }
+  return out;
+}
+
 /** An enemy's stats: its role's, for its variant (the bosses have only one). */
 export function defOf(defs: EnemyDefs, e: { readonly type: EnemyType; readonly variant: number }): EnemyDef {
   const list = defs[e.type];

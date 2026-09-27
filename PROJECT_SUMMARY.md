@@ -85,13 +85,17 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 
 **Verified:**
 - The typecheck is clean.
-- 118 tests pass.
+- 125 tests pass.
 - 2000 seeds produce 0 validation failures (about 12 ms per map including validation).
 - The production build succeeds (about 45 kB JS).
 - Headless Chromium (SwiftShader) renders correctly.
 
 **Not yet verified:** real mouse and keyboard play. Pointer lock can't run headless.
 
+- Run structure (M17):
+  - A fresh load (no URL parameters) shows the title screen (`title.ts`): the menu over a slowly turning view of a generated level. New run with a difficulty (remembered), Continue (the run in progress, at its next level), the best runs, the seed browser and the controls.
+  - Difficulty (`core/src/difficulty.ts`): Easy, Normal, Hard, Brutal. The generator scales the enemy budget and escorts (0.7 / 1 / 1.3 / 1.6) and the chance of health in a room (1.4 / 1 / 0.8 / 0.65); the sim scales enemy damage (0.7 / 1 / 1.2 / 1.4, `scaleDamage`); the score scales with it (0.5 / 1 / 1.5 / 2). Runs carry it in the URL (`&diff=`); normal maps record none and stay byte-identical.
+  - Runs are tracked across levels in the browser's storage (`run.ts`, guarded, so no storage just means no memory): each cleared level's kills, secrets, time, deaths and score (kills × 10, secrets × 250, 1,000 for the clear, up to 750 for pace, times the difficulty and 10% more per level deep). The end-of-level screen (`screens.ts`) shows the level's stats and score, the run so far, and buttons (next level or retry, end run; E still moves on) with the mouse freed. Ending a run files it among the 8 best and shows a summary: every level, the total, and its place. The pause screen shows the run and a way back to the title.
 - Small fixes after M16 (generator v0.18.0): a sniper's shot draws a glowing line from its eye to where it lands (the player, or the wall if they broke line of sight), fading in a quarter second; even volleys shift half a step (alternating sides) so one projectile always flies at the aim (a symmetric even fan left a gap exactly where the player stood); runs lean vertical (a third of levels flat, was half).
 - Enemy behaviour (M16):
   - Lifts: the pathing field no longer treats lifts as walls, so enemies route through them between storeys. They ride by the player's rules (`liftAllows` in ai.ts): never on or off a moving lift; onto one that is not level they call it and wait, but never one the player stands on; off one towards a floor it is not level with they send it there and ride; and the way off must be open at the lift's real height. An enemy's height follows the platform (`floorNow`).
@@ -220,7 +224,7 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 - **M14 — rendering performance:** ✅ complete. The palette post pass now runs at the scene's low resolution (the canvas holds 240 rows and CSS scales it up pixelated; same image, a twentieth of the fill at 1080p), portal culling draws only the sectors the camera can see (about 7% of a level's sectors), visible ranges draw in one call, sprite quads reuse one buffer, and F3 shows a perf overlay (F4 toggles culling).
 - **M15 — more weapons:** ✅ complete. The heavy bolter (fast, accurate, explosive bolts) beside the scattergun, weapon switching (1/2, wheel, Q), per-weapon magazines, its own view model, sounds, tracers and bursts, and a per-weapon ammo panel with weapon slots.
 - **M16 — enemy behaviour:** ✅ complete (generator v0.17.0). Enemies ride lifts and follow the player between storeys, snipers perch on catwalk tops, and some enemies flank.
-- **M17 — run structure:** planned. A title screen, a run summary, score and kills tracked across a run, difficulty options.
+- **M17 — run structure:** ✅ complete. A title screen, four difficulties, runs tracked across levels with a score, an end-of-level screen with the run so far, a run summary and the best runs.
 - **M11 — procedural enemies:** ✅ complete. Every generated level breeds its own mutants: seeded stat variants per role (core `enemyDefsFor`) and seeded body plans and skins that stand out from the theme (render `enemyLooks`). The exit gets a glowing pad, a light beacon and a hum.
 
 ## Doors (decided)
@@ -249,5 +253,5 @@ In the map format a door is a one-cell sector with its kind in `Sector.special` 
 
 Ideas noted during play-testing, not yet scheduled. Each line points at whatever already exists for it.
 
-- **More interesting boss fights.** Today the mini boss and boss are big, tough enemies with wider volleys in an arena. Ideas: attack phases that change as their health drops (volley patterns, a charge, summoning a wave of grunts), telegraphed area attacks to dodge (a ground slam, a sweeping beam), arena features (cover pillars that break, hazard floors that switch on), a health bar on the HUD while the fight is on, and a proper death (a long gib burst, a pause).
+- **More interesting boss fights.** Today the mini boss and boss are big, tough enemies with wider volleys in an arena. Ideas: attack phases that change as their health drops (volley patterns, a charge, summoning a wave of grunts), telegraphed area attacks to dodge (a ground slam, a sweeping beam), arena features (cover pillars that break, hazard floors that switch on), a health bar on the HUD while the fight is on, and a proper death (a long gib burst, a pause). Also: the chainsword's invulnerability should not turn away a boss's or mini boss's blows (today `hurtPlayer` shields every hit during MELEE_IFRAMES), so a boss cannot be ground down safely up close.
 - **Grenade launcher, limited ammo.** A left-hand launcher like the chainsword, fired with E; grenades are scarce: one now and then in a loot room, a count on the HUD. Needs: a grenade pickup (thing type) placed by the generator in some loot rooms, a count in `PlayerState`, a lobbed projectile with an arc, a fuse or impact burst with splash (reuse the bolter's blast), a left-hand view model and sounds. Controls (decided): fire it with E, and doors move to Space only (today E and Space both open doors).

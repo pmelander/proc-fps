@@ -197,6 +197,8 @@ export interface MapMeta {
   level?: number;
   /** Generated level type: compound (flat), ascent or descent. */
   levelType?: string;
+  /** Run difficulty (see core's DIFFICULTY); absent means normal. */
+  difficulty?: string;
 }
 
 export interface MapData {

@@ -12,3 +12,4 @@ export * from './cells.js';
 export * from './enemies.js';
 export * from './bestiary.js';
 export * from './weapons.js';
+export * from './difficulty.js';
