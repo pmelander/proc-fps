@@ -290,3 +290,4 @@ Ideas noted during play-testing, not yet scheduled. Each line points at whatever
 
 
 - **Chainsword only on the trigger.** The dedicated melee input (right-click, V) is too strong: the chainsword should start only from a normal attack with an enemy in reach. Drop the `melee` input from the app (`app/src/input.ts`) and the controls lists (`screens.ts`); the `InputFrame.melee` field and its handling in `sim/src/combat.ts` (`playerFire`) can stay for old replays, or go with a replay-format note.
+- **Grenade on right-click, E interacts again.** With the chainsword off right-click (above), right-click could lob the grenade and E go back to opening key doors and secret walls (Space since M19; decide whether Space stays as well). Touches `app/src/input.ts` (`grenade`, `use`), the door prompt (main.ts `doorPrompt`), and the controls lists in `screens.ts`.
