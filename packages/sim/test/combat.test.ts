@@ -861,3 +861,27 @@ describe('armour and power-ups', async () => {
     expect(boosted.cooldown).toBeLessThan(plain.cooldown);
   });
 });
+
+describe('line of sight', async () => {
+  const { sightLine } = await import('../src/index.js');
+  it('a raised lift between a sniper and the player blocks its sight and its shot; lowered, it does not', () => {
+    const plan = new CellPlan();
+    const hall = plan.spec({ floor: 0, ceil: 320, light: 200 });
+    for (let x = 0; x < 7; x++) plan.set(x, 0, x === 3 ? plan.spec({ floor: 0, ceil: 320, light: 200, special: SPECIAL_LIFT, tag: 192 }) : hall);
+    const b = new MapBuilder();
+    emitCellPlan(b, plan, C);
+    b.thing(ThingType.PlayerStart, 0.5 * C, 0.5 * C, 0);
+    b.thing(EnemyType.Sniper, 6.5 * C, 0.5 * C, 180);
+    const s = sim(b.build({ name: 'lift-cover' }));
+    const sniper = s.state.enemies[0]!;
+    const def = s.world.enemyDefs[EnemyType.Sniper][0]!;
+    expect(sightLine(s.world, s.state, sniper, def)).not.toBeNull();
+    s.state.lifts[0]!.pos = s.world.lifts[0]!.travel; // up at the top: a block of floor 192 high
+    expect(sightLine(s.world, s.state, sniper, def)).toBeNull();
+    // Mid wind-up when the lift rises: the shot does not land.
+    Object.assign(sniper, { mode: 'windup', timer: 1 });
+    s.step({});
+    expect(events(s.state, 'attack')).toHaveLength(1);
+    expect(s.state.player.health).toBe(PLAYER_MAX_HEALTH);
+  });
+});

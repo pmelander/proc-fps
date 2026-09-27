@@ -7,7 +7,7 @@ import {
   GRENADE,
   isBoss,
   SLAM_RADIUS,
-  lineOfSight,
+  sightLine,
   ReplayRecorder,
   clonePlayer,
   createSimState,
@@ -319,8 +319,10 @@ function sniperBeam(world: World, state: SimState, e: EnemyState, gore: Gore): v
   const def = defOf(world.enemyDefs, e);
   const p = state.player;
   const [sx, sy, sz] = [e.x, e.y, e.z + def.height * 0.75];
-  let [tx, ty, tz] = [p.x, p.y, p.z + 44];
-  if (!lineOfSight(world, state, sx, sy, tx, ty)) {
+  // To the point of the player it saw (as the sim judged the shot), or on to whatever blocked it.
+  const seen = sightLine(world, state, e, def);
+  let [tx, ty, tz] = seen ? [seen.x, seen.y, seen.z] : [p.x, p.y, p.z + 44];
+  if (!seen) {
     const len = Math.hypot(tx - sx, ty - sy, tz - sz) || 1;
     const [dx, dy, dz] = [(tx - sx) / len, (ty - sy) / len, (tz - sz) / len];
     const d = castRay(world, state, sx, sy, sz, dx, dy, dz, WEAPON_RANGE);

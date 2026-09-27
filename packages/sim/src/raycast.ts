@@ -50,7 +50,20 @@ export function traceCells(
   return true;
 }
 
-/** 2D line of sight between two map points: every cell on the way is open. */
+/**
+ * 3D line of sight between two points: no wall, closed door, floor, ceiling, catwalk or lift
+ * (at its height now) in between, judged as castRay judges the player's shots.
+ */
+export function clearLine(world: World, state: SimState, x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): boolean {
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const dz = z1 - z0;
+  const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  if (len < 1) return true;
+  return castRay(world, state, x0, y0, z0, dx / len, dy / len, dz / len, len) >= len - 1;
+}
+
+/** 2D line of sight between two map points: every cell on the way is open (heights ignored). */
 export function lineOfSight(world: World, state: SimState, x0: number, y0: number, x1: number, y1: number): boolean {
   return traceCells(world, x0, y0, x1, y1, (cx, cy) => cellOpen(world, state, cx, cy));
 }

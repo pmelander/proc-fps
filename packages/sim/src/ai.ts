@@ -1,8 +1,8 @@
-import { ALERT_TICKS, CELL_SIZE, CHARGE_STEP_TICKS, CHARGE_STUN, CellGrid, DoorKind, defOf, HEADING_DX, HEADING_DY, MAX_STEP, NOISE_CELLS, PLAYER_HEIGHT, SHIELD_TURN, SIGHT_CELLS, dcos, dsin, type EnemyDef, type Heading } from '@proc-fps/core';
+import { ALERT_TICKS, CELL_SIZE, PLAYER_EYE_HEIGHT, CHARGE_STEP_TICKS, CHARGE_STUN, CellGrid, DoorKind, defOf, HEADING_DX, HEADING_DY, MAX_STEP, NOISE_CELLS, PLAYER_HEIGHT, SHIELD_TURN, SIGHT_CELLS, dcos, dsin, type EnemyDef, type Heading } from '@proc-fps/core';
 import { detonate, hurtPlayer } from './combat.js';
 import { callLift, floorNow, liftAtCell, liftMoving } from './lifts.js';
 import { bossAttack, isBoss, nextPattern, patternCooldown, patternWindup, updatePhase, volleyBonus } from './boss.js';
-import { lineOfSight } from './raycast.js';
+import { clearLine } from './raycast.js';
 import { fireHoming, fireLob } from './shots.js';
 import { DOOR_OPEN_TICKS, type EnemyState, type SimState } from './state.js';
 import { doorAtCell, type World } from './world.js';
@@ -348,12 +348,25 @@ function flankField(world: World, state: SimState, main: Int32Array, side: numbe
   return dist;
 }
 
+/**
+ * The point of the player an enemy can see from its eye (their chest, else their head), or null:
+ * a 3D line, so floors between storeys, ledges, catwalks and raised lifts all block it.
+ */
+export function sightLine(world: World, state: SimState, e: EnemyState, def: EnemyDef): { x: number; y: number; z: number } | null {
+  const p = state.player;
+  const eye = e.z + def.height * EYE;
+  for (const z of [p.z + AIM_HEIGHT, p.z + PLAYER_EYE_HEIGHT]) {
+    if (clearLine(world, state, e.x, e.y, eye, p.x, p.y, z)) return { x: p.x, y: p.y, z };
+  }
+  return null;
+}
+
 function sees(world: World, state: SimState, e: EnemyState, def: EnemyDef, cells: number): boolean {
   const p = state.player;
   const dx = p.x - e.x;
   const dy = p.y - e.y;
   const reach = cells * CELL_SIZE;
-  return dx * dx + dy * dy <= reach * reach && lineOfSight(world, state, e.x, e.y, p.x, p.y);
+  return dx * dx + dy * dy <= reach * reach && sightLine(world, state, e, def) !== null;
 }
 
 function adjacent(e: EnemyState, x: number, y: number): boolean {
@@ -466,7 +479,7 @@ function attack(world: World, state: SimState, e: EnemyState, def: EnemyDef, ind
   }
   if (def.attack === 'hitscan') {
     // Breaking line of sight during the wind-up dodges.
-    if (lineOfSight(world, state, e.x, e.y, p.x, p.y)) hurtPlayer(state, def.damage, { x: e.x, y: e.y });
+    if (sightLine(world, state, e, def)) hurtPlayer(state, def.damage, { x: e.x, y: e.y });
     return;
   }
   const boss = isBoss(e.type);
