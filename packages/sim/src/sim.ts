@@ -1,4 +1,4 @@
-import {
+import { PLAYER_HEIGHT,
   DoorKind,
   HAZARD_DAMAGE,
   HAZARD_TICKS,
@@ -84,6 +84,14 @@ export function stepSim(world: World, state: SimState, input: InputFrame): void 
       if (to >= 0 && Math.abs(there - here) > MAX_STEP) {
         callLift(world, state, to, here);
         return 'wait';
+      }
+      // Off a lift: the grid lets a lift stand at whichever end suits the step, but this one is where
+      // it is. The way off must be open at its real height: from a raised lift, a lower corridor is
+      // behind the wall above its opening, not a drop.
+      if (from >= 0 && to < 0) {
+        const fromCeil = world.grid.span(cx, cy, level)![1];
+        const toCeil = world.grid.span(nx, ny, lands)![1];
+        if (Math.min(fromCeil, toCeil) - Math.max(here, there) < PLAYER_HEIGHT) return 'no';
       }
       return there - here > MAX_STEP ? 'no' : lands;
     },

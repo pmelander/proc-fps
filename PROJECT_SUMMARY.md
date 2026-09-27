@@ -92,6 +92,8 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 
 **Not yet verified:** real mouse and keyboard play. Pointer lock can't run headless.
 
+- A heavier shot and its debris (after M12): the shot sound is a low zap, a crack, a long blast, a distorted boom and a sub-bass thump, played a little lower or higher each time. Each shot throws a tracer spark along every pellet (the sim's fixed spread, traced in the app with `castRay`), and where a pellet strikes a wall or floor a burst of white-hot sparks and stone chips that bounce and settle (new `Spark` and `Chip` sprites; pellets that hit an enemy make blood instead).
+- Fixed: stepping off a raised lift towards a lower cell (the wall above a corridor's opening) walked through the wall and fell a storey. The grid lets a lift stand at whichever end suits a step; the sim now also requires the opening at the lift's real height.
 - Enemy variety (after M12):
   - Each level breeds two variants of every ordinary role (grunt, brute, sniper), so it holds six kinds of ordinary enemy plus its mini boss and boss. Stats (`enemyDefsFor` now returns a pair per role; read one with `defOf(defs, enemy)`): the second variant takes the opposite speed trait (one quick and frail, one slow and tough) and, for grunts, another spit pattern. The generator marks second-variant enemies with `THING_VARIANT` (flag 1 << 5): 40% of rooms hold only the first, 40% only the second, 20% mix them. `EnemyState.variant` carries it into the sim.
   - Looks (`enemyLooks` now returns 8, one per sprite row: grunt, grunt, brute, brute, sniper, sniper, mini boss, boss; `spriteRow`): the second variant shifts the role's hue 30–50° towards clearer ground, flips its lightness, stands on different legs, wears another pattern and grows its own body plan. New traits: four leg types (biped, digitigrade, crawler with two splayed legs a side, slug), glowing markings (30%: the pattern's accent areas glow in the hue farthest from the theme and the skin; self-lit in SPRITE_FS, atlas alpha 0.68), wider saturation and value, and accents from several schemes (a darker shade, the complement, a triad, a pale belly).
@@ -227,5 +229,4 @@ In the map format a door is a one-cell sector with its kind in `Sector.special` 
 
 Ideas noted during play-testing, not yet scheduled. Each line points at whatever already exists for it.
 
-- **Bug: clipping out of a lift at the top.** Entering a lift on the top storey and bumping into the wall in front of it lets the player clip outside and fall straight down to the storey below. Likely in the lift/step interplay (`lifts.ts`, `MoveGate.tryStep`, `CellGrid.stepTarget` treating a lift cell as standing at either end): a step off the raised platform towards a cell that is only reachable from the lift's bottom end.
-
+- Empty.

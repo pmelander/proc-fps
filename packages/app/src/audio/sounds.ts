@@ -18,12 +18,14 @@ export type SoundId =
 type Recipe = Voice[];
 
 const RECIPES: Record<SoundId, Recipe> = {
-  // An energy scattergun: a zap, a hard crack, a wide noise blast and a sub-bass thump.
+  // An energy scattergun, heavy: a low zap, a hard crack, a long blast of noise, a distorted boom
+  // and a deep sub-bass thump that rolls on after it.
   shot: [
-    { wave: 'square', freq: 1800, freqEnd: 140, attack: 0, sustain: 0.01, release: 0.12, volume: 0.3, duty: 0.3 },
-    { wave: 'noise', freq: 4000, freqEnd: 900, attack: 0, sustain: 0.01, release: 0.05, volume: 0.6 },
-    { wave: 'noise', freq: 1600, freqEnd: 120, attack: 0.002, sustain: 0.05, release: 0.35, volume: 0.75, lowpass: 2600 },
-    { wave: 'sine', freq: 95, freqEnd: 32, attack: 0, sustain: 0.04, release: 0.25, volume: 0.9 },
+    { wave: 'square', freq: 900, freqEnd: 80, attack: 0, sustain: 0.015, release: 0.16, volume: 0.26, duty: 0.35 },
+    { wave: 'noise', freq: 3200, freqEnd: 700, attack: 0, sustain: 0.012, release: 0.06, volume: 0.55 },
+    { wave: 'noise', freq: 1100, freqEnd: 70, attack: 0.002, sustain: 0.08, release: 0.6, volume: 0.8, lowpass: 1700 },
+    { wave: 'saw', freq: 72, freqEnd: 26, attack: 0, sustain: 0.07, release: 0.45, volume: 0.55, lowpass: 380 },
+    { wave: 'sine', freq: 60, freqEnd: 22, attack: 0, sustain: 0.09, release: 0.6, volume: 0.9 },
   ],
   // The coils recharging: a rising whine through the cooldown.
   charge: [{ wave: 'sine', freq: 260, freqEnd: 1100, attack: 0.05, sustain: 0.3, release: 0.12, volume: 0.18, vibrato: { depth: 0.03, rate: 24 } }],

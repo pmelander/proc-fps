@@ -1,8 +1,9 @@
-import { CELL_SIZE, DoorKind, EnemyType, defOf, MAG_SIZE, MELEE_FIRST_HIT, MELEE_IFRAMES, MELEE_TICKS, RELOAD_TICKS, HEADING_DX, HEADING_DY, PLAYER_EYE_HEIGHT, STEP_TICKS, TICK_DT, isEnemyThing, type MapData } from '@proc-fps/core';
+import { CELL_SIZE, DoorKind, EnemyType, PELLETS, PELLET_SPREAD, WEAPON_RANGE, dcos, defOf, dsin, MAG_SIZE, MELEE_FIRST_HIT, MELEE_IFRAMES, MELEE_TICKS, RELOAD_TICKS, HEADING_DX, HEADING_DY, PLAYER_EYE_HEIGHT, STEP_TICKS, TICK_DT, isEnemyThing, type MapData } from '@proc-fps/core';
 import { GENERATOR_VERSION, generate, isLevelType, validateGenerated, type LevelType } from '@proc-fps/gen';
 import { BASELINE_LOOKS, HIDDEN_OFFSET, LevelRenderer, SpriteShape, THEME_COLORS, WebGL2Backend, enemyLooks, spriteRow, spriteTile, type Sprite } from '@proc-fps/render';
 import {
   PLAYER_MAX_HEALTH,
+  castRay,
   ReplayRecorder,
   clonePlayer,
   createSimState,
@@ -166,7 +167,7 @@ const SPRITE_ROWS_OF: readonly (readonly [EnemyType, number])[] = [
 ];
 /** Events that play a sound with no position (the player's own). */
 const SOUND_OF: Partial<Record<string, SoundId>> = {
-  shot: 'shot', hurt: 'hurt', death: 'death', locked: 'locked', key: 'key', health: 'health', secret: 'secret', exit: 'exit',
+  hurt: 'hurt', death: 'death', locked: 'locked', key: 'key', health: 'health', secret: 'secret', exit: 'exit',
   reload: 'reload', reloaded: 'reloaded',
 };
 const FLASH_SECONDS = 0.12;
@@ -248,6 +249,41 @@ function buildSprites(
     sprites.push({ x: q.x, y: q.y, z: q.z - PROJECTILE_SIZE / 2, width: PROJECTILE_SIZE, height: PROJECTILE_SIZE, shape: SpriteShape.Projectile, charge: 0, flash: 0, light: 1, tile: -1 });
   }
   return sprites;
+}
+
+/**
+ * The shot's debris, render-only: a tracer spark along each pellet (the sim's fixed spread), and
+ * where one strikes a wall or floor a burst of sparks and chips. Pellets that hit an enemy make
+ * blood instead (the hit events), so they get no impact here.
+ */
+function shatter(world: World, state: SimState, gore: Gore): void {
+  const p = state.player;
+  const ox = p.x;
+  const oy = p.y;
+  const oz = p.z + PLAYER_EYE_HEIGHT - 6;
+  for (const [yaw, pitch] of PELLET_SPREAD.slice(0, PELLETS)) {
+    const cp = dcos(p.pitch + pitch);
+    const dx = cp * dcos(p.angle + yaw);
+    const dy = cp * dsin(p.angle + yaw);
+    const dz = dsin(p.pitch + pitch);
+    const wall = castRay(world, state, ox, oy, oz, dx, dy, dz, WEAPON_RANGE);
+    // The nearest living enemy the pellet passes through before the wall, if any.
+    const struck = state.enemies.some((e) => {
+      if (e.mode === 'dead') return false;
+      const def = defOf(world.enemyDefs, e);
+      const t = (e.x - ox) * dx + (e.y - oy) * dy;
+      if (t <= 0 || t >= wall) return false;
+      const cx = ox + dx * t - e.x;
+      const cy = oy + dy * t - e.y;
+      const z = oz + dz * t;
+      return cx * cx + cy * cy <= def.radius * def.radius && z >= e.z && z <= e.z + def.height;
+    });
+    const speed = 2600;
+    // Start a little ahead of the eye (at the muzzle) so the tracer is not a blob in the face.
+    const start = 40;
+    if (wall > start) gore.tracer(ox + dx * start, oy + dy * start, oz + dz * start, dx * speed, dy * speed, dz * speed, (wall - start) / speed);
+    if (!struck && wall < WEAPON_RANGE) gore.impact(ox + dx * wall, oy + dy * wall, oz + dz * wall, -dx, -dy, -dz);
+  }
 }
 
 /**
@@ -463,6 +499,9 @@ function main(): void {
         if (e.type === 'secret') [notice, noticeUntil] = ['You found a secret!', now + NOTICE_SECONDS];
         if (e.type === 'health') [notice, noticeUntil] = [`+${e.amount} health`, now + NOTICE_SECONDS];
         if (e.type === 'shot') {
+          // Heavy, and never quite the same twice: a little lower or higher each time.
+          audio.play('shot', undefined, undefined, 0.92 + Math.random() * 0.1);
+          shatter(world, state, gore);
           weapon.fire(now);
           renderer.flash = 1;
           joltUntil = now + JOLT_SECONDS;

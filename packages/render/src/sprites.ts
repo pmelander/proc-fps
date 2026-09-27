@@ -49,6 +49,10 @@ export const SpriteShape = {
   Blood: 15,
   /** A shimmering column of light over the exit, screen-door transparent. */
   ExitBeacon: 16,
+  /** A white-hot spark (pellet tracers and impacts); self-lit. */
+  Spark: 17,
+  /** A chip of stone or metal knocked off a wall by a pellet. */
+  Chip: 18,
 } as const;
 
 export interface Sprite {

@@ -352,6 +352,18 @@ void main() {
     outColor = vec4(mix(vec3(0.25, 1.0, 0.45), vec3(0.9, 1.0, 0.9), a), 1.0);
     return;
   }
+  if (vShape == 17) { // spark: a white-hot dot cooling to orange at its rim, self-lit
+    float r = length(p - 0.5) * 2.0;
+    if (r > 1.0) discard;
+    outColor = vec4(mix(vec3(1.0, 0.97, 0.8), vec3(1.0, 0.55, 0.12), r), 1.0);
+    return;
+  }
+  if (vShape == 18) { // chip: a jagged grey fragment
+    vec2 q = p - 0.5;
+    if (max(abs(q.x + q.y * 0.3), abs(q.y - q.x * 0.2)) > 0.42) discard;
+    outColor = vec4(vec3(0.42, 0.4, 0.37) * (0.8 + 0.4 * p.y) * lightBand(vLight, vWorld, uEye), 1.0);
+    return;
+  }
   if (vShape == 14 || vShape == 15) { // gib chunk (14) or blood drop (15)
     vec2 q = p - 0.5;
     float d = vShape == 14 ? length(q * vec2(1.0, 1.35)) - 0.42 + 0.08 * sin(atan(q.y, q.x) * 5.0) : length(q) - 0.45;

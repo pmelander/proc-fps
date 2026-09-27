@@ -215,7 +215,7 @@ export const BASELINE_LOOKS: EnemyLook[] = ROW_ROLE.map((role) => {
   };
 });
 
-/** The bake's uniforms: \`uPlan\` from the looks, \`uAspect\` from each row's quad width / height. */
+/** The bake's uniforms: `uPlan` from the looks, `uAspect` from each row's quad width / height. */
 export function lookUniforms(looks: readonly EnemyLook[], aspects: readonly number[]): Record<string, UniformValue> {
   const plan = new Float32Array(SPRITE_ROWS * SPRITE_PLAN_VEC4S * 4);
   looks.forEach((l, i) => {

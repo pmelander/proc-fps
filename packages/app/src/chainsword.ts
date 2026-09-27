@@ -111,7 +111,7 @@ export class Chainsword {
     this.particles = this.particles.filter((p) => p.life > 0 && p.x > -4 && p.x < W + 4 && p.y < H + 4);
   }
 
-  /** A point on the weapon: \`s\` along the axis (0–1), \`side\` across it towards the upper edge. */
+  /** A point on the weapon: `s` along the axis (0–1), `side` across it towards the upper edge. */
   private point(s: number, side: number): Pt {
     const len = Math.hypot(B[0] - A[0], B[1] - A[1]);
     const ux = (B[0] - A[0]) / len;

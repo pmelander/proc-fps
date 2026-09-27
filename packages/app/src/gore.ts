@@ -5,6 +5,8 @@ import { SpriteShape, type Sprite } from '@proc-fps/render';
  * A kill bursts the enemy into chunks and a spray of blood thrown along the killing blow; hits
  * spray blood away from the blow. Drops that land become pools on the floor, and drops that hit a
  * wall stick to it; both linger, so a fought-over room stays painted. Gibs settle and linger too.
+ * Shots add their own debris: a tracer spark along each pellet, and where one strikes a wall or
+ * floor a burst of sparks and chips of stone that bounce and settle.
  */
 interface Particle {
   x: number;
@@ -14,7 +16,7 @@ interface Particle {
   vy: number;
   vz: number;
   size: number;
-  kind: 'gib' | 'drop' | 'pool' | 'stuck';
+  kind: 'gib' | 'drop' | 'pool' | 'stuck' | 'spark' | 'tracer' | 'chip';
   age: number;
 }
 
@@ -25,6 +27,10 @@ const MAX_PARTICLES = 1800;
 const DROP_LIFE = 3;
 const POOL_LIFE = 120;
 const GIB_LIFE = 90;
+/** Sparks burn out fast; chips settle and stay a while. */
+const SPARK_LIFE = 0.45;
+const CHIP_LIFE = 25;
+const SPARK_GRAVITY = 450;
 
 export interface GoreWorld {
   /** Floor height at a map point, or undefined for solid (walls). */
@@ -42,7 +48,7 @@ export class Gore {
     return this.seed / 0x7fffffff;
   }
 
-  /** A kill: \`count\` gibs and four times as much blood from (x, y, z), thrown along (dx, dy). */
+  /** A kill: `count` gibs and four times as much blood from (x, y, z), thrown along (dx, dy). */
   burst(x: number, y: number, z: number, dx: number, dy: number, count: number, spread: number): void {
     for (let i = 0; i < count * 5; i++) {
       const gib = i < count;
@@ -62,7 +68,7 @@ export class Gore {
     }
   }
 
-  /** A hit: blood sprayed away from the blow (along (dx, dy)), \`count\` drops. */
+  /** A hit: blood sprayed away from the blow (along (dx, dy)), `count` drops. */
   splash(x: number, y: number, z: number, dx = 0, dy = 0, count = 14): void {
     const toward = Math.atan2(dy, dx);
     const aimed = dx !== 0 || dy !== 0;
@@ -73,7 +79,30 @@ export class Gore {
     }
   }
 
-  /** A pool of blood of about \`size\` on the floor at (x, y), height z. */
+  /** A pellet's tracer: a spark flying straight from the muzzle, gone after `life` seconds (at its impact). */
+  tracer(x: number, y: number, z: number, vx: number, vy: number, vz: number, life: number): void {
+    this.add({ x, y, z, vx, vy, vz, size: 4, kind: 'tracer', age: SPARK_LIFE - life });
+  }
+
+  /** A pellet striking a wall or floor: sparks and chips thrown back along (dx, dy, dz), towards the shooter. */
+  impact(x: number, y: number, z: number, dx: number, dy: number, dz: number): void {
+    for (let i = 0; i < 16; i++) {
+      const spark = i < 10;
+      const speed = spark ? 180 + this.rand() * 420 : 60 + this.rand() * 180;
+      const jx = (this.rand() - 0.5) * 1.6;
+      const jy = (this.rand() - 0.5) * 1.6;
+      const jz = this.rand() * 1.2;
+      this.add({
+        x: x + dx * 4, y: y + dy * 4, z: z + dz * 4,
+        vx: (dx + jx) * speed, vy: (dy + jy) * speed, vz: (dz + jz) * speed,
+        size: spark ? 3 + this.rand() * 2.5 : 4 + this.rand() * 4,
+        kind: spark ? 'spark' : 'chip',
+        age: spark ? this.rand() * 0.2 : 0,
+      });
+    }
+  }
+
+  /** A pool of blood of about `size` on the floor at (x, y), height z. */
   pool(x: number, y: number, z: number, size: number): void {
     this.add({ x, y, z, vx: 0, vy: 0, vz: 0, size, kind: 'pool', age: 0 });
   }
@@ -86,9 +115,17 @@ export class Gore {
   update(dt: number, world: GoreWorld): void {
     this.particles = this.particles.filter((p) => {
       p.age += dt;
-      if (p.age > (p.kind === 'gib' ? GIB_LIFE : p.kind === 'drop' ? DROP_LIFE : POOL_LIFE)) return false;
-      if (p.kind === 'pool' || p.kind === 'stuck' || (p.kind === 'gib' && p.vx === 0 && p.vy === 0 && p.vz === 0)) return true;
-      p.vz -= GRAVITY * dt;
+      const life = p.kind === 'gib' ? GIB_LIFE : p.kind === 'drop' ? DROP_LIFE : p.kind === 'spark' || p.kind === 'tracer' ? SPARK_LIFE : p.kind === 'chip' ? CHIP_LIFE : POOL_LIFE;
+      if (p.age > life) return false;
+      if (p.kind === 'tracer') {
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.z += p.vz * dt;
+        return true;
+      }
+      const settled = p.vx === 0 && p.vy === 0 && p.vz === 0;
+      if (p.kind === 'pool' || p.kind === 'stuck' || ((p.kind === 'gib' || p.kind === 'chip') && settled)) return true;
+      p.vz -= (p.kind === 'spark' ? SPARK_GRAVITY : GRAVITY) * dt;
       const nx = p.x + p.vx * dt;
       const ny = p.y + p.vy * dt;
       if (world.floorAt(nx, ny) === undefined) {
@@ -118,7 +155,7 @@ export class Gore {
         p.vz = -p.vz * BOUNCE;
         p.vx *= 0.55;
         p.vy *= 0.55;
-        if (Math.abs(p.vz) < 40) p.vx = p.vy = p.vz = 0; // the gib settles
+        if (Math.abs(p.vz) < 40) p.vx = p.vy = p.vz = 0; // a gib or chip settles
       }
       return true;
     });
@@ -126,7 +163,8 @@ export class Gore {
 
   sprites(world: GoreWorld): Sprite[] {
     return this.particles.map((p) => {
-      const base = { shape: p.kind === 'gib' ? SpriteShape.Gib : SpriteShape.Blood, charge: 0, flash: 0, light: world.light(p.x, p.y), tile: -1 };
+      const shape = p.kind === 'gib' ? SpriteShape.Gib : p.kind === 'spark' || p.kind === 'tracer' ? SpriteShape.Spark : p.kind === 'chip' ? SpriteShape.Chip : SpriteShape.Blood;
+      const base = { shape, charge: 0, flash: 0, light: p.kind === 'spark' || p.kind === 'tracer' ? 1 : world.light(p.x, p.y), tile: -1 };
       // Pools lie flat on the floor, just above it.
       if (p.kind === 'pool') return { ...base, x: p.x, y: p.y, z: p.z + 1, width: p.size * 2.4, height: p.size * 2.4, flat: true };
       return { ...base, x: p.x, y: p.y, z: p.z, width: p.size, height: p.kind === 'gib' ? p.size * 0.8 : p.size };

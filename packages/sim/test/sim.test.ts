@@ -217,6 +217,9 @@ describe('lifts and hazards (test04)', async () => {
     expect(cell(run(m, [...onLift, ...idle(LIFT_WAIT + travel + 2), ...forward]))).toEqual([6, 1]);
     // Before it has risen, the upper room is out of reach.
     expect(cell(run(m, [...onLift, ...forward]))).toEqual([5, 1]);
+    // Raised, it faces the wall above the low corridor behind it: no clipping through to fall.
+    const back = run(m, [...onLift, ...idle(LIFT_WAIT + travel + 2), ...tap({ move: -1 }, 30)]);
+    expect([cell(back), back.player.z]).toEqual([[5, 1], 192]);
     // It stops after the trip: staying aboard does not send it back down.
     expect(run(m, [...onLift, ...idle(2 * (LIFT_WAIT + travel) + 10)]).player.z).toBe(192);
   });
