@@ -53,6 +53,8 @@ export const SpriteShape = {
   Spark: 17,
   /** A chip of stone or metal knocked off a wall by a pellet. */
   Chip: 18,
+  /** A glowing ring on the floor: a boss's slam about to land within it (flat, self-lit, pulsing). */
+  Warning: 19,
 } as const;
 
 export interface Sprite {

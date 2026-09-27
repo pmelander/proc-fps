@@ -1,6 +1,7 @@
 import { ALERT_TICKS, CELL_SIZE, CellGrid, DoorKind, defOf, HEADING_DX, HEADING_DY, MAX_STEP, NOISE_CELLS, PLAYER_HEIGHT, SIGHT_CELLS, dcos, dsin, type EnemyDef, type Heading } from '@proc-fps/core';
 import { hurtPlayer } from './combat.js';
 import { callLift, floorNow, liftAtCell, liftMoving } from './lifts.js';
+import { bossAttack, isBoss, nextPattern, patternCooldown, patternWindup, updatePhase, volleyBonus } from './boss.js';
 import { lineOfSight } from './raycast.js';
 import { DOOR_OPEN_TICKS, type EnemyState, type SimState } from './state.js';
 import { doorAtCell, type World } from './world.js';
@@ -32,6 +33,8 @@ export function stepEnemies(world: World, state: SimState): void {
     if (e.cooldown > 0) e.cooldown--;
     if (e.stepTick > 0 && ++e.stepTick > def.stepTicks) e.stepTick = 0;
     updatePose(world, state, e, def);
+    const boss = isBoss(e.type);
+    if (boss) updatePhase(state, e, def, i);
 
     switch (e.mode) {
       case 'idle':
@@ -43,16 +46,23 @@ export function stepEnemies(world: World, state: SimState): void {
         break;
       case 'windup':
         if (--e.timer > 0) break;
-        attack(world, state, e, def, i);
-        e.cooldown = def.cooldown;
+        if (boss && e.pattern !== 'volley') bossAttack(world, state, e, def, i, e.pattern);
+        else attack(world, state, e, def, i);
+        e.cooldown = boss ? patternCooldown(e, def) : def.cooldown;
         e.mode = 'chase';
         break;
       case 'chase': {
         if (e.stepTick !== 0) break;
         if (e.cooldown === 0 && canAttack(world, state, e, def)) {
           e.mode = 'windup';
-          e.timer = def.windup;
-          state.events.push({ type: 'windup', enemy: i });
+          if (boss) {
+            e.pattern = nextPattern(state, e, i);
+            e.timer = patternWindup(e, def, e.pattern);
+            state.events.push({ type: 'windup', enemy: i, pattern: e.pattern });
+          } else {
+            e.timer = def.windup;
+            state.events.push({ type: 'windup', enemy: i });
+          }
           break;
         }
         // Flankers head for a point beside the player while still far from it; then straight in.
@@ -358,9 +368,11 @@ function attack(world: World, state: SimState, e: EnemyState, def: EnemyDef, ind
   const ay = p.y - sy;
   const az = p.z + AIM_HEIGHT - sz;
   const len = Math.sqrt(ax * ax + ay * ay + az * az) || 1;
-  for (let k = 0; k < def.volley; k++) {
-    const shift = def.volley % 2 === 0 ? (state.tick % 2 === 0 ? 0.5 : -0.5) : 0;
-    const a = (k - (def.volley - 1) / 2 + shift) * def.spread;
+  const boss = isBoss(e.type);
+  const volley = def.volley + (boss ? volleyBonus(e) : 0);
+  for (let k = 0; k < volley; k++) {
+    const shift = volley % 2 === 0 ? (state.tick % 2 === 0 ? 0.5 : -0.5) : 0;
+    const a = (k - (volley - 1) / 2 + shift) * def.spread;
     const c = dcos(a);
     const s = dsin(a);
     const dx = (ax * c - ay * s) / len;
@@ -370,6 +382,7 @@ function attack(world: World, state: SimState, e: EnemyState, def: EnemyDef, ind
       vx: dx * def.projectileSpeed, vy: dy * def.projectileSpeed, vz: (az / len) * def.projectileSpeed,
       damage: def.damage,
       ttl: 0,
+      ...(boss ? { unblockable: true } : {}),
     });
   }
 }

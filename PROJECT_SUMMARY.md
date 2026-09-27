@@ -85,13 +85,17 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 
 **Verified:**
 - The typecheck is clean.
-- 125 tests pass.
+- 130 tests pass.
 - 2000 seeds produce 0 validation failures (about 12 ms per map including validation).
 - The production build succeeds (about 45 kB JS).
 - Headless Chromium (SwiftShader) renders correctly.
 
 **Not yet verified:** real mouse and keyboard play. Pointer lock can't run headless.
 
+- Boss fights (M18):
+  - `sim/src/boss.ts`: the mini boss moves to its second phase at half health, the boss at two thirds and one third (`phase` events). Each phase rotates its attacks: aimed volleys; a ring burst (10 or 16 projectiles in every direction, the rotation alternating so the gaps move); a summon (two or three grunts erupting two to four steps away, at most 6 alive per boss, marked with `summoner`); a slam (a 48-tick wind-up, then 2.5× its damage to the player if within 2.2 cells on its floor). The rotation skips a slam when the player is out of reach and a summon at the cap. The boss's last phase is enraged: wind-ups at 80%, cooldowns at 60%, two more projectiles per volley.
+  - Bosses' projectiles and slams are unblockable: the chainsword's invulnerability does not turn them away, so a boss cannot be ground down safely up close.
+  - App: a boss bar under the compass while a boss is awake, with a name bred from the seed (`bossname.ts`, e.g. "Vorgath the Unburied"); a banner and a roar at each phase; a pulsing warning ring on the floor through a slam's wind-up, then a shockwave of sparks and a crushing boom; summoned grunts erupt in blood with a howl; a boss dies in six gib bursts over a second, with a last roar.
 - Run structure (M17):
   - A fresh load (no URL parameters) shows the title screen (`title.ts`): the menu over a slowly turning view of a generated level. New run with a difficulty (remembered), Continue (the run in progress, at its next level), the best runs, the seed browser and the controls.
   - Difficulty (`core/src/difficulty.ts`): Easy, Normal, Hard, Brutal. The generator scales the enemy budget and escorts (0.7 / 1 / 1.3 / 1.6) and the chance of health in a room (1.4 / 1 / 0.8 / 0.65); the sim scales enemy damage (0.7 / 1 / 1.2 / 1.4, `scaleDamage`); the score scales with it (0.5 / 1 / 1.5 / 2). Runs carry it in the URL (`&diff=`); normal maps record none and stay byte-identical.
@@ -224,6 +228,7 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 - **M14 — rendering performance:** ✅ complete. The palette post pass now runs at the scene's low resolution (the canvas holds 240 rows and CSS scales it up pixelated; same image, a twentieth of the fill at 1080p), portal culling draws only the sectors the camera can see (about 7% of a level's sectors), visible ranges draw in one call, sprite quads reuse one buffer, and F3 shows a perf overlay (F4 toggles culling).
 - **M15 — more weapons:** ✅ complete. The heavy bolter (fast, accurate, explosive bolts) beside the scattergun, weapon switching (1/2, wheel, Q), per-weapon magazines, its own view model, sounds, tracers and bursts, and a per-weapon ammo panel with weapon slots.
 - **M16 — enemy behaviour:** ✅ complete (generator v0.17.0). Enemies ride lifts and follow the player between storeys, snipers perch on catwalk tops, and some enemies flank.
+- **M18 — boss fights:** ✅ complete. Bosses fight in phases with rotating attacks (volleys, ring bursts, summoned packs, telegraphed slams), an enraged last phase, blows the chainsword cannot shield, a named boss bar, and deaths worth watching.
 - **M17 — run structure:** ✅ complete. A title screen, four difficulties, runs tracked across levels with a score, an end-of-level screen with the run so far, a run summary and the best runs.
 - **M11 — procedural enemies:** ✅ complete. Every generated level breeds its own mutants: seeded stat variants per role (core `enemyDefsFor`) and seeded body plans and skins that stand out from the theme (render `enemyLooks`). The exit gets a glowing pad, a light beacon and a hum.
 
@@ -254,5 +259,4 @@ In the map format a door is a one-cell sector with its kind in `Sector.special` 
 Ideas noted during play-testing, not yet scheduled. Each line points at whatever already exists for it.
 
 - **A calmer start room.** The start room should have at most one open entrance (a doorway with no door); any others get closed doors (auto doors are fine), and none arrives by lift. Pointers: `mission.ts` gives connections `open` or `auto` at random (`plain()`), so force every start edge but one to `auto`; in vertical levels a start neighbour can sit a storey away (`assignStoreys` spreads progress along the arcs), making that corridor a lift, so keep the start's neighbours on its storey (or push the first storey change one room further out).
-- **More interesting boss fights.** Today the mini boss and boss are big, tough enemies with wider volleys in an arena. Ideas: attack phases that change as their health drops (volley patterns, a charge, summoning a wave of grunts), telegraphed area attacks to dodge (a ground slam, a sweeping beam), arena features (cover pillars that break, hazard floors that switch on), a health bar on the HUD while the fight is on, and a proper death (a long gib burst, a pause). Also: the chainsword's invulnerability should not turn away a boss's or mini boss's blows (today `hurtPlayer` shields every hit during MELEE_IFRAMES), so a boss cannot be ground down safely up close.
 - **Grenade launcher, limited ammo.** A left-hand launcher like the chainsword, fired with E; grenades are scarce: one now and then in a loot room, a count on the HUD. Needs: a grenade pickup (thing type) placed by the generator in some loot rooms, a count in `PlayerState`, a lobbed projectile with an arc, a fuse or impact burst with splash (reuse the bolter's blast), a left-hand view model and sounds. Controls (decided): fire it with E, and doors move to Space only (today E and Space both open doors).

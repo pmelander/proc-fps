@@ -30,4 +30,5 @@ export {
 export * from './combat.js';
 export * from './raycast.js';
 export { distanceField, flankSide } from './ai.js';
+export { MAX_ADDS, SLAM_RADIUS, SLAM_WINDUP, isBoss, type BossPattern } from './boss.js';
 export * from './lifts.js';

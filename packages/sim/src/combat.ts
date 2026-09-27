@@ -29,11 +29,14 @@ const MELEE_ARC_COS = 0.7;
 /** Projectiles expire after this many ticks, hit or not. */
 const PROJECTILE_TTL = 600;
 
-/** Damages the player; `from` (map units) is where the hit came from, for the HUD's direction glow. */
-export function hurtPlayer(state: SimState, amount: number, from?: { x: number; y: number }): void {
+/**
+ * Damages the player; `from` (map units) is where the hit came from, for the HUD's direction glow.
+ * The chainsword's invulnerability turns it away, unless it is `unblockable` (a boss's).
+ */
+export function hurtPlayer(state: SimState, amount: number, from?: { x: number; y: number }, unblockable = false): void {
   if (state.dead) return;
   const p = state.player;
-  if (p.melee > 0 && p.melee <= MELEE_IFRAMES + 1) {
+  if (!unblockable && p.melee > 0 && p.melee <= MELEE_IFRAMES + 1) {
     state.events.push(from ? { type: 'shielded', amount, from } : { type: 'shielded', amount });
     return;
   }
@@ -207,7 +210,7 @@ export function stepProjectiles(world: World, state: SimState): void {
     const reach = PLAYER_RADIUS + PROJECTILE_RADIUS;
     if (dx * dx + dy * dy < reach * reach && q.z >= p.z && q.z <= p.z + PLAYER_HEIGHT) {
       // It came from back along its flight.
-      hurtPlayer(state, q.damage, { x: q.x - q.vx * 16, y: q.y - q.vy * 16 });
+      hurtPlayer(state, q.damage, { x: q.x - q.vx * 16, y: q.y - q.vy * 16 }, q.unblockable === true);
       return false;
     }
     const [cx, cy] = g.cellOf(q.x, q.y);

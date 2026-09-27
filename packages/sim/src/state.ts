@@ -1,4 +1,5 @@
 import { DEG_TO_RAD, PLAYER_MAX_HEALTH, WEAPONS, defOf, isHigh, variantOf, ThingType, isEnemyThing, type EnemyType, type Heading } from '@proc-fps/core';
+import type { BossPattern } from './boss.js';
 import type { World } from './world.js';
 
 /** No buffered step. */
@@ -86,6 +87,14 @@ export interface EnemyState {
   timer: number;
   /** Ticks until the next attack may start. */
   cooldown: number;
+  /** Bosses: the fight's phase (0 at full health; see boss.ts). */
+  phase: number;
+  /** Bosses: attacks started, which walks their phase's rotation. */
+  attacks: number;
+  /** Bosses: the attack being wound up. */
+  pattern: BossPattern;
+  /** The boss that summoned it (an index into enemies), if any. */
+  summoner?: number;
 }
 
 export interface LiftState {
@@ -112,6 +121,8 @@ export interface Projectile {
   damage: number;
   /** Ticks alive. */
   ttl: number;
+  /** A boss's: the chainsword's invulnerability does not turn it away. */
+  unblockable?: boolean;
 }
 
 /** Things that happened this tick, for the HUD and (later) sound. Cleared every tick. */
@@ -139,8 +150,12 @@ export type SimEvent =
   /** The chainsword's invulnerability turned a hit away. */
   | { type: 'shielded'; amount: number; from?: { x: number; y: number } }
   | { type: 'kill'; enemy: number }
-  /** An enemy started its wind-up (the telegraph) or attacked. */
-  | { type: 'windup'; enemy: number }
+  /** An enemy started its wind-up (the telegraph; a boss says which attack) or attacked. */
+  | { type: 'windup'; enemy: number; pattern?: BossPattern }
+  /** A boss moved to a new phase of its fight; summoned a pack; slammed the floor. */
+  | { type: 'phase'; enemy: number; phase: number }
+  | { type: 'summon'; enemy: number; count: number }
+  | { type: 'slam'; enemy: number }
   | { type: 'attack'; enemy: number }
   | { type: 'lift'; lift: number }
   | { type: 'death' }
@@ -190,7 +205,7 @@ export function createSimState(world: World): SimState {
     return [{
       type: t.type, variant: variantOf(t), cx: ex, cy: ey, fromCx: ex, fromCy: ey, level, fromLevel: level, stepTick: 0,
       x: px, y: py, z: world.grid.floorAt(ex, ey, level),
-      hp: defOf(world.enemyDefs, { type: t.type, variant: variantOf(t) }).hp, mode: 'idle', timer: 0, cooldown: 0,
+      hp: defOf(world.enemyDefs, { type: t.type, variant: variantOf(t) }).hp, mode: 'idle', timer: 0, cooldown: 0, phase: 0, attacks: 0, pattern: 'volley',
     }];
   });
   return {

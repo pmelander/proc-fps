@@ -4,6 +4,8 @@ import { BASELINE_LOOKS, HIDDEN_OFFSET, LevelRenderer, SpriteShape, THEME_COLORS
 import {
   PLAYER_MAX_HEALTH,
   castRay,
+  isBoss,
+  SLAM_RADIUS,
   lineOfSight,
   ReplayRecorder,
   clonePlayer,
@@ -36,6 +38,7 @@ import { newRunId, runUrl, titleScreen } from './title.js';
 import { endRun, levelScore, loadBest, recordDeath, recordLevel, runFor, runScore, type RunRecord } from './run.js';
 import { endScreen, summaryScreen } from './screens.js';
 import { Bolter } from './bolter.js';
+import { bossName } from './bossname.js';
 import { InputSampler } from './input.js';
 import { KEY_COLORS, KEY_NAMES } from './keys.js';
 
@@ -246,6 +249,11 @@ function buildSprites(
     const bob = 6 * Math.sin(performance.now() / 300 + i);
     sprites.push({ x: kx, y: ky, z: world.grid.floorAt(at[0], at[1]) + 18 + bob, width: 28, height: 28, shape: SpriteShape.Key + k.key, charge: 0, flash: 0, light: 1, tile: -1 });
   });
+  // A boss winding up a slam: a pulsing ring on the floor marks how far it will reach.
+  for (const e of state.enemies) {
+    if (e.mode !== 'windup' || !isBoss(e.type) || e.pattern !== 'slam') continue;
+    sprites.push({ x: e.x, y: e.y, z: e.z + 1.5, width: SLAM_RADIUS * 2, height: SLAM_RADIUS * 2, shape: SpriteShape.Warning, charge: 0, flash: 0, light: 1, tile: -1, flat: true });
+  }
   // The exit's beacon, until the level is won.
   if (world.exit && !state.won) {
     const [ex, ey] = world.grid.center(world.exit[0], world.exit[1]);
@@ -373,6 +381,18 @@ function main(): void {
   let joltUntil = 0;
   const hurtFlash = document.getElementById('hurt') as HTMLDivElement;
   const damageLayer = document.getElementById('damage') as HTMLDivElement;
+  // The boss bar, and a banner for boss moments.
+  const bossBar = document.getElementById('bossbar') as HTMLDivElement;
+  const bossFill = bossBar.querySelector('.fill') as HTMLDivElement;
+  const bossLabel = bossBar.querySelector('.name') as HTMLSpanElement;
+  let shownBoss = '';
+  const banner = document.getElementById('banner') as HTMLDivElement;
+  let bannerUntil = 0;
+  const say = (text: string, now: number, seconds = 2.5) => {
+    banner.textContent = text;
+    banner.hidden = false;
+    bannerUntil = now + seconds;
+  };
   // F3: frame timings and what the renderer drew, averaged over the last second or so.
   const perf = document.getElementById('perf') as HTMLPreElement;
   const timing = { frame: 0, sim: 0, render: 0 };
@@ -548,6 +568,19 @@ function main(): void {
             }
             audio.play('kill', enemy, listener, DEATH_PITCH[enemy.type] ?? 1);
             audio.play('gib', enemy, listener);
+            if (isBoss(enemy.type)) {
+              // A boss dies hard: burst after burst over a second or so, and a last roar.
+              audio.play('bossDeath', enemy, listener);
+              say(`${bossName(map.meta.seed ?? map.meta.name, enemy.type)} is dead`, now);
+              renderer.flash = 1;
+              for (let k = 1; k <= 6; k++) {
+                window.setTimeout(() => {
+                  const a = k * 2.1;
+                  gore.burst(enemy.x, enemy.y, enemy.z + def.height * (0.3 + 0.1 * k), Math.cos(a), Math.sin(a), Math.round((GIBS[enemy.type] ?? 40) / 3), def.radius);
+                  audio.play('gib', enemy, listener, 0.8 + k * 0.05);
+                }, k * 180);
+              }
+            }
           } else {
             // Blood sprays out of the far side, away from the blow.
             gore.splash(enemy.x, enemy.y, mid, dx / len, dy / len, e.type === 'melee' ? 10 : 16);
@@ -580,7 +613,7 @@ function main(): void {
           const enemy = enemyAt(e.enemy);
           const kind = defOf(world.enemyDefs, enemy).attack;
           const id: SoundId = e.type === 'windup'
-            ? kind === 'melee' ? 'windupMelee' : kind === 'hitscan' ? 'windupHitscan' : 'windup'
+            ? e.type === 'windup' && e.pattern === 'slam' ? 'windupSlam' : kind === 'melee' ? 'windupMelee' : kind === 'hitscan' ? 'windupHitscan' : 'windup'
             : kind === 'melee' ? 'melee' : kind === 'hitscan' ? 'snipe' : 'launch';
           audio.play(id, enemy, listener);
           // A sniper's shot shows: a glowing line from its eye to the player, or to the wall if
@@ -616,6 +649,29 @@ function main(): void {
           switchAt = now;
           switchFrom = e.weapon === WeaponId.Bolter ? WeaponId.Scattergun : WeaponId.Bolter;
           audio.play('switch');
+        }
+        if (e.type === 'phase') {
+          const boss = enemyAt(e.enemy);
+          const name = bossName(map.meta.seed ?? map.meta.name, boss.type);
+          audio.play('roar', boss, listener);
+          say(e.phase === 2 || boss.type === EnemyType.MiniBoss ? `${name} is enraged!` : `${name} grows furious`, now);
+          renderer.flash = Math.max(renderer.flash, 0.6);
+          joltUntil = now + JOLT_SECONDS * 2;
+        }
+        if (e.type === 'slam') {
+          const boss = enemyAt(e.enemy);
+          audio.play('slam', boss, listener);
+          joltUntil = now + JOLT_SECONDS * 3;
+          // A shockwave of dust and sparks along the ring it reached.
+          for (let k = 0; k < 16; k++) {
+            const a = (k / 16) * Math.PI * 2;
+            gore.impact(boss.x + Math.cos(a) * SLAM_RADIUS * 0.6, boss.y + Math.sin(a) * SLAM_RADIUS * 0.6, boss.z + 4, Math.cos(a) * 0.3, Math.sin(a) * 0.3, 0.8);
+          }
+        }
+        if (e.type === 'summon' && e.count > 0) {
+          audio.play('summon', enemyAt(e.enemy), listener);
+          // The pack erupts from the floor in a spray of blood.
+          for (const add of state.enemies.slice(-e.count)) gore.splash(add.x, add.y, add.z + 20, 0, 0, 24);
         }
         if (e.type === 'reload') {
           const seconds = WEAPONS[state.player.weapon]!.reloadTicks * TICK_DT;
@@ -716,6 +772,20 @@ function main(): void {
       ammo.classList.toggle('empty', mag === 0);
     }
     hurtFlash.hidden = now >= hurtUntil;
+    if (now >= bannerUntil) banner.hidden = true;
+    // The boss bar: the first boss awake and alive, with its name and health.
+    const bossIndex = state.enemies.findIndex((x) => isBoss(x.type) && x.mode !== 'idle' && x.mode !== 'dead');
+    const fighting = bossIndex >= 0 ? state.enemies[bossIndex]! : undefined;
+    const bossKey = fighting ? `${bossIndex}|${fighting.hp}` : '';
+    if (bossKey !== shownBoss) {
+      shownBoss = bossKey;
+      bossBar.hidden = !fighting;
+      if (fighting) {
+        const full = defOf(world.enemyDefs, fighting).hp;
+        bossFill.style.width = `${Math.max(0, Math.min(100, (100 * fighting.hp) / full))}%`;
+        bossLabel.textContent = bossName(map.meta.seed ?? map.meta.name, fighting.type);
+      }
+    }
     const ending = state.dead ? 'dead' : state.won ? 'won' : '';
     if (end.dataset.state !== ending) {
       end.dataset.state = ending;

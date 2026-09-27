@@ -358,6 +358,13 @@ void main() {
     outColor = vec4(mix(vec3(1.0, 0.97, 0.8), vec3(1.0, 0.55, 0.12), r), 1.0);
     return;
   }
+  if (vShape == 19) { // warning ring: a pulsing red-orange band at the rim
+    float r = length(p - 0.5) * 2.0;
+    if (r > 1.0 || r < 0.86) discard;
+    float pulse = 0.65 + 0.35 * sin(uTime * 18.0);
+    outColor = vec4(mix(vec3(1.0, 0.2, 0.05), vec3(1.0, 0.7, 0.2), pulse), 1.0);
+    return;
+  }
   if (vShape == 18) { // chip: a jagged grey fragment
     vec2 q = p - 0.5;
     if (max(abs(q.x + q.y * 0.3), abs(q.y - q.x * 0.2)) > 0.42) discard;

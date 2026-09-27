@@ -14,7 +14,8 @@ export type SoundId =
   | 'charge' | 'gib'
   | 'reload' | 'reloaded'
   | 'saw' | 'sawHit' | 'shielded'
-  | 'bolt' | 'boltBlast' | 'switch';
+  | 'bolt' | 'boltBlast' | 'switch'
+  | 'roar' | 'slam' | 'windupSlam' | 'summon' | 'bossDeath';
 
 type Recipe = Voice[];
 
@@ -55,6 +56,34 @@ const RECIPES: Record<SoundId, Recipe> = {
     { wave: 'noise', freq: 1000, freqEnd: 80, attack: 0, sustain: 0.04, release: 0.35, volume: 0.7, lowpass: 1800 },
     { wave: 'saw', freq: 55, freqEnd: 25, attack: 0, sustain: 0.04, release: 0.25, volume: 0.4, lowpass: 300 },
     { wave: 'sine', freq: 60, freqEnd: 22, attack: 0, sustain: 0.05, release: 0.35, volume: 0.7 },
+  ],
+  // A boss moving to its next phase: a long, torn roar.
+  roar: [
+    { wave: 'saw', freq: 110, freqEnd: 60, attack: 0.08, sustain: 0.7, release: 0.5, volume: 0.45, vibrato: { depth: 0.25, rate: 9 }, lowpass: 900 },
+    { wave: 'noise', freq: 800, freqEnd: 250, attack: 0.1, sustain: 0.6, release: 0.5, volume: 0.35, lowpass: 1200 },
+    { wave: 'square', freq: 220, freqEnd: 140, attack: 0.1, sustain: 0.5, release: 0.4, volume: 0.12, duty: 0.3, vibrato: { depth: 0.1, rate: 14 } },
+  ],
+  // A slam landing: a crushing boom with a rumble after.
+  slam: [
+    { wave: 'noise', freq: 900, freqEnd: 60, attack: 0, sustain: 0.06, release: 0.7, volume: 0.8, lowpass: 1500 },
+    { wave: 'sine', freq: 48, freqEnd: 20, attack: 0, sustain: 0.1, release: 0.8, volume: 1 },
+    { wave: 'saw', freq: 60, freqEnd: 25, attack: 0, sustain: 0.08, release: 0.5, volume: 0.4, lowpass: 300 },
+  ],
+  // A slam winding up: a rising grinding rumble, as long as the wind-up.
+  windupSlam: [
+    { wave: 'saw', freq: 40, freqEnd: 90, attack: 0.1, sustain: 0.6, release: 0.1, volume: 0.35, vibrato: { depth: 0.2, rate: 22 }, lowpass: 500 },
+    { wave: 'noise', freq: 300, freqEnd: 900, attack: 0.2, sustain: 0.5, release: 0.1, volume: 0.25, lowpass: 1200 },
+  ],
+  // A boss calling its pack: a howl.
+  summon: [
+    { wave: 'sine', freq: 260, freqEnd: 520, attack: 0.1, sustain: 0.4, release: 0.3, volume: 0.25, vibrato: { depth: 0.06, rate: 6 } },
+    { wave: 'saw', freq: 130, freqEnd: 180, attack: 0.1, sustain: 0.4, release: 0.3, volume: 0.2, vibrato: { depth: 0.08, rate: 7 }, lowpass: 1400 },
+  ],
+  // A boss dying: a falling, breaking roar.
+  bossDeath: [
+    { wave: 'saw', freq: 180, freqEnd: 25, attack: 0.02, sustain: 0.6, release: 1.4, volume: 0.5, vibrato: { depth: 0.3, rate: 7 }, lowpass: 1100 },
+    { wave: 'noise', freq: 900, freqEnd: 80, attack: 0.02, sustain: 0.4, release: 1.2, volume: 0.5, lowpass: 1500 },
+    { wave: 'sine', freq: 55, freqEnd: 20, attack: 0, sustain: 0.3, release: 1.2, volume: 0.8 },
   ],
   // Swapping guns: a heavy mechanical clunk and a latch.
   switch: [

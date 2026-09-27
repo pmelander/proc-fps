@@ -167,6 +167,55 @@ canvas[hidden] {
   color: #fff;
   text-shadow: 1px 1px 0 #000;
 }
+/* The boss bar (main.ts): the boss's name and health, under the compass while it is awake. */
+#bossbar {
+  position: fixed;
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(520px, 70vw);
+  text-align: center;
+  pointer-events: none;
+}
+#bossbar[hidden] {
+  display: none;
+}
+#bossbar .name {
+  display: block;
+  font: 700 14px/1.3 ui-monospace, monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #ff6a4a;
+  text-shadow: 2px 2px 0 #000;
+}
+#bossbar .bar {
+  height: 10px;
+  margin-top: 3px;
+  border: 2px solid rgb(0 0 0 / 0.8);
+  background: rgb(0 0 0 / 0.5);
+  box-shadow: 0 0 0 1px rgb(255 90 60 / 0.35);
+}
+#bossbar .fill {
+  height: 100%;
+  background: linear-gradient(#e0402a, #8a1810);
+  transition: width 0.2s steps(5);
+}
+/* Boss moments (main.ts): a big line across the upper screen, fading on its own. */
+#banner {
+  position: fixed;
+  top: 28%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font: 900 30px/1.2 ui-monospace, monospace;
+  letter-spacing: 0.06em;
+  color: #ff6a4a;
+  text-shadow: 3px 3px 0 #000, 0 0 18px rgb(255 60 20 / 0.6);
+  pointer-events: none;
+}
+#banner[hidden] {
+  display: none;
+}
 /* Ammo: the type, a pip per round in the cell, and the (infinite) reserve, bottom right. */
 #ammo {
   position: fixed;

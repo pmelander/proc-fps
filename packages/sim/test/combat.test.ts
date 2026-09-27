@@ -505,3 +505,67 @@ describe('per-level enemies', () => {
     expect(createWorld(arena({ w: 3, h: 3 })).enemyDefs).toBe(BASELINE_DEFS);
   });
 });
+
+describe('boss fights', async () => {
+  const { bossAttack, nextPattern, MAX_ADDS, SLAM_RADIUS } = await import('../src/boss.js');
+  /** A 10 × 5 room with the boss at (6, 2) and the player at (0, 2). */
+  const fight = () => {
+    const s = sim(arena({ w: 10, h: 5, py: 2, things: [[EnemyType.Boss, 6, 2]] }));
+    const world = createWorld(arena({ w: 10, h: 5, py: 2, things: [[EnemyType.Boss, 6, 2]] }));
+    return { ...s, world, boss: s.state.enemies[0]!, def: world.enemyDefs[EnemyType.Boss][0]! };
+  };
+
+  it('moves through its phases as its health drops', () => {
+    const { state, step, boss, def } = fight();
+    boss.hp = Math.floor(def.hp * 0.6);
+    step({});
+    expect(events(state, 'phase')).toEqual([{ type: 'phase', enemy: 0, phase: 1 }]);
+    boss.hp = Math.floor(def.hp * 0.3);
+    step({});
+    expect(boss.phase).toBe(2);
+  });
+
+  it('bursts a ring of projectiles in every direction, which the chainsword cannot turn away', () => {
+    const { state, world, boss, def } = fight();
+    bossAttack(world, state, boss, def, 0, 'ring');
+    expect(state.projectiles.length).toBeGreaterThanOrEqual(10);
+    const angles = state.projectiles.map((q) => Math.atan2(q.vy, q.vx));
+    expect(Math.max(...angles) - Math.min(...angles)).toBeGreaterThan(Math.PI * 1.5);
+    expect(state.projectiles.every((q) => q.unblockable)).toBe(true);
+  });
+
+  it('summons grunts around itself, up to a cap', () => {
+    const { state, world, boss, def } = fight();
+    bossAttack(world, state, boss, def, 0, 'summon');
+    const adds = state.enemies.filter((e) => e.summoner === 0);
+    expect(adds.length).toBeGreaterThan(0);
+    for (const a of adds) expect(Math.abs(a.cx - boss.cx) + Math.abs(a.cy - boss.cy)).toBeGreaterThanOrEqual(2);
+    for (let k = 0; k < 5; k++) bossAttack(world, state, boss, def, 0, 'summon');
+    expect(state.enemies.filter((e) => e.summoner === 0 && e.mode !== 'dead').length).toBeLessThanOrEqual(MAX_ADDS);
+  });
+
+  it('slams everyone close on its floor, chainsword or not, and nobody farther', () => {
+    const near = fight();
+    near.state.player.x = near.boss.x - SLAM_RADIUS + 20;
+    near.state.player.melee = 5; // mid-swing: invulnerable to anything else
+    bossAttack(near.world, near.state, near.boss, near.def, 0, 'slam');
+    expect(near.state.player.health).toBe(PLAYER_MAX_HEALTH - Math.round(near.def.damage * 2.5));
+    const far = fight();
+    bossAttack(far.world, far.state, far.boss, far.def, 0, 'slam');
+    expect(far.state.player.health).toBe(PLAYER_MAX_HEALTH);
+  });
+
+  it('skips a slam from afar, and widens its volleys when enraged', () => {
+    const { state, step, boss, def } = fight();
+    boss.attacks = 2; // the slam's turn in phase 0 (volley, ring, slam)
+    expect(nextPattern(state, boss, 0)).not.toBe('slam');
+    boss.hp = Math.floor(def.hp * 0.2);
+    boss.mode = 'windup';
+    boss.pattern = 'volley';
+    boss.timer = 1;
+    step({});
+    expect(boss.phase).toBe(2);
+    expect(state.projectiles.length).toBe(def.volley + 2);
+    expect(state.projectiles.every((q) => q.unblockable)).toBe(true);
+  });
+});
