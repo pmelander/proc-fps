@@ -11,6 +11,8 @@ export interface Options {
   invert: boolean;
   /** Vertical field of view, degrees. */
   fov: number;
+  /** Rows the scene is drawn at (240 is the look it was made for). */
+  resolution: number;
   /** Music and sound volume, 0–10. */
   music: number;
   sound: number;
@@ -22,7 +24,7 @@ export interface Options {
   bob: boolean;
 }
 
-export const DEFAULT_OPTIONS: Readonly<Options> = { sensitivity: 10, invert: false, fov: 74, music: 10, sound: 10, shake: true, flashes: true, bob: true };
+export const DEFAULT_OPTIONS: Readonly<Options> = { sensitivity: 10, invert: false, fov: 74, resolution: 240, music: 10, sound: 10, shake: true, flashes: true, bob: true };
 
 type RangeKey = { [K in keyof Options]: Options[K] extends number ? K : never }[keyof Options];
 type ToggleKey = { [K in keyof Options]: Options[K] extends boolean ? K : never }[keyof Options];
@@ -36,6 +38,7 @@ export const OPTION_DEFS: readonly OptionDef[] = [
   { key: 'sensitivity', label: 'Mouse speed', hint: 'How far the view turns for the mouse.', min: 1, max: 30, step: 1, format: (v) => `${(v / 10).toFixed(1)}×` },
   { key: 'invert', label: 'Invert look', hint: 'Mouse up looks down.' },
   { key: 'fov', label: 'Field of view', hint: 'Vertical, in degrees: wider sees more, narrower looks bigger.', min: 60, max: 90, step: 2, format: (v) => `${v}°` },
+  { key: 'resolution', label: 'Resolution', hint: 'Rows the scene is drawn at: 240 is the chunky look it was made for; higher is sharper and costs more.', min: 240, max: 480, step: 60, format: (v) => `${v}p` },
   { key: 'music', label: 'Music', hint: 'Music volume (M mutes it in play).', min: 0, max: 10, step: 1, format: String, bar: true },
   { key: 'sound', label: 'Sound', hint: 'Sound volume (N mutes it in play).', min: 0, max: 10, step: 1, format: String, bar: true },
   { key: 'shake', label: 'Screen shake', hint: 'The view jolts on heavy hits and blasts.' },

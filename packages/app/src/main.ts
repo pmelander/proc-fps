@@ -516,11 +516,16 @@ function main(): void {
   const input = new InputSampler(canvas);
   // The player's options (options.ts), applied now and whenever the options panel changes one.
   let options = loadOptions();
+  let resizeView: (() => void) | undefined;
   const applyOptions = (o: Options) => {
     options = o;
     input.sensitivity = o.sensitivity / 10;
     input.invertLook = o.invert;
     renderer.fovY = (o.fov * Math.PI) / 180;
+    if (renderer.lowResHeight !== o.resolution) {
+      renderer.lowResHeight = o.resolution;
+      resizeView?.();
+    }
     audio.setVolumes(o.music / 10, o.sound / 10);
   };
   applyOptions(options);
@@ -637,6 +642,7 @@ function main(): void {
   };
   addEventListener('resize', resize);
   resize();
+  resizeView = resize;
 
   let last = performance.now() / 1000;
   let acc = 0;

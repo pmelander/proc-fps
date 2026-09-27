@@ -128,6 +128,10 @@ export function titleScreen(): void {
       const apply = (o: typeof options) => {
         options = o;
         audio.setVolumes(o.music / 10, o.sound / 10);
+        if (renderer.lowResHeight !== o.resolution) {
+          renderer.lowResHeight = o.resolution;
+          resize();
+        }
       };
       new OptionsPanel(el, options, apply, sound, () => title.classList.remove('sub'));
       return;
@@ -163,6 +167,7 @@ export function titleScreen(): void {
   const start = map.things.find((t) => t.type === ThingType.PlayerStart)!;
   const backend = WebGL2Backend.create(canvas);
   const renderer = new LevelRenderer(backend);
+  renderer.lowResHeight = options.resolution;
   renderer.setMap(map);
   const resize = () => {
     const h = renderer.lowResHeight;

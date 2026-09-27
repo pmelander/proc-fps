@@ -200,9 +200,12 @@ export class LevelRenderer {
     this.backend.endPass();
   }
 
-  /** Rows the scene is drawn (and palette-quantized) at; the canvas needs no more than this. */
+  /** Rows the scene is drawn (and palette-quantized) at; the canvas needs no more than this. Call resize after setting it. */
   get lowResHeight(): number {
     return this.opts.lowResHeight;
+  }
+  set lowResHeight(h: number) {
+    this.opts.lowResHeight = h;
   }
 
   /** Call after the canvas size changes. */
