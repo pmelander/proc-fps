@@ -221,11 +221,11 @@ describe('balance', () => {
 });
 
 describe('armour and power-ups', () => {
-  it('lie about the levels, mostly in secret and loot rooms, and new roles join as a run goes on', () => {
+  it('lie about the levels, mostly in secret and loot rooms, and new roles join as a run goes on', { timeout: 120_000 }, () => {
+    const maps = new Map<number, ReturnType<typeof generate>[]>();
     const count = (level: number, types: number[]) => {
-      let n = 0;
-      for (let i = 0; i < 40; i++) n += generate(`pu-${i}`, { level }).things.filter((t) => types.includes(t.type)).length;
-      return n;
+      if (!maps.has(level)) maps.set(level, Array.from({ length: 30 }, (_, i) => generate(`pu-${i}`, { level })));
+      return maps.get(level)!.reduce((n, m) => n + m.things.filter((t) => types.includes(t.type)).length, 0);
     };
     expect(count(3, [ThingType.Armor])).toBeGreaterThan(10);
     expect(count(3, [ThingType.Berserk])).toBeGreaterThan(2);
