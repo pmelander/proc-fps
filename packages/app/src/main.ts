@@ -38,11 +38,11 @@ import { ScreenBlood } from './screenblood.js';
 import { Weapon } from './weapon.js';
 import { newRunId, runUrl, titleScreen } from './title.js';
 import { endRun, levelScore, loadBest, recordDeath, recordLevel, runFor, runScore, type RunRecord } from './run.js';
-import { endScreen, pauseScreen, summaryScreen, type PauseInfo } from './screens.js';
+import { TIPS, endScreen, loadingScreen, pauseScreen, summaryScreen, type PauseInfo } from './screens.js';
 import { Menu } from './ui/menu.js';
 import { OptionsPanel } from './ui/optionspanel.js';
 import { loadOptions, type Options } from './options.js';
-import { installSkin } from './ui/skin.js';
+import { installFonts, installSkin } from './ui/skin.js';
 import { tally } from './ui/tally.js';
 import { Bolter } from './bolter.js';
 import { Launcher } from './launcher.js';
@@ -402,7 +402,12 @@ function showDamageFrom(from: { x: number; y: number }, p: PlayerState, layer: H
   layer.append(hit);
 }
 
-function main(): void {
+/** Resolves once the page has painted what is on it now: loading yields with it between stages. */
+const painted = () => new Promise<void>((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
+
+async function main(): Promise<void> {
+  // The pixel font first, so nothing ever shows in a fallback face.
+  await installFonts();
   const canvas = document.getElementById('view') as HTMLCanvasElement;
   const automap = document.getElementById('automap') as HTMLCanvasElement;
   const hud = document.getElementById('hud') as HTMLPreElement;
@@ -466,6 +471,7 @@ function main(): void {
   const here = where();
   if (here.title) {
     titleScreen();
+    document.body.classList.remove('loading');
     return;
   }
   const map = loadMap(here);
@@ -474,6 +480,19 @@ function main(): void {
   // The weapon's coils glow in the theme's light colour, and so does the UI's accent.
   const theme = THEME_COLORS[(map.meta.theme ?? 'base') as keyof typeof THEME_COLORS] ?? THEME_COLORS.base;
   installSkin(map.meta.theme ?? 'base');
+  // The loading screen: the level's title card and a bar through the stages, with a tip.
+  const loading = document.getElementById('loading') as HTMLDivElement;
+  const loadInfo: PauseInfo = { level: here.level, run: here.run ? { difficulty: here.difficulty, score: 0 } : null };
+  if (map.meta.levelType) loadInfo.levelType = map.meta.levelType;
+  if (map.meta.theme) loadInfo.theme = map.meta.theme;
+  if (map.meta.seed) loadInfo.seed = map.meta.seed;
+  if (here.map) loadInfo.map = here.map;
+  const tip = TIPS[Math.floor(Math.random() * TIPS.length)]!;
+  const stage = async (n: number) => {
+    loading.innerHTML = loadingScreen(loadInfo, n, tip);
+    await painted();
+  };
+  await stage(1);
   const weapon = new Weapon(document.getElementById('gun') as HTMLCanvasElement, theme.techLight);
   const bolter = new Bolter(document.getElementById('bolter') as HTMLCanvasElement, theme.techLight);
   const chainsword = new Chainsword(document.getElementById('saw') as HTMLCanvasElement);
@@ -501,6 +520,7 @@ function main(): void {
   const backend = WebGL2Backend.create(canvas);
   const renderer = new LevelRenderer(backend);
   renderer.setMap(map);
+  await stage(2);
   // Sprite quads are radius × SPRITE_WIDTH wide and height tall; the baked models match. Each
   // generated level breeds its own mutants, coloured to stand out from its theme.
   const themeName = (map.meta.theme && map.meta.theme in THEME_COLORS ? map.meta.theme : 'base') as keyof typeof THEME_COLORS;
@@ -512,6 +532,7 @@ function main(): void {
     map.meta.seed ? enemyLooks(map.meta.seed, themeName) : BASELINE_LOOKS,
   );
   const spawnAngles = map.things.filter((t) => isEnemyThing(t.type)).map((t) => (t.angle * Math.PI) / 180);
+  await stage(3);
 
   const input = new InputSampler(canvas);
   // The player's options (options.ts), applied now and whenever the options panel changes one.
@@ -1051,11 +1072,12 @@ function main(): void {
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
+  // Ready: the level's title card (the pause screen) takes over from the loading screen.
+  document.body.classList.remove('loading');
 }
 
-try {
-  main();
-} catch (e) {
+main().catch((e: unknown) => {
+  document.body.classList.remove('loading');
   document.body.textContent = `Could not start: ${(e as Error).message}`;
   console.error(e);
-}
+});

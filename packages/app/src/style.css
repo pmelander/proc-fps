@@ -297,6 +297,43 @@ table.list tr:first-child th {
   padding-bottom: calc(var(--u) * 2);
 }
 
+/* ---------------------------------------------------------------- loading (main.ts) */
+
+/* Until a level (or the title) is ready, the page is black but for the loading screen, so the
+   HUD never shows unstyled. */
+body.loading > :not(#loading) {
+  visibility: hidden !important;
+}
+#loading {
+  background: var(--ink);
+  z-index: 10;
+}
+body:not(.loading) #loading {
+  display: none;
+}
+#loading .loadbar {
+  display: flex;
+  gap: calc(var(--u) * 2);
+  margin-top: calc(var(--u) * 4);
+}
+#loading .loadbar i {
+  width: calc(var(--u) * 24);
+  height: calc(var(--u) * 5);
+  background: var(--iron-mid);
+  box-shadow: 0 0 0 var(--u) var(--ink), 0 0 0 calc(var(--u) * 2) var(--iron-hi);
+}
+#loading .loadbar i.on {
+  background: linear-gradient(var(--bone-hi) 0 calc(var(--u) * 1), var(--accent) 0);
+}
+#loading .stage {
+  color: var(--rust);
+}
+#loading .tip {
+  margin-top: calc(var(--u) * 10);
+  max-width: min(calc(var(--u) * 260), 86vw);
+  color: var(--bone-dim);
+}
+
 /* ---------------------------------------------------------------- the title screen (title.ts) */
 
 #title {

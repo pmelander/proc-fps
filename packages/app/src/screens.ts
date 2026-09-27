@@ -109,3 +109,35 @@ export function summaryScreen(run: RunRecord, rank: number, best: readonly BestR
     (table ? `<div class="plate list"><table class="list best"><tr><th colspan="5">Hall of the fallen</th></tr>${table}</table></div>` : '') +
     `<nav class="menu row"><button type="button" data-item data-action="new">New run <span class="key">E</span></button><button type="button" data-item data-action="title">Title screen</button></nav>`;
 }
+
+/** The stages of loading a level, in order (main.ts yields to the page between them). */
+export const LOADING_STAGES = ['Carving the sectors', 'Baking the walls', 'Breeding the mutants', 'Waking the horde'] as const;
+
+/** A line of advice for the loading screen. */
+export const TIPS: readonly string[] = [
+  'Wardens lower their shields to fire: that is your window.',
+  'A charger bellows before it rushes. Step out of its lane.',
+  'Shoot a bloater among its friends.',
+  'Nothing hurts you while the chainsword grinds. Bosses excepted.',
+  'Berserk and overcharge wait where the fighting is.',
+  'One step sideways dodges what grunts throw.',
+  'Break a sniper’s line of sight before its shot lands.',
+  'Grenades are scarce. Save them for crowds and bosses.',
+  'Armour soaks up half of every hit.',
+  'A glowing ring on the floor means a slam is coming. Get out of it.',
+  'Hold Tab for the map.',
+  'Secret rooms hide behind walls that open with E.',
+];
+
+/** The loading screen: the level's title card, a bar through the loading stages, and a tip. */
+export function loadingScreen(info: PauseInfo, stage: number, tip: string): string {
+  const what = info.map ? `Test map ${info.map}` : info.run ? `Level ${info.level}` : `Seed ${info.seed ?? ''}`;
+  const kind = [info.levelType, info.theme && info.theme !== 'base' ? info.theme : ''].filter(Boolean).join(' · ');
+  const n = LOADING_STAGES.length;
+  const at = Math.max(0, Math.min(n - 1, stage));
+  return `<p class="kicker">${kind || '&nbsp;'}</p><h1 class="heading huge">${what}</h1>` +
+    `<div class="stripe" style="width: 60%"></div>` +
+    `<div class="loadbar">${Array.from({ length: n }, (_, i) => `<i${i <= at ? ' class="on"' : ''}></i>`).join('')}</div>` +
+    `<p class="stage">${LOADING_STAGES[at]}...</p>` +
+    `<p class="tip">${tip}</p>`;
+}

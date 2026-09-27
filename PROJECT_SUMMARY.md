@@ -85,7 +85,7 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 
 **Verified:**
 - The typecheck is clean.
-- 162 tests pass.
+- 163 tests pass.
 - 2000 seeds produce 0 validation failures (about 12 ms per map including validation).
 - The production build succeeds (about 45 kB JS).
 - Headless Chromium (SwiftShader) renders correctly.
@@ -93,6 +93,7 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 **Not yet verified:** real mouse and keyboard play. Pointer lock can't run headless.
 
 - The game is called **Null Sector** (chosen over Hellseed, Gridfall, Cursed Protocol and others; not yet checked against existing games or trademarks). The name shows on the title logo and the page titles; the repository, the `@proc-fps/*` packages and the browser-storage keys (`proc-fps.run`, `.best`, `.difficulty`, so saved runs carry over) keep the working name.
+- Loading screen (after M25): the page starts black (`body.loading` hides all but `#loading`), so the unstyled HUD never flashes while a level loads. main.ts is async: the pixel font first, then the map and the theme's skin, then a loading screen (`loadingScreen` in screens.ts: the level's title card, a bar through `LOADING_STAGES`, the stage, and one of `TIPS`), yielding a paint between stages (baking the walls, breeding the mutants, waking the horde); ready, the pause screen's title card takes over.
 - Resolution option (after M25): Options → Resolution draws the scene at 240 (the default, the look it was made for), 300, 360, 420 or 480 rows (`LevelRenderer.lowResHeight` is settable; the canvas follows). Cost grows with the pixel count: 480 rows is 4× the fill and palette matching of 240, about a fifth of full 1080p. Textures and sprites keep their texel size, so they read chunkier against a sharper frame, and the dither gets finer. The automap stays at 240 rows.
 - Boss bar fix (after M25): the options' volume pips shared the `.bar` class with the boss bar, whose track collapsed to nothing; the pips are `.meter` now. Dev builds expose the running game as `window.__game` (world, state, map) for poking at from the console.
 - Enemies see in 3D (fix after M25): sight, and so wake-ups, attacks and a sniper's shot, needs a clear line from the enemy's eye to the player's chest or head (`sightLine`, over `clearLine` in raycast.ts, judged as `castRay` judges the player's shots). The old check was 2D, so a raised lift, a floor between storeys, a ledge or a catwalk did not block it: snipers shot through lifts.

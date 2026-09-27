@@ -71,3 +71,15 @@ describe('run screens', async () => {
     expect(html).toContain('<tr class="you">');
   });
 });
+
+describe('loading screen', async () => {
+  const { loadingScreen, LOADING_STAGES } = await import('../src/screens.js');
+  it('shows the level, a bar lit up to the stage, the stage and a tip', () => {
+    const html = loadingScreen({ level: 3, levelType: 'descent', theme: 'hell', run: { difficulty: 'hard', score: 0 } }, 1, 'A tip.');
+    expect(html).toContain('Level 3');
+    expect(html).toContain('descent · hell');
+    expect(html.match(/class="on"/g)).toHaveLength(2);
+    expect(html).toContain(`${LOADING_STAGES[1]}...`);
+    expect(html).toContain('A tip.');
+  });
+});
