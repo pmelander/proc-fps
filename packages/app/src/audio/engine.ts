@@ -30,7 +30,8 @@ export class AudioEngine {
 
   constructor(private readonly seed: string) {}
 
-  unlock(): void {
+  /** Starts audio (on a user gesture); `music: false` for sounds only (the title screen's menus). */
+  unlock(opts: { music?: boolean } = {}): void {
     if (this.ctx) {
       void this.ctx.resume();
       return;
@@ -50,6 +51,7 @@ export class AudioEngine {
       buf.copyToChannel(samples, 0);
       this.buffers.set(id, buf);
     }
+    if (opts.music === false) return;
     this.music = new Music(ctx, this.musicOut, composeSong(this.seed));
     this.music.start();
   }

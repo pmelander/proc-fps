@@ -1,11 +1,48 @@
+/*
+ * The UI skin (ui/skin.ts sets the variables and draws the textures). Everything sits on the UI
+ * pixel --u: borders, gaps and paddings are whole multiples of it, and text uses the pixel font
+ * at 8 × n UI pixels so each glyph pixel is an n × n block. Colours are steps of the game's
+ * 64-colour palette (render/palette.ts); --accent is the level's theme light.
+ */
+:root {
+  --u: 2px;
+  --lk: 4;
+  --ink: rgb(10 10 12);
+  --iron: rgb(24 24 26);
+  --iron-mid: rgb(48 48 49);
+  --iron-hi: rgb(76 76 76);
+  --bone-hi: rgb(250 238 206);
+  --bone: rgb(207 196 170);
+  --bone-dim: rgb(131 122 104);
+  --rust: rgb(252 176 72);
+  --rust-mid: rgb(208 144 58);
+  --rust-dim: rgb(129 86 34);
+  --blood: rgb(236 96 80);
+  --blood-mid: rgb(195 78 65);
+  --blood-dim: rgb(121 46 39);
+  --toxic: rgb(150 250 90);
+  --toxic-mid: rgb(122 205 74);
+  --accent: rgb(51 179 255);
+  --glow: var(--accent);
+  /* Text sizes: one, two, three and four UI pixels per glyph pixel. */
+  --f1: calc(var(--u) * 8);
+  --f2: calc(var(--u) * 16);
+  --f3: calc(var(--u) * 24);
+  --f4: calc(var(--u) * 32);
+  --shadow: var(--u) var(--u) 0 var(--ink);
+  --font: 'Proc', ui-monospace, monospace;
+  --heavy: 'Proc Heavy', 'Proc', ui-monospace, monospace;
+}
 html,
 body {
   margin: 0;
   height: 100%;
   background: #000;
   overflow: hidden;
-  color: #d8d2c4;
-  font: 14px/1.4 system-ui, sans-serif;
+  color: var(--bone);
+  font: var(--f1) / 1.25 var(--font);
+  text-transform: uppercase;
+  font-synthesis: none;
 }
 canvas {
   position: fixed;
@@ -15,14 +52,323 @@ canvas {
   display: block;
 }
 /* `display: block` above would otherwise override the hidden attribute. */
-canvas[hidden] {
-  display: none;
+canvas[hidden],
+[hidden] {
+  display: none !important;
 }
-#view {
+button {
+  font: inherit;
+  color: inherit;
+  text-transform: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+a {
+  color: var(--rust);
+}
+p {
+  margin: 0;
+}
+/* The pixel font has its own heavy face; never a synthetic bold. */
+b,
+strong,
+h1 {
+  font-weight: normal;
+}
+
+/* ---------------------------------------------------------------- building blocks */
+
+/* A riveted iron plate: the nine-slice texture, repeated at one texel per UI pixel. */
+.plate {
+  border: calc(var(--u) * 5) solid transparent;
+  border-image: var(--plate) 5 fill / calc(var(--u) * 5) / 0 repeat;
+  image-rendering: pixelated;
+}
+.plate.lit {
+  border-image-source: var(--plate-lit);
+}
+/* Hazard stripes: a bar under headings. */
+.stripe {
+  height: calc(var(--u) * 4);
+  background: var(--stripes) 0 0 / calc(var(--u) * 8) repeat;
+  image-rendering: pixelated;
+  box-shadow: 0 0 0 var(--u) var(--ink);
+}
+/* A key on the keyboard: a small bevelled cap. */
+.key,
+.keycap {
+  display: inline-block;
+  min-width: calc(var(--u) * 6);
+  padding: var(--u) calc(var(--u) * 2) 0;
+  font: var(--f1) / 1.25 var(--font);
+  text-align: center;
+  color: var(--bone-hi);
+  background: var(--iron-mid);
+  box-shadow:
+    inset calc(var(--u) * -1) calc(var(--u) * -1) 0 var(--iron),
+    inset var(--u) var(--u) 0 var(--iron-hi),
+    0 0 0 var(--u) var(--ink);
+  text-shadow: none;
+  vertical-align: middle;
+}
+.heading {
+  margin: 0;
+  font: var(--f3) / 1 var(--heavy);
+  color: var(--rust);
+  text-shadow: var(--shadow), calc(var(--u) * 2) calc(var(--u) * 2) 0 var(--ink);
+}
+.heading.huge {
+  font-size: var(--f4);
+}
+.heading.dead {
+  color: var(--blood);
+  animation: pulse 1.2s steps(2) infinite;
+}
+@keyframes pulse {
+  50% {
+    color: var(--blood-mid);
+  }
+}
+.kicker {
+  color: var(--bone-dim);
+  margin-bottom: calc(var(--u) * 3);
+}
+.blink {
+  color: var(--rust);
+  animation: blink 1s steps(1) infinite;
+}
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+.dim,
+.run {
+  color: var(--bone-dim);
+}
+
+/* A menu: items stacked, the chosen one lit with a blinking pointer (ui/menu.ts). */
+.menu {
+  display: grid;
+  gap: calc(var(--u) * 4);
+  justify-items: start;
+  padding: calc(var(--u) * 3) calc(var(--u) * 6);
+}
+.menu [data-item] {
+  position: relative;
+  display: flex;
+  gap: calc(var(--u) * 6);
+  align-items: baseline;
+  width: 100%;
+  padding-left: calc(var(--u) * 10);
+  font: var(--f2) / 1 var(--font);
+  color: var(--bone-dim);
+  text-align: left;
+  white-space: nowrap;
+}
+.menu [data-item].sel {
+  color: var(--rust);
+  text-shadow: var(--shadow);
+}
+.menu [data-item].sel::before {
+  content: '▶';
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+  animation: blink 0.6s steps(1) infinite;
+}
+.menu .aside {
+  margin-left: auto;
+  font-size: var(--f1);
+  color: var(--bone-dim);
+  text-shadow: none;
+}
+.menu .value {
+  margin-left: auto;
+  color: var(--bone);
+}
+.menu .sel .value {
+  color: var(--bone-hi);
+}
+.menu [data-dir] {
+  font-style: normal;
+  color: var(--accent);
+}
+/* A row of menu items (the end and pause screens). */
+.menu.row {
+  grid-auto-flow: column;
+  gap: calc(var(--u) * 12);
+  justify-content: center;
+}
+.menu.row [data-item] {
+  font-size: var(--f1);
+  padding-left: calc(var(--u) * 6);
+  gap: calc(var(--u) * 3);
+}
+
+/* A full-screen overlay: centred, over a dithered darkening like the scene's own shadows. */
+.screen {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: calc(var(--u) * 4);
+  text-align: center;
+  background: var(--screen-dark) 0 0 / calc(var(--u) * 4) repeat;
+  image-rendering: pixelated;
+  z-index: 3;
+}
+.screen.light {
+  background-image: var(--screen-light);
+}
+
+/* Tables: the tally, the run's levels, the best runs. */
+table {
+  border-collapse: collapse;
+  font: var(--f1) / 1.25 var(--font);
+}
+th,
+td {
+  padding: var(--u) calc(var(--u) * 4);
+  text-align: right;
+  white-space: nowrap;
+}
+th {
+  color: var(--bone-dim);
+  font-weight: normal;
+}
+tr.you td {
+  color: var(--rust);
+}
+table.list tr:first-child th {
+  color: var(--accent);
+  padding-bottom: calc(var(--u) * 2);
+}
+
+/* ---------------------------------------------------------------- the title screen (title.ts) */
+
+#title {
+  background:
+    radial-gradient(ellipse at center, transparent 30%, rgb(0 0 0 / 0.7)),
+    var(--screen-light) 0 0 / calc(var(--u) * 4) repeat;
+  align-content: center;
+  gap: calc(var(--u) * 5);
+}
+.logo {
+  margin: 0;
+  font: calc(var(--u) * 8 * var(--lk)) / 1 var(--heavy);
+  color: transparent;
+  background: var(--fire) 0 0 / calc(var(--u) * 4) calc(var(--u) * 8 * var(--lk)) repeat-x;
+  -webkit-background-clip: text;
+  background-clip: text;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 calc(var(--u) * var(--lk)) 0 var(--blood-dim)) drop-shadow(calc(var(--u) * 2) calc(var(--u) * 2) 0 var(--ink));
+}
+#title .tag {
+  color: var(--bone);
+  text-shadow: var(--shadow);
+}
+#title .stripe {
+  width: min(calc(var(--u) * 240), 80vw);
+}
+#title .menu {
+  min-width: min(calc(var(--u) * 200), 86vw);
+}
+#title .hint {
+  min-height: calc(var(--u) * 10);
+  color: var(--bone-dim);
+  text-shadow: var(--shadow);
+}
+#title .panel {
+  display: grid;
+  gap: calc(var(--u) * 4);
+  justify-items: center;
+  padding: calc(var(--u) * 4) calc(var(--u) * 8);
+  max-width: 90vw;
+}
+#title .panel .menu {
+  min-width: 0;
+  padding: 0;
+}
+#title footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--u) * 4);
+  color: var(--bone-dim);
+  text-shadow: var(--shadow);
+}
+
+/* The controls: key caps and what they do, in two columns. */
+.controls {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: calc(var(--u) * 3) calc(var(--u) * 6);
+  align-items: center;
+  text-align: left;
+}
+.controls .keys {
+  justify-self: end;
+  display: flex;
+  gap: calc(var(--u) * 2);
+}
+.controls .does {
+  color: var(--bone);
+}
+
+/* ---------------------------------------------------------------- pause and end screens (screens.ts) */
+
+#start {
+  cursor: pointer;
+}
+#start .plate {
+  padding: calc(var(--u) * 2) calc(var(--u) * 4);
+}
+#end .tally {
+  min-width: calc(var(--u) * 160);
+}
+#end .tally th {
+  text-align: left;
+  font-size: var(--f2);
+  color: var(--bone);
+  line-height: 1;
+}
+#end .tally td {
+  font-size: var(--f2);
+  line-height: 1;
+  color: var(--bone-hi);
+}
+#end .tally td.of {
+  color: var(--bone-dim);
+  font-size: var(--f1);
+  text-align: left;
+  padding-left: 0;
+}
+#end .tally tr.score th,
+#end .tally tr.score td {
+  color: var(--rust);
+  padding-top: calc(var(--u) * 4);
+}
+#end .total {
+  font: var(--f3) / 1 var(--heavy);
+  color: var(--bone-hi);
+  text-shadow: var(--shadow);
+}
+#end .plate.list {
+  padding: calc(var(--u) * 2);
+}
+
+/* ---------------------------------------------------------------- the HUD (main.ts) */
+
+#view,
+#automap,
+#bloodscreen {
   image-rendering: pixelated;
 }
 #automap {
-  image-rendering: pixelated;
   pointer-events: none;
 }
 /* The weapon lowers while the automap is up, as in Doom; the HUD stays over the map. */
@@ -32,304 +378,281 @@ canvas[hidden] {
 #automap:not([hidden]) ~ #launcher {
   visibility: hidden !important;
 }
-#hud {
+/* Over the pause screen (the state of play stays readable), gone for the end of a level. */
+.hud {
   position: fixed;
-  top: 8px;
-  left: 10px;
-  margin: 0;
-  font: 12px/1.35 ui-monospace, monospace;
-  color: #c8f0a0;
-  text-shadow: 1px 1px 0 #000;
   pointer-events: none;
+  text-shadow: var(--shadow);
+  z-index: 4;
 }
-/* F3 perf overlay (main.ts). */
+body.ended .hud {
+  display: none !important;
+}
+/* Messages (pickups, keys, secrets), top left, Doom style. */
+#notice {
+  top: calc(var(--u) * 6);
+  left: calc(var(--u) * 8);
+  color: var(--bone-hi);
+}
+#notice.fade {
+  animation: notice-fade 0.5s steps(4) forwards;
+}
+@keyframes notice-fade {
+  to {
+    opacity: 0;
+  }
+}
+/* F3: debug lines and frame timings. */
+#hud,
 #perf {
-  position: fixed;
-  top: 70px;
-  left: 10px;
+  left: calc(var(--u) * 8);
   margin: 0;
-  padding: 6px 8px;
-  font: 12px/1.35 ui-monospace, monospace;
-  color: #9fe8ff;
-  background: rgb(0 0 0 / 0.55);
-  pointer-events: none;
+  font: var(--f1) / 1.25 var(--font);
+  color: var(--toxic);
 }
-#perf[hidden] {
-  display: none;
+#hud {
+  top: calc(var(--u) * 64);
 }
-#start {
-  position: fixed;
-  inset: 0;
-  display: grid;
-  place-content: center;
-  text-align: center;
-  background: rgb(0 0 0 / 0.55);
-  cursor: pointer;
+#perf {
+  top: calc(var(--u) * 116);
+  color: var(--accent);
 }
-#start[hidden] {
-  display: none;
-}
-#start .title {
-  font-size: 32px;
-  font-weight: 700;
-  margin: 0 0 8px;
-  color: #f2b04a;
-}
-#start p {
-  margin: 0;
-}
-#compass {
-  position: fixed;
-  top: 42px;
+/* Health: a riveted plate across the top centre, the bar in segments. */
+#healthbar {
+  top: calc(var(--u) * 4);
   left: 50%;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 6px;
-  color: #f2b04a;
-  text-shadow: 1px 1px 0 #000;
-  pointer-events: none;
+  gap: calc(var(--u) * 3);
+  padding: 0 calc(var(--u) * 2);
 }
-/* The door prompt (E, or the missing key) sits just above the crosshair, where you are looking. */
-#prompt {
-  position: fixed;
-  left: 50%;
-  bottom: calc(50% + 14px);
-  transform: translateX(-50%);
-  pointer-events: none;
-  filter: drop-shadow(2px 2px 0 #000);
+#healthbar .icon {
+  color: var(--blood);
 }
-#keys svg {
-  width: 52px;
-  height: 52px;
-  margin: -12px -6px;
-}
-#prompt[hidden] {
-  display: none;
-}
-#prompt .keycap {
-  display: inline-block;
-  min-width: 30px;
-  padding: 2px 6px;
-  border: 3px solid #f2b04a;
-  border-radius: 4px;
-  font: 700 24px/1.1 ui-monospace, monospace;
-  text-align: center;
-  color: #f2b04a;
-  background: rgb(0 0 0 / 0.5);
-}
-#crosshair {
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  width: 6px;
-  height: 6px;
-  margin: -3px 0 0 -3px;
-  border: 1px solid rgb(242 176 74 / 0.9);
-  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.6);
-  pointer-events: none;
-}
-/* Health: a bar across the top centre, the compass just under it. */
-#healthbar {
-  position: fixed;
-  top: 14px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(320px, 44vw);
-  height: 18px;
-  border: 2px solid rgb(0 0 0 / 0.75);
-  background: rgb(0 0 0 / 0.45);
-  box-shadow: 0 0 0 1px rgb(242 176 74 / 0.35);
-  pointer-events: none;
+#healthbar .bar {
+  position: relative;
+  width: calc(var(--u) * 100);
+  max-width: 34vw;
+  height: calc(var(--u) * 6);
+  background: var(--ink);
+  box-shadow: 0 0 0 var(--u) var(--ink);
 }
 #healthbar .fill {
   height: 100%;
   width: 100%;
-  background: #6fd24a;
+  background: linear-gradient(var(--toxic) 0 50%, var(--toxic-mid) 50%);
   transition: width 0.15s steps(4);
 }
-#healthbar.mid .fill {
-  background: #e8b830;
-}
-#healthbar.low .fill {
-  background: #ff4a3a;
-  animation: low-health 0.6s steps(2) infinite;
-}
-@keyframes low-health {
-  50% {
-    opacity: 0.55;
-  }
-}
-#healthbar .value {
+/* The segment gaps, one UI pixel every five. */
+#healthbar .bar::after {
+  content: '';
   position: absolute;
   inset: 0;
-  font: 700 13px/18px ui-monospace, monospace;
-  text-align: center;
-  color: #fff;
-  text-shadow: 1px 1px 0 #000;
+  background: repeating-linear-gradient(90deg, transparent 0 calc(var(--u) * 4), var(--ink) 0 calc(var(--u) * 5));
 }
-/* The boss bar (main.ts): the boss's name and health, under the compass while it is awake. */
-#bossbar {
-  position: fixed;
-  top: 70px;
+#healthbar.mid .fill {
+  background: linear-gradient(var(--rust) 0 50%, var(--rust-mid) 50%);
+}
+#healthbar.low .fill {
+  background: linear-gradient(var(--blood) 0 50%, var(--blood-mid) 50%);
+  animation: blink 0.6s steps(1) infinite;
+}
+#healthbar .value {
+  min-width: calc(var(--u) * 18);
+  font-size: var(--f2);
+  line-height: 1;
+  color: var(--bone-hi);
+  text-align: right;
+}
+/* The compass: where W goes, under the health. */
+#compass {
+  top: calc(var(--u) * 34);
   left: 50%;
   transform: translateX(-50%);
-  width: min(520px, 70vw);
-  text-align: center;
-  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 2);
+  color: var(--rust);
 }
-#bossbar[hidden] {
-  display: none;
+#compass-arrow {
+  display: inline-block;
+  color: var(--accent);
+}
+/* The boss: its name and health under the compass while it is awake. */
+#bossbar {
+  top: calc(var(--u) * 48);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(calc(var(--u) * 200), 70vw);
+  text-align: center;
 }
 #bossbar .name {
   display: block;
-  font: 700 14px/1.3 ui-monospace, monospace;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #ff6a4a;
-  text-shadow: 2px 2px 0 #000;
+  margin-bottom: calc(var(--u) * 2);
+  font: var(--f1) / 1.25 var(--heavy);
+  color: var(--blood);
 }
 #bossbar .bar {
-  height: 10px;
-  margin-top: 3px;
-  border: 2px solid rgb(0 0 0 / 0.8);
-  background: rgb(0 0 0 / 0.5);
-  box-shadow: 0 0 0 1px rgb(255 90 60 / 0.35);
+  height: calc(var(--u) * 5);
+  background: var(--ink);
+  box-shadow: 0 0 0 var(--u) var(--ink), 0 0 0 calc(var(--u) * 2) var(--blood-dim);
 }
 #bossbar .fill {
   height: 100%;
-  background: linear-gradient(#e0402a, #8a1810);
+  background: linear-gradient(var(--blood) 0 40%, var(--blood-mid) 40% 80%, var(--blood-dim) 80%);
   transition: width 0.2s steps(5);
 }
-/* Boss moments (main.ts): a big line across the upper screen, fading on its own. */
+/* Boss moments: a big line across the upper screen, fading on its own. */
 #banner {
-  position: fixed;
   top: 28%;
   left: 0;
   right: 0;
   text-align: center;
-  font: 900 30px/1.2 ui-monospace, monospace;
-  letter-spacing: 0.06em;
-  color: #ff6a4a;
-  text-shadow: 3px 3px 0 #000, 0 0 18px rgb(255 60 20 / 0.6);
-  pointer-events: none;
+  font: var(--f3) / 1 var(--heavy);
+  color: var(--blood);
+  text-shadow: var(--shadow), calc(var(--u) * 2) calc(var(--u) * 2) 0 var(--ink);
 }
-#banner[hidden] {
-  display: none;
+/* The door prompt (Space, or the missing key) just above the crosshair, where you are looking. */
+#prompt {
+  left: 50%;
+  bottom: calc(50% + var(--u) * 8);
+  transform: translateX(-50%);
+  filter: drop-shadow(var(--u) var(--u) 0 var(--ink));
 }
-/* Ammo: the type, a pip per round in the cell, and the (infinite) reserve, bottom right. */
+#prompt .keycap {
+  font-size: var(--f1);
+}
+#keys svg,
+#prompt svg {
+  width: calc(var(--u) * 26);
+  height: calc(var(--u) * 26);
+  margin: calc(var(--u) * -6) calc(var(--u) * -3);
+}
+/* The crosshair: four pixels round a gap. */
+#crosshair {
+  left: 50%;
+  top: 50%;
+  width: var(--u);
+  height: var(--u);
+  margin: calc(var(--u) * -0.5) 0 0 calc(var(--u) * -0.5);
+  box-shadow:
+    calc(var(--u) * -3) 0 0 var(--bone-hi),
+    calc(var(--u) * 3) 0 0 var(--bone-hi),
+    0 calc(var(--u) * -3) 0 var(--bone-hi),
+    0 calc(var(--u) * 3) 0 var(--bone-hi),
+    calc(var(--u) * -3) var(--u) 0 var(--ink),
+    calc(var(--u) * 3) var(--u) 0 var(--ink),
+    var(--u) calc(var(--u) * -3) 0 var(--ink),
+    var(--u) calc(var(--u) * 3) 0 var(--ink);
+  text-shadow: none;
+}
+/* Ammo, bottom right: the guns, the cell's type, a pip per round, the count and the grenades. */
 #ammo {
-  position: fixed;
-  right: 18px;
-  bottom: 16px;
-  padding: 8px 12px 9px;
-  min-width: 170px;
-  background: rgb(0 0 0 / 0.45);
-  border: 2px solid rgb(0 0 0 / 0.7);
-  box-shadow: 0 0 0 1px rgb(242 176 74 / 0.3);
-  font: 700 12px/1.2 ui-monospace, monospace;
-  color: #f2b04a;
-  text-shadow: 1px 1px 0 #000;
-  pointer-events: none;
-  z-index: 1;
+  right: calc(var(--u) * 4);
+  bottom: calc(var(--u) * 4);
+  min-width: calc(var(--u) * 90);
+  padding: 0 calc(var(--u) * 2);
+  color: var(--rust);
+}
+#ammo .slots {
+  display: flex;
+  gap: calc(var(--u) * 4);
+  margin-bottom: calc(var(--u) * 2);
+  color: var(--bone-dim);
+}
+#ammo .slots .on {
+  color: var(--rust);
 }
 #ammo .type {
   display: flex;
   align-items: center;
-  gap: 6px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #d8d2c4;
+  gap: calc(var(--u) * 2);
+  color: var(--bone);
 }
 #ammo .cell {
-  width: 8px;
-  height: 12px;
-  background: var(--glow, #33b3ff);
-  box-shadow: 0 0 6px var(--glow, #33b3ff);
+  width: calc(var(--u) * 3);
+  height: calc(var(--u) * 5);
+  background: var(--glow);
+  box-shadow: 0 0 0 var(--u) var(--ink);
 }
 #ammo .pips {
   display: flex;
-  gap: 4px;
-  margin: 7px 0 5px;
-  height: 22px;
+  gap: var(--u);
+  margin: calc(var(--u) * 3) 0 calc(var(--u) * 2);
+  height: calc(var(--u) * 9);
   align-items: flex-end;
 }
 #ammo .pip {
-  width: 12px;
-  height: 22px;
-  border: 2px solid rgb(0 0 0 / 0.8);
-  background: rgb(255 255 255 / 0.08);
-}
-#ammo .pips.thin {
-  gap: 2px;
-}
-#ammo .pips.thin .pip {
-  width: 3px;
-  border-width: 1px;
-}
-#ammo .slots {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 5px;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: rgb(216 210 196 / 0.45);
-}
-#ammo .slots .on {
-  color: #f2b04a;
+  width: calc(var(--u) * 5);
+  height: calc(var(--u) * 9);
+  background: var(--iron-mid);
+  box-shadow: inset 0 0 0 var(--u) var(--ink);
 }
 #ammo .pip.full {
-  background: var(--glow, #33b3ff);
-  box-shadow: 0 0 5px var(--glow, #33b3ff);
+  background: linear-gradient(var(--bone-hi) 0 calc(var(--u) * 2), var(--glow) 0);
+}
+#ammo .pips.thin {
+  gap: 0;
+}
+#ammo .pips.thin .pip {
+  width: var(--u);
+  box-shadow: none;
+}
+#ammo .pips.thin .pip:nth-child(3n) {
+  margin-right: var(--u);
 }
 #ammo .reloading {
   flex: 1;
-  height: 22px;
-  border: 2px solid rgb(0 0 0 / 0.8);
-  background: linear-gradient(90deg, var(--glow, #33b3ff) var(--p, 0%), rgb(255 255 255 / 0.08) var(--p, 0%));
-  font: 700 11px/18px ui-monospace, monospace;
+  height: calc(var(--u) * 9);
+  background: linear-gradient(90deg, var(--glow) var(--p, 0%), var(--iron-mid) var(--p, 0%));
+  box-shadow: inset 0 0 0 var(--u) var(--ink);
+  line-height: calc(var(--u) * 9);
   text-align: center;
-  color: #fff;
-  letter-spacing: 0.12em;
+  color: var(--bone-hi);
 }
 #ammo .count {
-  font-size: 22px;
-  color: #fff;
+  font-size: var(--f2);
+  line-height: 1;
+  color: var(--bone-hi);
 }
 #ammo .count b {
-  color: #fff;
+  font-weight: normal;
+}
+#ammo .count .size,
+#ammo .count .reserve {
+  font-size: var(--f1);
+  color: var(--bone-dim);
+}
+#ammo.empty .count b {
+  color: var(--blood);
 }
 #ammo .grenades {
   display: flex;
-  gap: 4px;
+  gap: calc(var(--u) * 2);
   align-items: center;
-  margin-top: 5px;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #d8d2c4;
+  margin-top: calc(var(--u) * 3);
+  color: var(--bone);
 }
 #ammo .grenades .label {
-  margin-right: 4px;
+  margin-right: calc(var(--u) * 2);
 }
 #ammo .nade {
-  width: 9px;
-  height: 11px;
-  border-radius: 50%;
-  border: 2px solid rgb(0 0 0 / 0.8);
-  background: rgb(255 255 255 / 0.08);
+  width: calc(var(--u) * 4);
+  height: calc(var(--u) * 5);
+  background: var(--iron-mid);
+  box-shadow: 0 0 0 var(--u) var(--ink);
 }
 #ammo .nade.full {
-  background: #6a7a3a;
-  box-shadow: inset 0 3px 0 #c9a24a;
+  background: linear-gradient(rgb(106 122 58) 0 calc(var(--u) * 2), var(--rust-mid) 0 calc(var(--u) * 3), rgb(106 122 58) 0);
 }
-#ammo .reserve {
-  color: #f2b04a;
-  font-size: 20px;
-}
-#ammo.empty .count b {
-  color: #ff5a4a;
+/* Keys held, bottom left. */
+#keys {
+  left: calc(var(--u) * 6);
+  bottom: calc(var(--u) * 6);
+  display: flex;
+  gap: var(--u);
+  filter: drop-shadow(var(--u) var(--u) 0 var(--ink));
 }
 /* Damage direction (main.ts): a red glow on the screen edge each hit came from, fading out. */
 #damage {
@@ -351,26 +674,16 @@ canvas[hidden] {
     opacity: 0;
   }
 }
-/* Keys held (main.ts): a row of key icons, bottom left. */
-#keys {
+#hurt {
   position: fixed;
-  left: 12px;
-  bottom: 12px;
-  display: flex;
-  gap: 2px;
+  inset: 0;
+  background: rgb(255 30 20 / 0.28);
   pointer-events: none;
-  filter: drop-shadow(2px 2px 0 #000);
 }
-#end .stats {
-  margin: 0 0 12px;
-  color: #c8f0a0;
-}
-/* The shotgun view model (weapon.ts): pixel art, big and heavy. */
+/* The view models (weapon.ts, bolter.ts): pixel art, big and heavy. */
 #gun,
 #bolter {
   position: fixed;
-  left: 50%;
-  bottom: -2vh;
   width: auto;
   height: 48vh;
   inset: auto auto -2vh 50%;
@@ -381,7 +694,6 @@ canvas[hidden] {
 }
 /* Blood on the screen (screenblood.ts): over the view and weapons, under the HUD. */
 #bloodscreen {
-  image-rendering: pixelated;
   pointer-events: none;
 }
 /* The chainsword (chainsword.ts) and the grenade launcher (launcher.ts), left hand; shown only in use. */
@@ -396,184 +708,12 @@ canvas[hidden] {
   pointer-events: none;
   transform-origin: 20% 100%;
 }
-#hurt {
-  position: fixed;
-  inset: 0;
-  background: rgb(255 30 20 / 0.28);
-  pointer-events: none;
-}
-#hurt[hidden],
-#end[hidden] {
-  display: none;
-}
-#end {
-  position: fixed;
-  inset: 0;
-  display: grid;
-  place-content: center;
-  text-align: center;
-  background: rgb(0 0 0 / 0.6);
-}
-/* End-of-level and run summary screens (main.ts), and the title screen (title.ts). */
-#end .score {
-  margin: 4px 0;
-  font: 700 26px/1.2 ui-monospace, monospace;
-  color: #fff;
-}
-.run {
-  color: #8f8a80;
-}
-#end .buttons,
-#title .menu {
-  display: flex;
-  gap: 10px;
-  justify-content: center;
-  margin-top: 16px;
-}
-#end button,
-#title button {
-  font: 700 14px/1 ui-monospace, monospace;
-  padding: 10px 16px;
-  color: #0b0b0c;
-  background: #f2b04a;
-  border: 2px solid #000;
-  cursor: pointer;
-}
-#end button.alt,
-#title button.alt {
-  color: #f2b04a;
-  background: rgb(0 0 0 / 0.5);
-  border-color: #f2b04a;
-}
-#end kbd {
-  margin-left: 6px;
-  padding: 1px 5px;
-  border: 1px solid currentColor;
-  font: inherit;
-  font-size: 11px;
-}
-#end table,
-#title table {
-  margin: 14px auto 0;
-  border-collapse: collapse;
-  font: 12px/1.4 ui-monospace, monospace;
-}
-#end td,
-#end th,
-#title td,
-#title th {
-  padding: 2px 10px;
-  text-align: right;
-}
-#end th,
-#title th {
-  color: #8f8a80;
-  font-weight: normal;
-}
-#end tr.you td {
-  color: #f2b04a;
-  font-weight: 700;
-}
-#title {
-  position: fixed;
-  inset: 0;
-  display: grid;
-  place-content: center;
-  text-align: center;
-  background: radial-gradient(ellipse at center, rgb(0 0 0 / 0.35), rgb(0 0 0 / 0.8));
-}
-#title[hidden] {
-  display: none;
-}
-#title h1 {
-  margin: 0;
-  font: 900 72px/1 ui-monospace, monospace;
-  letter-spacing: 0.08em;
-  color: #f2b04a;
-  text-shadow: 4px 4px 0 #000, 0 0 24px rgb(255 90 20 / 0.5);
-}
-#title h1 span {
-  color: #c33;
-}
-#title .tag {
-  margin: 8px 0 0;
-  color: #d8d2c4;
-}
-#title .menu {
-  flex-direction: column;
-  align-items: center;
-}
-#title .diff {
-  display: flex;
-  gap: 6px;
-}
-#title .diff button {
-  padding: 6px 10px;
-  color: #d8d2c4;
-  background: rgb(0 0 0 / 0.5);
-  border-color: #555;
-}
-#title .diff button.on {
-  color: #0b0b0c;
-  background: #d8d2c4;
-  border-color: #000;
-}
-#title button.big {
-  min-width: 320px;
-  font-size: 18px;
-}
-#title .links {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-}
-#title a {
-  color: #f2b04a;
-}
-#title button.link {
-  padding: 0;
-  color: #f2b04a;
-  background: none;
-  border: none;
-  text-decoration: underline;
-  font: inherit;
-}
-#title .controls {
-  margin-top: 12px;
-  color: #d8d2c4;
-}
-#title .controls p {
-  margin: 2px 0;
-}
 /* The title screen shows the level only, no HUD. */
-body.titling #hud,
-body.titling #perf,
-body.titling #compass,
-body.titling #prompt,
-body.titling #crosshair,
+body.titling .hud,
 body.titling #gun,
 body.titling #bolter,
 body.titling #saw,
 body.titling #launcher,
-body.titling #healthbar,
-body.titling #ammo,
-body.titling #keys,
 body.titling #start {
   display: none !important;
-}
-#end .title {
-  margin: 0 0 8px;
-  font-size: 32px;
-  font-weight: 700;
-  color: #f2b04a;
-}
-#end p {
-  margin: 0;
-}
-#compass-arrow {
-  display: inline-block;
-  font-size: 18px;
-}
-#compass b {
-  font-size: 13px;
 }

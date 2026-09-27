@@ -37,7 +37,10 @@ import { ScreenBlood } from './screenblood.js';
 import { Weapon } from './weapon.js';
 import { newRunId, runUrl, titleScreen } from './title.js';
 import { endRun, levelScore, loadBest, recordDeath, recordLevel, runFor, runScore, type RunRecord } from './run.js';
-import { endScreen, summaryScreen } from './screens.js';
+import { endScreen, pauseScreen, summaryScreen, type PauseInfo } from './screens.js';
+import { Menu } from './ui/menu.js';
+import { installSkin } from './ui/skin.js';
+import { tally } from './ui/tally.js';
 import { Bolter } from './bolter.js';
 import { Launcher } from './launcher.js';
 import { bossName } from './bossname.js';
@@ -119,11 +122,6 @@ function newRun(w: Where): void {
 /** The next level of this run (a single seed becomes a run named after it). */
 function nextLevel(w: Where): void {
   location.href = runUrl(w.run ?? w.seed ?? newRunId(), w.level + 1, w.difficulty);
-}
-
-function clock(ticks: number): string {
-  const s = Math.floor(ticks / 60);
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
 function downloadJSON(name: string, data: unknown): void {
@@ -415,6 +413,8 @@ function main(): void {
   let notice = '';
   let noticeUntil = 0;
   let shownPrompt = '';
+  const noticeEl = document.getElementById('notice') as HTMLParagraphElement;
+  let shownNotice = '';
 
   const here = where();
   if (here.title) {
@@ -424,21 +424,15 @@ function main(): void {
   const map = loadMap(here);
   // The run this level belongs to (none for a single seed or a test map).
   let run: RunRecord | null = here.run ? runFor(here.run, here.difficulty) : null;
-  const runLine = document.getElementById('runline') as HTMLParagraphElement;
-  runLine.textContent = run
-    ? `${DIFFICULTY[run.difficulty].label} run · level ${here.level} · score ${runScore(run).toLocaleString('en-US')}`
-    : `${here.map ? `Test map ${here.map}` : `Seed ${here.seed}`}`;
-  document.getElementById('quit')!.addEventListener('click', (e) => e.stopPropagation());
-  // The weapon's coils glow in the theme's light colour.
+  // The weapon's coils glow in the theme's light colour, and so does the UI's accent.
   const theme = THEME_COLORS[(map.meta.theme ?? 'base') as keyof typeof THEME_COLORS] ?? THEME_COLORS.base;
+  installSkin(theme.techLight);
   const weapon = new Weapon(document.getElementById('gun') as HTMLCanvasElement, theme.techLight);
   const bolter = new Bolter(document.getElementById('bolter') as HTMLCanvasElement, theme.techLight);
   const chainsword = new Chainsword(document.getElementById('saw') as HTMLCanvasElement);
   const launcher = new Launcher(document.getElementById('launcher') as HTMLCanvasElement);
   const ammoGrenades = document.querySelector('#ammo .grenades') as HTMLDivElement;
   let shownGrenades = -1;
-  // The ammo pips glow in the same colour as the gun's coils.
-  document.documentElement.style.setProperty('--glow', `rgb(${theme.techLight.map((c) => Math.round(c * 255)).join(' ')})`);
   const world = createWorld(map);
   const state = createSimState(world);
   let prev: PlayerState = clonePlayer(state.player);
@@ -471,33 +465,70 @@ function main(): void {
   const spawnAngles = map.things.filter((t) => isEnemyThing(t.type)).map((t) => (t.angle * Math.PI) / 180);
 
   const input = new InputSampler(canvas);
-  start.addEventListener('click', () => {
+  const menuSound = (kind: 'move' | 'choose' | 'adjust' | 'back') => audio.play(kind === 'move' || kind === 'adjust' ? 'menuMove' : kind === 'back' ? 'menuBack' : 'menuChoose');
+  const fight = () => {
     audio.unlock(); // browsers allow audio only after a gesture
     void canvas.requestPointerLock();
+  };
+  // The pause screen: the level's title card until the first click, then "Paused".
+  const pauseInfo: PauseInfo = { level: here.level, run: run ? { difficulty: run.difficulty, score: runScore(run) } : null };
+  if (map.meta.levelType) pauseInfo.levelType = map.meta.levelType;
+  if (map.meta.theme) pauseInfo.theme = map.meta.theme;
+  if (map.meta.seed) pauseInfo.seed = map.meta.seed;
+  if (here.map) pauseInfo.map = here.map;
+  let started = false;
+  start.innerHTML = pauseScreen(pauseInfo, started);
+  const pauseMenu = new Menu(start, {
+    choose: (item) => {
+      if (item.dataset.action === 'resume') fight();
+      if (item.dataset.action === 'title') location.href = './index.html';
+      if (item.dataset.action === 'browse') location.href = './browse.html';
+      if (item.dataset.action === 'controls') {
+        const panel = start.querySelector<HTMLElement>('[data-panel="controls"]');
+        if (panel) panel.hidden = !panel.hidden;
+      }
+    },
+    sound: menuSound,
+    chooseKeys: [],
+  });
+  start.addEventListener('click', (e) => {
+    if (!(e.target as HTMLElement).closest('[data-item]')) fight();
   });
   // The pause screen shows whenever the mouse is free, except over the end-of-level screen.
-  document.addEventListener('pointerlockchange', () => (start.hidden = input.locked || state.dead || state.won));
-  end.addEventListener('click', (e) => {
-    const action = (e.target as HTMLElement).closest<HTMLElement>('[data-action]')?.dataset.action;
-    if (action === 'next') nextLevel(here);
+  document.addEventListener('pointerlockchange', () => {
+    start.hidden = input.locked || state.dead || state.won;
+    if (input.locked && !started) {
+      started = true;
+      start.innerHTML = pauseScreen(pauseInfo, started);
+      pauseMenu.refresh();
+    }
+  });
+  // The end-of-level screen and the run summary: a tally, then a menu (E or Space picks the first item).
+  let endMenu: Menu | null = null;
+  let skipTally: (() => void) | null = null;
+  const showEnd = (html: string) => {
+    endMenu?.close();
+    skipTally?.();
+    end.innerHTML = html;
+    endMenu = new Menu(end, { choose: (item) => endAction(item.dataset.action), sound: menuSound, delay: 500 });
+    skipTally = tally(end, (k) => audio.play(k === 'tick' ? 'tally' : 'tallyDone'));
+  };
+  const endAction = (action: string | undefined) => {
+    if (action === 'next') {
+      if (here.map) location.reload();
+      else nextLevel(here);
+    }
     if (action === 'retry') location.reload();
     if (action === 'new') newRun(here);
     if (action === 'title') location.href = './index.html';
     if (action === 'end' && run) {
       const rank = endRun(run);
-      end.innerHTML = summaryScreen(run, rank, loadBest());
-      end.classList.add('summary');
+      showEnd(summaryScreen(run, rank, loadBest()));
       run = null;
     }
-  });
+  };
 
   addEventListener('keydown', (e) => {
-    // After death or the exit, E (or Space) moves on: retry the level, or a new one.
-    // (Not once the run is over and its summary shows: that screen has its own buttons.)
-    if ((state.dead || state.won) && !end.classList.contains('summary') && (e.code === 'KeyE' || e.code === 'Space')) {
-      if (state.won && !here.map) nextLevel(here);
-      else location.reload();
-    }
     if (e.code === 'Tab') automap.hidden = false;
     if (e.code === 'KeyM') audio.toggleMusic();
     if (e.code === 'KeyN') audio.toggleSound();
@@ -509,6 +540,7 @@ function main(): void {
     if (e.code === 'F3') {
       e.preventDefault();
       perf.hidden = !perf.hidden;
+      hud.hidden = perf.hidden;
     }
     if (e.code === 'F8') downloadJSON(`replay-${map.meta.seed ?? map.meta.name}-${state.tick}.json`, recorder.finish());
   });
@@ -812,7 +844,7 @@ function main(): void {
         ? `<div class="reloading" style="--p: ${reloadDone}%">RELOADING</div>`
         : Array.from({ length: gun.magSize }, (_, i) => `<div class="pip${i < mag ? ' full' : ''}"></div>`).join('');
       ammoCount.textContent = String(mag);
-      ammoSize.textContent = String(gun.magSize);
+      ammoSize.textContent = `/ ${gun.magSize}`;
       ammoType.textContent = gun.ammo;
       ammoSlots.innerHTML = WEAPONS.map((w, i) => `<span class="${i === p.weapon ? 'on' : ''}">${i + 1} ${w.name}</span>`).join('');
       ammo.classList.toggle('empty', mag === 0);
@@ -836,11 +868,11 @@ function main(): void {
     if (end.dataset.state !== ending) {
       end.dataset.state = ending;
       end.hidden = !ending;
+      document.body.classList.toggle('ended', !!ending);
       if (ending) {
         const kills = state.enemies.filter((x) => x.mode === 'dead').length;
         const secretsFound = popcount(state.secrets);
-        const secrets = world.secrets ? ` · secrets ${secretsFound}/${world.secrets}` : '';
-        const stats = `<p class="stats">kills ${kills}/${state.enemies.length}${secrets} · time ${clock(state.tick)}</p>`;
+        const stats = { kills, enemies: state.enemies.length, secrets: secretsFound, secretTotal: world.secrets, seconds: state.tick * TICK_DT };
         // File the level with the run: a clear and its score, or one more death.
         if (run && ending === 'won') {
           const seconds = state.tick * TICK_DT;
@@ -850,7 +882,7 @@ function main(): void {
           });
         }
         if (run && ending === 'dead') run = recordDeath(run);
-        end.innerHTML = endScreen(ending, here, stats, run);
+        showEnd(endScreen(ending, { ...here, ...(map.meta.levelType ? { levelType: map.meta.levelType } : {}) }, stats, run));
         // Free the mouse for the buttons (E still moves on).
         if (document.pointerLockElement) document.exitPointerLock();
       }
@@ -877,8 +909,13 @@ function main(): void {
       `${map.meta.seed ? `level ${here.level} ${map.meta.levelType ?? ''} ${here.difficulty}  seed ${map.meta.seed}  gen ${GENERATOR_VERSION}` : `map ${map.meta.name}`}  ${map.meta.theme ?? ''}\n` +
       `${fps.toFixed(0)} fps  tick ${state.tick}  sector ${p.sector}\n` +
       `cell ${p.cx}, ${p.cy}  z ${p.z.toFixed(0)}` +
-      (world.secrets ? `\nsecrets ${popcount(state.secrets)}/${world.secrets}` : '') +
-      (now < noticeUntil ? `\n${notice}` : '');
+      (world.secrets ? `\nsecrets ${popcount(state.secrets)}/${world.secrets}` : '');
+    // Messages: shown, then fading once their time is up.
+    if (notice !== shownNotice) {
+      noticeEl.textContent = shownNotice = notice;
+      noticeEl.classList.remove('fade');
+    }
+    noticeEl.classList.toggle('fade', now >= noticeUntil);
 
     requestAnimationFrame(frame);
   };

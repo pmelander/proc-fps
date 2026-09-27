@@ -1,17 +1,28 @@
 import { DIFFICULTIES, DIFFICULTY, PLAYER_EYE_HEIGHT, ThingType, isDifficulty, type Difficulty } from '@proc-fps/core';
-import { generate } from '@proc-fps/gen';
-import { LevelRenderer, WebGL2Backend } from '@proc-fps/render';
+import { GENERATOR_VERSION, generate } from '@proc-fps/gen';
+import { LevelRenderer, THEME_COLORS, WebGL2Backend } from '@proc-fps/render';
+import { AudioEngine } from './audio/engine.js';
 import { loadBest, loadRun, runScore } from './run.js';
+import { controlsHtml } from './screens.js';
+import { Menu } from './ui/menu.js';
+import { installSkin } from './ui/skin.js';
 
 /**
- * The title screen: the menu over a slowly turning view of a generated level. New run (with a
- * difficulty), Continue (the run in progress, at its next level), the best runs, the seed browser
- * and the controls. Choices go through the URL, like the rest of the game (a run is ?run=…&level=…
- * &diff=…).
+ * The title screen: the logo and a menu over a slowly turning view of a generated level. New run,
+ * Continue (the run in progress, at its next level), the difficulty, the best runs, the controls
+ * and the seed browser; the mouse or the keys (ui/menu.ts). Choices go through the URL, like the
+ * rest of the game (a run is ?run=…&level=…&diff=…).
  */
 const SHOWCASE_SEED = 'title';
 const SPIN = 0.12; // radians a second
 const DIFFICULTY_KEY = 'proc-fps.difficulty';
+/** A line on each difficulty, under the menu while it is chosen. */
+const DIFFICULTY_BLURB: Record<Difficulty, string> = {
+  easy: 'Fewer of them, softer blows, more health lying around.',
+  normal: 'The descent as it was meant.',
+  hard: 'More of them, harder hits, less to heal with.',
+  brutal: 'A horde at every door. Health is scarce.',
+};
 
 export const newRunId = () => Math.random().toString(36).slice(2, 8);
 
@@ -30,57 +41,113 @@ function remembered(): Difficulty {
 
 export function titleScreen(): void {
   document.body.classList.add('titling');
+  const map = generate(SHOWCASE_SEED, { level: 3, type: 'ascent' });
+  const theme = THEME_COLORS[(map.meta.theme ?? 'base') as keyof typeof THEME_COLORS] ?? THEME_COLORS.base;
+  installSkin(theme.techLight);
   const title = document.getElementById('title') as HTMLDivElement;
   title.hidden = false;
 
-  // The menu.
+  // Menu sounds, once a click or a key allows audio (no music here).
+  const audio = new AudioEngine(SHOWCASE_SEED);
+  const unlock = () => audio.unlock({ music: false });
+  addEventListener('pointerdown', unlock, { once: true });
+  addEventListener('keydown', unlock, { once: true });
+  const sound = (kind: 'move' | 'choose' | 'adjust' | 'back') => audio.play(kind === 'move' || kind === 'adjust' ? 'menuMove' : kind === 'back' ? 'menuBack' : 'menuChoose');
+
   let difficulty = remembered();
   const saved = loadRun();
   const best = loadBest();
   const fmt = (n: number) => n.toLocaleString('en-US');
   title.innerHTML =
-    `<h1>PROC<span>·</span>FPS</h1><p class="tag">An endless descent through procedural hell.</p>` +
-    `<div class="menu">` +
-    `<div class="diff">${DIFFICULTIES.map((d) => `<button type="button" data-diff="${d}"${d === difficulty ? ' class="on"' : ''}>${DIFFICULTY[d].label}</button>`).join('')}</div>` +
-    `<button type="button" class="big" data-action="new">New run</button>` +
+    `<h1 class="logo">Proc·FPS</h1>` +
+    `<p class="tag">An endless descent through procedural hell</p>` +
+    `<div class="stripe"></div>` +
+    `<nav class="menu plate main">` +
+    `<button type="button" data-item data-action="new">New run</button>` +
     (saved
-      ? `<button type="button" class="big alt" data-action="continue">Continue · level ${saved.levels.length + 1} · ${DIFFICULTY[saved.difficulty].label} · ${fmt(runScore(saved))}</button>`
+      ? `<button type="button" data-item data-action="continue">Continue <span class="aside">level ${saved.levels.length + 1} · ${DIFFICULTY[saved.difficulty].label} · ${fmt(runScore(saved))}</span></button>`
       : '') +
-    `<div class="links"><a href="./browse.html">Seed browser</a><button type="button" class="link" data-action="controls">Controls</button></div>` +
-    `</div>` +
-    `<div class="controls" hidden></div>` +
-    (best.length
-      ? `<table class="best"><tr><th colspan="4">Best runs</th></tr>${best
-          .map((b) => `<tr><td>${fmt(b.score)}</td><td>${b.levels} level${b.levels === 1 ? '' : 's'}</td><td>${b.kills} kills</td><td>${DIFFICULTY[b.difficulty].label}</td></tr>`)
-          .join('')}</table>`
-      : '');
-  const controls = title.querySelector('.controls') as HTMLDivElement;
-  controls.innerHTML =
-    `<p>WASD steps one square; the mouse looks. The arrow at the top shows where W goes.</p>` +
-    `<p>Click to fire. Up close it swings the chainsword (or right-click / V): nothing hurts you while it grinds.</p>` +
-    `<p>1 / 2, the wheel or Q switch guns; R reloads. E lobs a grenade (scarce: find them in loot rooms).</p>` +
-    `<p>Space opens key doors and secret walls.</p>` +
-    `<p>Tab holds the map. Esc pauses. M music, N sound, F3 performance, F8 saves a replay.</p>`;
-  title.addEventListener('click', (e) => {
-    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-diff], [data-action]');
-    if (!el) return;
-    if (el.dataset.diff && isDifficulty(el.dataset.diff)) {
-      difficulty = el.dataset.diff;
-      try {
-        localStorage.setItem(DIFFICULTY_KEY, difficulty);
-      } catch {
-        // Not remembered, that is all.
-      }
-      title.querySelectorAll('[data-diff]').forEach((b) => b.classList.toggle('on', b === el));
+    `<button type="button" data-item data-adjust data-action="difficulty">Difficulty <span class="value"><i data-dir="-1">◀</i> <b class="diff"></b> <i data-dir="1">▶</i></span></button>` +
+    (best.length ? `<button type="button" data-item data-action="best">Hall of the fallen</button>` : '') +
+    `<button type="button" data-item data-action="controls">Controls</button>` +
+    `<button type="button" data-item data-action="browse">Seed browser</button>` +
+    `</nav>` +
+    `<p class="hint"></p>` +
+    `<div class="panel plate" data-panel="best" hidden>` +
+    `<table class="list"><tr><th colspan="5">Hall of the fallen</th></tr>${best
+      .map((b, i) => `<tr><td>${i + 1}</td><td>${fmt(b.score)}</td><td>${b.levels} level${b.levels === 1 ? '' : 's'}</td><td>${b.kills} kills</td><td>${DIFFICULTY[b.difficulty].label}</td></tr>`)
+      .join('')}</table>` +
+    `<nav class="menu"><button type="button" data-item data-action="back">Back</button></nav></div>` +
+    `<div class="panel plate" data-panel="controls" hidden>${controlsHtml()}<nav class="menu"><button type="button" data-item data-action="back">Back</button></nav></div>` +
+    `<footer>W S or arrows to choose · Enter to pick · generator ${GENERATOR_VERSION}</footer>`;
+
+  const main = title.querySelector('.menu.main') as HTMLElement;
+  const hint = title.querySelector('.hint') as HTMLElement;
+  const diffLabel = title.querySelector('.diff') as HTMLElement;
+  const showDifficulty = () => {
+    diffLabel.textContent = DIFFICULTY[difficulty].label;
+  };
+  showDifficulty();
+  const hints: Record<string, () => string> = {
+    new: () => `A fresh descent on ${DIFFICULTY[difficulty].label}.`,
+    continue: () => 'Back into the run in progress, at its next level.',
+    difficulty: () => DIFFICULTY_BLURB[difficulty],
+    best: () => 'The best runs so far.',
+    controls: () => 'How to move, fight and find your way.',
+    browse: () => 'Preview the levels seeds make.',
+  };
+  const setDifficulty = (d: Difficulty) => {
+    difficulty = d;
+    try {
+      localStorage.setItem(DIFFICULTY_KEY, difficulty);
+    } catch {
+      // Not remembered, that is all.
     }
-    if (el.dataset.action === 'new') location.href = runUrl(newRunId(), 1, difficulty);
-    if (el.dataset.action === 'continue' && saved) location.href = runUrl(saved.id, saved.levels.length + 1, saved.difficulty);
-    if (el.dataset.action === 'controls') controls.hidden = !controls.hidden;
+    showDifficulty();
+  };
+
+  // A panel (best runs, controls) replaces the menu until it is backed out of.
+  let panel: { el: HTMLElement; menu: Menu } | null = null;
+  const closePanel = () => {
+    if (!panel) return;
+    panel.menu.close();
+    panel.el.hidden = true;
+    panel = null;
+    main.hidden = false;
+    hint.hidden = false;
+  };
+  const openPanel = (name: string) => {
+    const el = title.querySelector(`[data-panel="${name}"]`) as HTMLElement;
+    main.hidden = true;
+    hint.hidden = true;
+    el.hidden = false;
+    panel = { el, menu: new Menu(el, { choose: closePanel, back: closePanel, sound }) };
+  };
+
+  const menu = new Menu(main, {
+    choose: (item) => {
+      const action = item.dataset.action;
+      if (action === 'new') location.href = runUrl(newRunId(), 1, difficulty);
+      if (action === 'continue' && saved) location.href = runUrl(saved.id, saved.levels.length + 1, saved.difficulty);
+      if (action === 'best' || action === 'controls') openPanel(action);
+      if (action === 'browse') location.href = './browse.html';
+    },
+    adjust: (_, dir) => {
+      const i = DIFFICULTIES.indexOf(difficulty);
+      setDifficulty(DIFFICULTIES[(i + dir + DIFFICULTIES.length) % DIFFICULTIES.length]!);
+    },
+    sound,
   });
+  const showHint = () => {
+    hint.textContent = hints[menu.selected?.dataset.action ?? '']?.() ?? '';
+  };
+  // The hint follows the selection (and the difficulty as it turns).
+  const observer = new MutationObserver(showHint);
+  observer.observe(main, { subtree: true, attributes: true, attributeFilter: ['class'], childList: true, characterData: true });
+  showHint();
 
   // The backdrop: a level seen from its start, turning slowly.
   const canvas = document.getElementById('view') as HTMLCanvasElement;
-  const map = generate(SHOWCASE_SEED, { level: 3, type: 'ascent' });
   const start = map.things.find((t) => t.type === ThingType.PlayerStart)!;
   const backend = WebGL2Backend.create(canvas);
   const renderer = new LevelRenderer(backend);

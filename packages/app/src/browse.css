@@ -1,12 +1,13 @@
 :root {
   color-scheme: dark;
-  --bg: #0b0b0c;
-  --panel: #151516;
-  --line: #2a2a2c;
-  --text: #d8d2c4;
-  --muted: #8f8a80;
-  --accent: #f2b04a;
-  --bad: #ff5a4a;
+  /* Steps of the game's palette (render/palette.ts), as in the game's own UI (style.css). */
+  --bg: rgb(10 10 12);
+  --panel: rgb(24 24 26);
+  --line: rgb(48 48 49);
+  --text: rgb(207 196 170);
+  --muted: rgb(131 122 104);
+  --accent: rgb(252 176 72);
+  --bad: rgb(236 96 80);
 }
 * {
   box-sizing: border-box;
@@ -16,11 +17,18 @@ body {
   padding: 16px;
   background: var(--bg);
   color: var(--text);
-  font: 13px/1.45 ui-monospace, monospace;
+  font: 16px/1.25 'Proc', ui-monospace, monospace;
+  text-transform: uppercase;
+}
+/* Typed seeds stay exactly as typed. */
+header input {
+  text-transform: none;
+  font-family: ui-monospace, monospace;
 }
 h1 {
   margin: 0 0 8px;
-  font-size: 18px;
+  font: normal 32px/1 'Proc Heavy', ui-monospace, monospace;
+  text-shadow: 2px 2px 0 #000;
   color: var(--accent);
 }
 header p {
@@ -39,7 +47,6 @@ button {
   color: var(--text);
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 3px;
   padding: 4px 8px;
 }
 input {

@@ -17,7 +17,8 @@ export type SoundId =
   | 'bolt' | 'boltBlast' | 'switch'
   | 'roar' | 'slam' | 'windupSlam' | 'summon' | 'bossDeath'
   | 'grenadeFire' | 'explode' | 'grenadePickup'
-  | 'lob' | 'splash' | 'homing' | 'split';
+  | 'lob' | 'splash' | 'homing' | 'split'
+  | 'menuMove' | 'menuChoose' | 'menuBack' | 'tally' | 'tallyDone';
 
 type Recipe = Voice[];
 
@@ -58,6 +59,19 @@ const RECIPES: Record<SoundId, Recipe> = {
     { wave: 'noise', freq: 1000, freqEnd: 80, attack: 0, sustain: 0.04, release: 0.35, volume: 0.7, lowpass: 1800 },
     { wave: 'saw', freq: 55, freqEnd: 25, attack: 0, sustain: 0.04, release: 0.25, volume: 0.4, lowpass: 300 },
     { wave: 'sine', freq: 60, freqEnd: 22, attack: 0, sustain: 0.05, release: 0.35, volume: 0.7 },
+  ],
+  // Menus: a dry click to move, a heavy clunk to choose, a falling blip to back out.
+  menuMove: [{ wave: 'square', freq: 520, freqEnd: 480, attack: 0, sustain: 0.015, release: 0.03, volume: 0.16, duty: 0.25 }],
+  menuChoose: [
+    { wave: 'square', freq: 180, freqEnd: 90, attack: 0, sustain: 0.04, release: 0.12, volume: 0.3, duty: 0.4, lowpass: 1400 },
+    { wave: 'noise', freq: 2000, freqEnd: 500, attack: 0, sustain: 0.01, release: 0.06, volume: 0.2, lowpass: 2600 },
+  ],
+  menuBack: [{ wave: 'square', freq: 420, freqEnd: 180, attack: 0, sustain: 0.02, release: 0.08, volume: 0.16, duty: 0.3 }],
+  // The end-of-level tally counting up, and landing.
+  tally: [{ wave: 'square', freq: 880, freqEnd: 880, attack: 0, sustain: 0.01, release: 0.02, volume: 0.1, duty: 0.2 }],
+  tallyDone: [
+    { wave: 'sine', freq: 110, freqEnd: 55, attack: 0, sustain: 0.05, release: 0.2, volume: 0.6 },
+    { wave: 'noise', freq: 1600, freqEnd: 300, attack: 0, sustain: 0.02, release: 0.12, volume: 0.25, lowpass: 1800 },
   ],
   // A glob spat up in an arc: a wet, gulping pop.
   lob: [

@@ -51,17 +51,18 @@ describe('runs', () => {
 
 describe('run screens', async () => {
   const { endScreen, summaryScreen } = await import('../src/screens.js');
+  const STATS = { kills: 30, enemies: 34, secrets: 1, secretTotal: 1, seconds: 100 };
   const run = { id: 'r', difficulty: 'hard' as const, started: 0, deaths: 2, levels: [{ level: 1, type: 'ascent', kills: 30, enemies: 34, secrets: 1, secretTotal: 1, seconds: 100, deaths: 0, score: 4200 }] };
 
   it('offers the next level after a clear, a retry after a death, and ending the run in a run', () => {
-    const won = endScreen('won', { level: 1 }, '', run);
+    const won = endScreen('won', { level: 1 }, STATS, run);
     expect(won).toContain('data-action="next"');
     expect(won).toContain('+4,200');
     expect(won).toContain('data-action="end"');
-    const dead = endScreen('dead', { level: 2 }, '', run);
+    const dead = endScreen('dead', { level: 2 }, STATS, run);
     expect(dead).toContain('data-action="retry"');
     expect(dead).toContain('2 deaths on this level');
-    expect(endScreen('won', { level: 1, map: 'test01' }, '', null)).not.toContain('data-action="end"');
+    expect(endScreen('won', { level: 1, map: 'test01' }, STATS, null)).not.toContain('data-action="end"');
   });
 
   it('sums the run up and marks its place among the best', () => {

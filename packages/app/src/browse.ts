@@ -1,5 +1,8 @@
 import { GENERATOR_VERSION, generateDetailed, isLevelType, levelStats, levelTypeFor, validateGenerated } from '@proc-fps/gen';
 import { drawThumbnail } from './thumbnail.js';
+import { installFonts } from './ui/skin.js';
+
+void installFonts();
 
 /**
  * Seed browser: thumbnails for a run of seeds (prefix + index), paged. Each card opens its
