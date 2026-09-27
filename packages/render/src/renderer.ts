@@ -73,7 +73,7 @@ export class LevelRenderer {
   private readonly spriteBakePipeline: PipelineHandle;
   private readonly spriteBuffer: BufferHandle;
   private readonly postPipeline: PipelineHandle;
-  private readonly palette: TextureHandle;
+  private palette: TextureHandle;
   private target: RenderTargetHandle | null = null;
   private vb: BufferHandle | null = null;
   private ib: BufferHandle | null = null;
@@ -155,6 +155,9 @@ export class LevelRenderer {
     this.indexCount = mesh.indices.length;
     this.sectorRanges = mesh.sectors;
     this.portals = new PortalGraph(map);
+    // Every theme quantizes to its own palette.
+    this.backend.destroy(this.palette);
+    this.palette = this.backend.createTexture({ width: PALETTE_SIZE, height: 1, filter: 'nearest', wrap: 'clamp' }, paletteRGBA(map.meta.theme));
     this.bakeAtlas(map);
   }
 

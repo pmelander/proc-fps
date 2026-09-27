@@ -1,6 +1,6 @@
 import { DIFFICULTIES, DIFFICULTY, PLAYER_EYE_HEIGHT, ThingType, isDifficulty, type Difficulty } from '@proc-fps/core';
 import { GENERATOR_VERSION, generate } from '@proc-fps/gen';
-import { LevelRenderer, THEME_COLORS, WebGL2Backend } from '@proc-fps/render';
+import { LevelRenderer, WebGL2Backend } from '@proc-fps/render';
 import { AudioEngine } from './audio/engine.js';
 import { loadBest, loadRun, runScore } from './run.js';
 import { controlsHtml } from './screens.js';
@@ -44,8 +44,7 @@ function remembered(): Difficulty {
 export function titleScreen(): void {
   document.body.classList.add('titling');
   const map = generate(SHOWCASE_SEED, { level: 3, type: 'ascent' });
-  const theme = THEME_COLORS[(map.meta.theme ?? 'base') as keyof typeof THEME_COLORS] ?? THEME_COLORS.base;
-  installSkin(theme.techLight);
+  installSkin(map.meta.theme ?? 'base');
   const title = document.getElementById('title') as HTMLDivElement;
   title.hidden = false;
 

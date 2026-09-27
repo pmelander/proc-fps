@@ -1,4 +1,5 @@
 import { DoorKind, doorKindOf, isDamaging, isLift, secretOf, type MapData } from '@proc-fps/core';
+import { quantize } from '@proc-fps/render';
 import { pickupCell, type SimState, type World } from '@proc-fps/sim';
 
 /** Matches the 3D view's low-res height so the map has the same chunky pixels. */
@@ -227,5 +228,24 @@ export function drawAutomap(canvas: HTMLCanvasElement, map: MapData, view: Autom
   });
   glyph(PLAYER_GLYPH, cx, cy, PLAYER);
 
+  // Snapped to the level theme's palette, like the view under it (the map uses few colours, cached).
+  const theme = map.meta.theme ?? 'base';
+  for (let i = 0; i < px.length; i++) px[i] = inPalette(px[i]!, theme);
   canvas.getContext('2d')!.putImageData(image, 0, 0);
+}
+
+const snapped = new Map<string, Map<number, number>>();
+function inPalette(c: number, theme: string): number {
+  const a = c >>> 24;
+  if (a === 0) return c;
+  let cache = snapped.get(theme);
+  if (!cache) snapped.set(theme, (cache = new Map()));
+  const rgb = c & 0xffffff;
+  let q = cache.get(rgb);
+  if (q === undefined) {
+    const p = quantize([rgb & 0xff, (rgb >>> 8) & 0xff, (rgb >>> 16) & 0xff], theme).color;
+    q = rgba(p[0], p[1], p[2], 0) & 0xffffff;
+    cache.set(rgb, q);
+  }
+  return (q | (a << 24)) >>> 0;
 }

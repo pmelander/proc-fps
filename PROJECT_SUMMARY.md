@@ -85,7 +85,7 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 
 **Verified:**
 - The typecheck is clean.
-- 146 tests pass.
+- 150 tests pass.
 - 2000 seeds produce 0 validation failures (about 12 ms per map including validation).
 - The production build succeeds (about 45 kB JS).
 - Headless Chromium (SwiftShader) renders correctly.
@@ -93,6 +93,7 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 **Not yet verified:** real mouse and keyboard play. Pointer lock can't run headless.
 
 - The game is called **Null Sector** (chosen over Hellseed, Gridfall, Cursed Protocol and others; not yet checked against existing games or trademarks). The name shows on the title logo and the page titles; the repository, the `@proc-fps/*` packages and the browser-storage keys (`proc-fps.run`, `.best`, `.difficulty`, so saved runs carry over) keep the working name.
+- Per-theme palettes (M23): `render/src/palette.ts` builds each theme's 8 ramps × 8 steps from its colours: a gray cast towards its stone, its stone, its tech light and its hazard paint (turned amber where the theme paints hazards in its light's hue, as hell does, so the two do not duplicate and yellow keys stay yellow), beside four fixed ramps that must read the same everywhere (blood, bone, and the blue and green of keys). Theme ramps pass through the colour itself (brightened, hue kept) a little over halfway up. The renderer loads the level's palette in `setMap`; `quantize` picks colours as the post pass does. Tests hold every ramp dark to light, every theme distinct, the four key colours on four ramps in their own hues, and under 15% of enemy skins on the ramp the theme's walls use (the contrast rule survives quantization). The UI follows: `ui/skin.ts` takes its iron, rust, blood, bone and toxic from the theme's gray, hazard, blood, bone and toxic ramps (plates, stripes and the logo's fire too), and the automap snaps its colours to the palette.
 - Options (M22): `app/src/options.ts` holds them (mouse speed 0.1–3×, invert look, vertical field of view 60–90°, music and sound volume 0–10, screen shake, flashes, head bob), sanitized from the browser's storage (`proc-fps.options`; no storage means the defaults). `ui/optionspanel.ts` is the panel on the title and pause screens: left/right or the arrows turn a setting, a line explains the chosen one, Reset and Back; each change is saved and applied at once, so the game behind the pause screen shows it. None reaches the sim: sensitivity scales the turn the input records, so replays hold. Flashes off keeps muzzle, blast and hurt flashes faint; M and N still mute on top of the volumes.
 - UI revamp (M21):
   - A procedural pixel font (`app/src/ui/font.ts`): 5×7 glyphs drawn as text art, built at load time into a real TrueType font (every lit pixel a square; regular and a heavy face one pixel bolder) and registered with `FontFace`, so the whole UI is ordinary text in it. Capitals only (lowercase maps to them), proportional punctuation, digits all one width.
@@ -237,7 +238,7 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
   - ✅ Slice 5: secrets: optional dead-end rooms behind secret doors, hidden on the automap until found.
   - ✅ Slice 6: tooling: `/browse.html` shows thumbnails and stats for pages of seeds (click to play); `gen:stats` reports distributions through `levelStats`.
 - **M3 — combat:** ✅ complete (generator v0.7.0). Grid-bound enemies with their own step timers and distance-field pathing, wake-up by sight, noise and damage, the idle/alert/chase/windup/pain/dead state machine, free-aim hitscan, dodgeable projectiles (grid collision, since all walls are on the grid), rare telegraphed hitscan snipers, player health, death and the exit. Balance (enemy budget by graph depth, health along the critical path) stays in M5; some levels currently have no health at all.
-- **M4 — procedural content:** ✅ complete (generator v0.8.0). Theme-coloured textures baked to an atlas on the GPU; SDF-modelled 8-direction, 4-frame enemy sprites baked to a sprite atlas; a seeded jsfxr-style sound set with positional playback; a seeded two-layer music generator that follows combat. Still open: per-theme quantization palettes (all themes share the 64-colour palette), and baked sprites for projectiles and pickups.
+- **M4 — procedural content:** ✅ complete (generator v0.8.0). Theme-coloured textures baked to an atlas on the GPU; SDF-modelled 8-direction, 4-frame enemy sprites baked to a sprite atlas; a seeded jsfxr-style sound set with positional playback; a seeded two-layer music generator that follows combat. Still open: baked sprites for projectiles and pickups (per-theme palettes came in M23).
 - **M5 — progression and balance:** ✅ complete (generator v0.9.0). Runs of levels with rising difficulty, enemy budgets by level and graph depth, health and ammo along the way, ammo, level stats, and pause. Beyond the roadmap: the Backlog below.
 - **M6 — hazards and storeys:** ✅ complete (generator v0.10.0). Damaging floors, lifts, and two-storey levels.
 - **M7 — combat feel:** ✅ complete (generator v0.11.0). A heavy shotgun with automatic melee, infinite ammo, hordes of fragile enemies, spectacular deaths, bosses dropping keys, key sprites, mutant enemies, a lift tile.
@@ -256,7 +257,7 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 - **M20 — projectile patterns:** ✅ complete. Lobbed globs and homing orbs for grunt variants; walls with a gap, split shots, spirals and homing fans rotated into boss phases.
 - **M21 — UI revamp:** ✅ complete. A procedural pixel font built into a TrueType font at load, a pixel-grid skin in the game's palette and the level's theme colour, keyboard menus, a title card per level, a Doom-style end-of-level tally, and a riveted-plate HUD.
 - **M22 — options:** ✅ complete. Mouse speed, invert look, field of view, music and sound volume, screen shake, flashes and head bob, from the title and pause screens, kept in the browser.
-- **M23 — per-theme palettes:** planned. Each theme quantizes to its own 64 colours (hell reads red, crypt green), and the UI follows.
+- **M23 — per-theme palettes:** ✅ complete. Each theme quantizes to its own 64 colours, built from its own colours; the HUD, menus and automap follow.
 - **M24 — more enemy roles:** planned. New ordinary roles beside grunt, brute and sniper, such as a charger, an exploder or a shielded enemy.
 - **M25 — pickups:** planned. Beyond health and grenades: armour, a berserk power-up for the chainsword, and the like.
 
@@ -288,4 +289,4 @@ Ideas noted during play-testing, not yet scheduled. Each line points at whatever
 
 
 
-- Nothing queued.
+- **Chainsword only on the trigger.** The dedicated melee input (right-click, V) is too strong: the chainsword should start only from a normal attack with an enemy in reach. Drop the `melee` input from the app (`app/src/input.ts`) and the controls lists (`screens.ts`); the `InputFrame.melee` field and its handling in `sim/src/combat.ts` (`playerFire`) can stay for old replays, or go with a replay-format note.

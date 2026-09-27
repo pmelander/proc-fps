@@ -428,7 +428,7 @@ function main(): void {
   let run: RunRecord | null = here.run ? runFor(here.run, here.difficulty) : null;
   // The weapon's coils glow in the theme's light colour, and so does the UI's accent.
   const theme = THEME_COLORS[(map.meta.theme ?? 'base') as keyof typeof THEME_COLORS] ?? THEME_COLORS.base;
-  installSkin(theme.techLight);
+  installSkin(map.meta.theme ?? 'base');
   const weapon = new Weapon(document.getElementById('gun') as HTMLCanvasElement, theme.techLight);
   const bolter = new Bolter(document.getElementById('bolter') as HTMLCanvasElement, theme.techLight);
   const chainsword = new Chainsword(document.getElementById('saw') as HTMLCanvasElement);

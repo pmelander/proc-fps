@@ -1,3 +1,4 @@
+import { THEME_COLORS, paletteRamps, rampStep, type Ramp, type RampName } from '@proc-fps/render';
 import { buildFont } from './font.js';
 
 /**
@@ -5,16 +6,19 @@ import { buildFont } from './font.js';
  * UI pixel `--u` sized to the window (every border, gap and glyph pixel is a whole number of
  * them, so nothing blurs), the game's palette as CSS colours (style.css), and textures drawn here
  * in that palette: a riveted iron plate (a nine-slice border image), a dithered backdrop like the
- * scene's own Bayer dithering, a dithered fire ramp for the logo, and hazard stripes. The level's
- * theme light is the accent, so the UI takes on each level's colour.
+ * scene's own Bayer dithering, a dithered fire ramp for the logo, and hazard stripes. The palette
+ * is the level theme's (render/palette.ts: its gray, hazard, blood, bone and toxic ramps become the
+ * iron, rust, blood, bone and toxic here) and its light is the accent, so the UI takes on each
+ * level's colours.
  */
 export type Rgb = readonly [number, number, number];
 
-/** Palette steps (render/palette.ts) the textures use. */
-const INK: Rgb = [10, 10, 12];
-const IRON: readonly Rgb[] = [[16, 16, 19], [24, 24, 26], [34, 33, 34], [48, 48, 49], [76, 76, 76], [110, 110, 108]];
-const FIRE: readonly Rgb[] = [[250, 238, 206], [252, 176, 72], [208, 144, 58], [236, 96, 80], [195, 78, 65], [121, 46, 39]];
-const RUST: Rgb = [252, 176, 72];
+/** Palette steps the textures use (set from the theme's palette by installSkin). */
+let INK: Rgb = [10, 10, 12];
+let IRON: readonly Rgb[] = [];
+let FIRE: readonly Rgb[] = [];
+let RUST: Rgb = [252, 176, 72];
+const avg = (a: Rgb, b: Rgb): Rgb => a.map((v, i) => Math.round((v + b[i]!) / 2)) as unknown as Rgb;
 
 const BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 const css = (c: Rgb, a = 1) => (a === 1 ? `rgb(${c.join(' ')})` : `rgb(${c.join(' ')} / ${a})`);
@@ -115,13 +119,28 @@ export function installFonts(): Promise<void> {
 }
 
 /**
- * Installs the skin: fonts, the UI pixel and the textures, re-sized with the window. `accent` is
- * the level's theme light (0–1 channels).
+ * Installs the skin for a level theme: fonts, the palette's colours, the UI pixel and the
+ * textures, re-sized with the window.
  */
-export function installSkin(accent: Rgb = [0.2, 0.7, 1.0]): void {
+export function installSkin(themeName = 'base'): void {
   void installFonts();
   const root = document.documentElement.style;
-  const a = accent.map((c) => Math.round(c * 255)) as unknown as Rgb;
+  const ramps = new Map<RampName, Ramp>(paletteRamps(themeName).map((r) => [r.name, r]));
+  const step = (name: RampName, s: number) => rampStep(ramps.get(name)!, s) as Rgb;
+  INK = step('gray', 0);
+  IRON = [avg(step('gray', 0), step('gray', 1)), step('gray', 1), avg(step('gray', 1), step('gray', 2)), step('gray', 2), step('gray', 3), step('gray', 4)];
+  RUST = step('hazard', 6);
+  FIRE = [step('bone', 7), step('hazard', 6), step('hazard', 5), step('blood', 7), step('blood', 6), step('blood', 4)];
+  const vars: Record<string, Rgb> = {
+    ink: INK, iron: step('gray', 1), 'iron-mid': step('gray', 2), 'iron-hi': step('gray', 3),
+    'bone-hi': step('bone', 7), bone: step('bone', 6), 'bone-dim': step('bone', 4),
+    rust: RUST, 'rust-mid': step('hazard', 5), 'rust-dim': step('hazard', 3),
+    blood: step('blood', 7), 'blood-mid': step('blood', 6), 'blood-dim': step('blood', 4),
+    toxic: step('toxic', 7), 'toxic-mid': step('toxic', 6),
+  };
+  for (const [k, v] of Object.entries(vars)) root.setProperty(`--${k}`, css(v));
+  const theme = THEME_COLORS[themeName as keyof typeof THEME_COLORS] ?? THEME_COLORS.base;
+  const a = theme.techLight.map((c) => Math.round(c * 255)) as unknown as Rgb;
   root.setProperty('--accent', css(a));
   root.setProperty('--glow', css(a));
   root.setProperty('--accent-dim', css(a.map((c) => Math.round(c * 0.45)) as unknown as Rgb));
