@@ -1,4 +1,4 @@
-# proc-fps
+# Null Sector
 
 A fully procedural, Doom-style FPS that runs in the browser. It uses 2.5D sector geometry rendered in true 3D, with a custom WebGL2 renderer and a deterministic sim.
 

@@ -135,8 +135,8 @@ export function installSkin(accent: Rgb = [0.2, 0.7, 1.0]): void {
     const h = innerHeight;
     // One UI pixel: whole screen pixels, a little finer than the scene's (240 rows).
     const u = Math.max(1, Math.min(Math.round(h / 360), Math.floor(w / 480)) || 1);
-    // The logo's pixel scale: "PROC·FPS" in the heavy face is about 52 glyph pixels wide.
-    const lk = Math.max(2, Math.min(6, Math.floor((0.8 * w) / (52 * u)), Math.floor((0.18 * h) / (7 * u))));
+    // The logo's pixel scale: "NULL SECTOR" in the heavy face is 74 glyph pixels wide.
+    const lk = Math.max(2, Math.min(6, Math.floor((0.84 * w) / (74 * u)), Math.floor((0.18 * h) / (7 * u))));
     root.setProperty('--u', `${u}px`);
     root.setProperty('--lk', String(lk));
     root.setProperty('--fire', fireRamp(8 * lk));

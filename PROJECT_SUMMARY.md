@@ -1,4 +1,4 @@
-# proc-fps — project summary
+# Null Sector — project summary
 
 A fully procedural, Doom-style FPS running entirely in the browser, planned as a long-term project. No hand-made assets: levels, textures, sprites, and audio are all generated from a seed.
 
@@ -92,6 +92,7 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 
 **Not yet verified:** real mouse and keyboard play. Pointer lock can't run headless.
 
+- The game is called **Null Sector** (chosen over Hellseed, Gridfall, Cursed Protocol and others; not yet checked against existing games or trademarks). The name shows on the title logo and the page titles; the repository, the `@proc-fps/*` packages and the browser-storage keys (`proc-fps.run`, `.best`, `.difficulty`, so saved runs carry over) keep the working name.
 - UI revamp (M21):
   - A procedural pixel font (`app/src/ui/font.ts`): 5×7 glyphs drawn as text art, built at load time into a real TrueType font (every lit pixel a square; regular and a heavy face one pixel bolder) and registered with `FontFace`, so the whole UI is ordinary text in it. Capitals only (lowercase maps to them), proportional punctuation, digits all one width.
   - The skin (`ui/skin.ts`, `style.css`): a UI pixel `--u` sized to the window (every border, gap and glyph pixel is a whole number of them, so nothing blurs), colours taken from the game's 64-colour palette, and textures drawn in it at load: a riveted iron plate (a nine-slice border image), a Bayer-dithered darkening for overlays like the scene's own dithering, a dithered fire ramp for the logo, hazard stripes. The level's theme light is the accent (menu pointers, ammo, compass), so the UI takes on each level's colour.
@@ -281,4 +282,5 @@ In the map format a door is a one-cell sector with its kind in `Sector.special` 
 Ideas noted during play-testing, not yet scheduled. Each line points at whatever already exists for it.
 
 
-- **A better title.** "proc-fps" is a working name; something like Cursed Protocol or Procedural Hell, shorter if possible. Brainstorm (unchecked against existing games and trademarks): Hellseed, Gridfall, Null Sector, Hellgrid, Cursed Protocol, Sector Zero, Bloodseed, Infernal Seed, Abyss Protocol, Carnage Engine, Underdeep, Endless Below. The logo (title.ts) sizes itself for about 52 heavy glyph pixels (eight characters); a longer name needs `--lk` in ui/skin.ts retuned.
+
+- Nothing queued.

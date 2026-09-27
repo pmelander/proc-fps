@@ -59,7 +59,7 @@ export function titleScreen(): void {
   const best = loadBest();
   const fmt = (n: number) => n.toLocaleString('en-US');
   title.innerHTML =
-    `<h1 class="logo">Proc·FPS</h1>` +
+    `<h1 class="logo">Null Sector</h1>` +
     `<p class="tag">An endless descent through procedural hell</p>` +
     `<div class="stripe"></div>` +
     `<nav class="menu plate main">` +

@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-proc-fps is a fully procedural, Doom-style browser FPS: 2.5D sector geometry rendered in true 3D by a custom WebGL2 renderer, driven by a deterministic 60 Hz sim. Movement is grid-based (one 128-unit cell per step) with free mouse look. `PROJECT_SUMMARY.md` holds the design rationale, known gaps, roadmap and open questions. Read it before architectural work.
+Null Sector (working name and repository: proc-fps) is a fully procedural, Doom-style browser FPS: 2.5D sector geometry rendered in true 3D by a custom WebGL2 renderer, driven by a deterministic 60 Hz sim. Movement is grid-based (one 128-unit cell per step) with free mouse look. `PROJECT_SUMMARY.md` holds the design rationale, known gaps, roadmap and open questions. Read it before architectural work.
 
 ## Commands
 
