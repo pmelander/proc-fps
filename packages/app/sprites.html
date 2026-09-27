@@ -7,7 +7,7 @@
     <link rel="icon" href="data:," />
     <style>
       body { margin: 0; padding: 16px; background: #0b0b0c; color: #d8d2c4; font: 13px/1.45 ui-monospace, monospace; }
-      canvas { display: block; width: 100%; max-width: 2048px; image-rendering: pixelated; aspect-ratio: 2048 / 320; }
+      canvas { display: block; width: 100%; max-width: 2048px; image-rendering: pixelated; aspect-ratio: 2048 / 512; }
       h1 { margin: 0 0 6px; font-size: 18px; color: #f2b04a; }
       p { margin: 0 0 12px; color: #8f8a80; }
       table { border-collapse: collapse; margin-top: 12px; }
@@ -18,7 +18,7 @@
   </head>
   <body>
     <h1>Enemy sprite atlas</h1>
-    <p>Rows: grunt, brute, sniper, mini boss, boss (bottom to top). Columns: 8 directions × 4 frames (walk, walk, attack, dead). Eyes tinted red. <code>?seed=&lt;s&gt;&amp;theme=base|tech|hell|crypt</code> breeds a level's mutants.</p>
+    <p>Rows, bottom to top: grunt, grunt, brute, brute, sniper, sniper (each level's two variants), mini boss, boss. Columns: 8 directions × 4 frames (walk, walk, attack, dead). Eyes tinted red. <code>?seed=&lt;s&gt;&amp;theme=base|tech|hell|crypt</code> breeds a level's mutants.</p>
     <canvas id="atlas"></canvas>
     <div id="info"></div>
     <script type="module" src="./src/sprites.ts"></script>

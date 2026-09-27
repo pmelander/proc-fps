@@ -1,8 +1,7 @@
 import {
   CellGrid,
   enemyDefsFor,
-  type EnemyDef,
-  type EnemyType,
+  type EnemyDefs,
   DoorKind,
   LIFT_SPEED,
   SectorLocator,
@@ -75,8 +74,8 @@ export interface World {
   readonly exit: readonly [number, number] | null;
   /** Number of secrets (ids 0 … secrets - 1). */
   readonly secrets: number;
-  /** This level's enemy stats: seeded variants on generated maps, the baseline otherwise. */
-  readonly enemyDefs: Readonly<Record<EnemyType, EnemyDef>>;
+  /** This level's enemy stats per role and variant (see `defOf`): seeded on generated maps, the baseline otherwise. */
+  readonly enemyDefs: EnemyDefs;
 }
 
 export function createWorld(map: MapData): World {

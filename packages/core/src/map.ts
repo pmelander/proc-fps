@@ -119,6 +119,9 @@ export const THING_DROPS_KEY = 1 << 4;
 export const dropsKeyFlags = (key: number): number => THING_DROPS_KEY | (key & 3);
 /** Key an enemy thing drops on death, or -1. */
 export const droppedKey = (t: Thing): number => (t.flags & THING_DROPS_KEY ? t.flags & 3 : -1);
+/** An ordinary enemy of the level's second variant (see core's enemyDefsFor, render's enemyLooks). */
+export const THING_VARIANT = 1 << 5;
+export const variantOf = (t: Thing): number => (t.flags & THING_VARIANT ? 1 : 0);
 
 /** Key things are KEY_THING_BASE + key id, for key ids 0 … MAX_KEYS - 1. */
 export const KEY_THING_BASE = 16;

@@ -1,6 +1,6 @@
-import { CELL_SIZE, DoorKind, MAG_SIZE, MELEE_FIRST_HIT, MELEE_IFRAMES, MELEE_TICKS, RELOAD_TICKS, HEADING_DX, HEADING_DY, PLAYER_EYE_HEIGHT, STEP_TICKS, TICK_DT, isEnemyThing, type MapData } from '@proc-fps/core';
+import { CELL_SIZE, DoorKind, EnemyType, defOf, MAG_SIZE, MELEE_FIRST_HIT, MELEE_IFRAMES, MELEE_TICKS, RELOAD_TICKS, HEADING_DX, HEADING_DY, PLAYER_EYE_HEIGHT, STEP_TICKS, TICK_DT, isEnemyThing, type MapData } from '@proc-fps/core';
 import { GENERATOR_VERSION, generate, isLevelType, validateGenerated, type LevelType } from '@proc-fps/gen';
-import { BASELINE_LOOKS, HIDDEN_OFFSET, LevelRenderer, SpriteShape, THEME_COLORS, WebGL2Backend, enemyLooks, spriteTile, type Sprite } from '@proc-fps/render';
+import { BASELINE_LOOKS, HIDDEN_OFFSET, LevelRenderer, SpriteShape, THEME_COLORS, WebGL2Backend, enemyLooks, spriteRow, spriteTile, type Sprite } from '@proc-fps/render';
 import {
   PLAYER_MAX_HEALTH,
   ReplayRecorder,
@@ -159,6 +159,11 @@ const SHAPE: Record<number, number> = {
   41: SpriteShape.Boss,
 };
 const PROJECTILE_SIZE = 14;
+/** The enemy (type, variant) behind each baked sprite row (see spriteRow). */
+const SPRITE_ROWS_OF: readonly (readonly [EnemyType, number])[] = [
+  [EnemyType.Grunt, 0], [EnemyType.Grunt, 1], [EnemyType.Brute, 0], [EnemyType.Brute, 1],
+  [EnemyType.Sniper, 0], [EnemyType.Sniper, 1], [EnemyType.MiniBoss, 0], [EnemyType.Boss, 0],
+];
 /** Events that play a sound with no position (the player's own). */
 const SOUND_OF: Partial<Record<string, SoundId>> = {
   shot: 'shot', hurt: 'hurt', death: 'death', locked: 'locked', key: 'key', health: 'health', secret: 'secret', exit: 'exit',
@@ -203,7 +208,7 @@ function buildSprites(
     return (world.map.sectors[world.grid.sectorAt(cx, cy)]?.light ?? 160) / 255;
   };
   const sprites: Sprite[] = state.enemies.map((e, i) => {
-    const def = world.enemyDefs[e.type];
+    const def = defOf(world.enemyDefs, e);
     const was = prevEnemies[i] ?? e;
     let x = lerp(was.x, e.x, t);
     let y = lerp(was.y, e.y, t);
@@ -223,7 +228,7 @@ function buildSprites(
     const charge = e.mode === 'windup' ? 1 - e.timer / def.windup : 0;
     return {
       x, y, z, width: def.radius * SPRITE_WIDTH, height: def.height, shape,
-      charge, flash: e.mode === 'pain' ? 1 : 0, light: light(x, y), tile: spriteTile(shape, direction, frame),
+      charge, flash: e.mode === 'pain' ? 1 : 0, light: light(x, y), tile: spriteTile(spriteRow(shape, e.variant), direction, frame),
     };
   });
   // Keys: bobbing and glowing where they lie (a carried key appears where its carrier died).
@@ -323,8 +328,8 @@ function main(): void {
   // generated level breeds its own mutants, coloured to stand out from its theme.
   const themeName = (map.meta.theme && map.meta.theme in THEME_COLORS ? map.meta.theme : 'base') as keyof typeof THEME_COLORS;
   renderer.bakeSprites(
-    Object.keys(SHAPE).map((type) => {
-      const def = world.enemyDefs[Number(type) as keyof typeof world.enemyDefs];
+    SPRITE_ROWS_OF.map(([type, variant]) => {
+      const def = defOf(world.enemyDefs, { type, variant });
       return (def.radius * SPRITE_WIDTH) / def.height;
     }),
     map.meta.seed ? enemyLooks(map.meta.seed, themeName) : BASELINE_LOOKS,
@@ -398,7 +403,7 @@ function main(): void {
         if (e.type === 'door') audio.play('door', doorCells[e.door], listener);
         if (e.type === 'hit' || e.type === 'kill' || e.type === 'melee') {
           const enemy = enemyAt(e.enemy);
-          const def = world.enemyDefs[enemy.type];
+          const def = defOf(world.enemyDefs, enemy);
           const mid = enemy.z + def.height * 0.6;
           const dx = enemy.x - state.player.x;
           const dy = enemy.y - state.player.y;
@@ -438,7 +443,7 @@ function main(): void {
           // Blood thrown back off the blade, towards the player.
           const [bx, by] = [state.player.x - enemy.x, state.player.y - enemy.y];
           const bl = Math.hypot(bx, by) || 1;
-          gore.burst(enemy.x, enemy.y, enemy.z + world.enemyDefs[enemy.type].height * 0.55, bx / bl, by / bl, 5, 10);
+          gore.burst(enemy.x, enemy.y, enemy.z + defOf(world.enemyDefs, enemy).height * 0.55, bx / bl, by / bl, 5, 10);
           joltUntil = now + JOLT_SECONDS;
         }
         if (e.type === 'shielded') {
@@ -447,7 +452,7 @@ function main(): void {
         }
         if (e.type === 'windup' || e.type === 'attack') {
           const enemy = enemyAt(e.enemy);
-          const kind = world.enemyDefs[enemy.type].attack;
+          const kind = defOf(world.enemyDefs, enemy).attack;
           const id: SoundId = e.type === 'windup'
             ? kind === 'melee' ? 'windupMelee' : kind === 'hitscan' ? 'windupHitscan' : 'windup'
             : kind === 'melee' ? 'melee' : kind === 'hitscan' ? 'snipe' : 'launch';

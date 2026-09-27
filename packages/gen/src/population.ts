@@ -1,4 +1,4 @@
-import { EnemyType, ThingType, dropsKeyFlags, type Rng } from '@proc-fps/core';
+import { EnemyType, THING_VARIANT, ThingType, VARIANT_TYPES, dropsKeyFlags, type Rng } from '@proc-fps/core';
 import type { Layout } from './layout.js';
 import type { Mission } from './mission.js';
 import type { RoomDesign } from './rooms.js';
@@ -86,6 +86,20 @@ export function populate(input: PopulationInput): Placed[] {
     return weights.find(([, w]) => (roll -= w) < 0)?.[0] ?? EnemyType.Grunt;
   };
 
+  // Variants: the level breeds two of each ordinary role. Most rooms hold one kind (a horde of the
+  // same mutant reads as a group), some mix them. Drawn from their own stream.
+  const variants = rng.fork('variants');
+  const roomVariant = mission.nodes.map(() => {
+    const roll = variants.float();
+    return roll < 0.4 ? 0 : roll < 0.8 ? 1 : -1; // -1 = mixed
+  });
+  const variantFlags = (id: number, type: EnemyType) => {
+    if (!VARIANT_TYPES.includes(type)) return 0;
+    const v = roomVariant[id]! >= 0 ? roomVariant[id]! : variants.chance(0.5) ? 1 : 0;
+    return v ? THING_VARIANT : 0;
+  };
+  const putEnemy = (id: number, type: EnemyType) => put(id, type, undefined, variantFlags(id, type));
+
   // Enemies.
   mission.nodes.forEach((node, id) => {
     const r = layout.rooms[id]!;
@@ -95,17 +109,17 @@ export function populate(input: PopulationInput): Placed[] {
       for (let n = 0; n < MAX_ROOM_ENEMIES; n++) {
         const type = pickEnemy(deep);
         const cost = COST[type] ?? 1;
-        if (cost > budget + 0.5 || !put(id, type)) break;
+        if (cost > budget + 0.5 || !putEnemy(id, type)) break;
         budget -= cost;
       }
     } else if (node.kind === 'miniboss') {
       putCentral(id, EnemyType.MiniBoss);
       const escort = rng.int(2, 3 + Math.floor(level / 2));
-      for (let n = 0; n < escort; n++) put(id, rng.chance(0.3 * (level - 1)) ? EnemyType.Brute : EnemyType.Grunt);
+      for (let n = 0; n < escort; n++) putEnemy(id, rng.chance(0.3 * (level - 1)) ? EnemyType.Brute : EnemyType.Grunt);
     } else if (node.kind === 'boss') {
       putCentral(id, EnemyType.Boss);
       const escort = Math.min(8, rng.int(1, 1 + level));
-      for (let n = 0; n < escort; n++) put(id, EnemyType.Grunt);
+      for (let n = 0; n < escort; n++) putEnemy(id, EnemyType.Grunt);
     }
   });
 

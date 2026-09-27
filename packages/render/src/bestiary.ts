@@ -6,13 +6,16 @@ import { THEME_COLORS, type Theme } from './themes.js';
 type Rgb = readonly [number, number, number];
 
 /**
- * How a level's mutants look: one body plan per sprite shape (grunt, brute, sniper, mini boss,
- * boss), bred from the level's seed and baked by SPRITE_BAKE_FS. Stats come from the same seed on
- * another fork (core's `enemyDefsFor`); looks are render-only.
+ * How a level's mutants look: one body plan per sprite row (grunt, grunt, brute, brute, sniper,
+ * sniper, mini boss, boss: the ordinary roles come in two variants, see core's enemyDefsFor),
+ * bred from the level's seed and baked by SPRITE_BAKE_FS. Looks are render-only.
  *
  * Skins must stand out from the level: every role gets a hue kept away from the theme's saturated
  * colours (its lights, slime, hazard paint, tinted stone) and from the other roles, so a green
- * crypt never breeds green mutants and a brute never passes for a grunt.
+ * crypt never breeds green mutants and a brute never passes for a grunt. A role's second variant
+ * shifts its hue and flips its lightness, stands on different legs and grows a different body, so
+ * the two read apart at a glance. Accents come from several schemes (a darker shade, the
+ * complement, a triad, a pale belly), and some mutants carry glowing markings.
  */
 export interface EnemyLook {
   /** Forward lean of everything above the hips (0 = upright). */
@@ -34,11 +37,15 @@ export interface EnemyLook {
   tail: number;
   /** Width scale of the whole body, about 1. */
   bulk: number;
+  /** 0 biped, 1 digitigrade, 2 crawler, 3 slug (the boss keeps its own stumps). */
+  legs: number;
   /** 0 mottled, 1 banded, 2 spotted, 3 pale-bellied. */
   pattern: number;
   patternScale: number;
   skin: Rgb;
   accent: Rgb;
+  /** Markings (the pattern's accent areas) that glow in this colour, or null. */
+  glow: Rgb | null;
 }
 
 /** Hue in degrees [0, 360), saturation and value in [0, 1]. */
@@ -50,8 +57,9 @@ function hsv([r, g, b]: Rgb): [number, number, number] {
 }
 
 function rgb(h: number, s: number, v: number): Rgb {
+  const hue = ((h % 360) + 360) % 360;
   const f = (n: number) => {
-    const k = (n + h / 60) % 6;
+    const k = (n + hue / 60) % 6;
     return v - v * s * Math.max(0, Math.min(k, 4 - k, 1));
   };
   return [f(5), f(3), f(1)];
@@ -75,17 +83,22 @@ export function themeHues(theme: Theme): { hue: number; radius: number }[] {
 
 /** Keeps role hues at least this far apart. */
 const ROLE_SEPARATION = 40;
+const ROLES = 5;
+/** The role behind each sprite row. */
+export const ROW_ROLE: readonly number[] = [0, 0, 1, 1, 2, 2, 3, 4];
+const BOSS_ROLE = 4;
 
-function pickHues(theme: Theme, rng: Rng): number[] {
-  const claims = themeHues(theme);
-  const clear = (h: number) => Math.min(180, ...claims.map((c) => hueDistance(h, c.hue) - c.radius));
+/** How far a hue is from the theme's claims (negative: inside one). */
+const clearance = (claims: { hue: number; radius: number }[], h: number) => Math.min(180, ...claims.map((c) => hueDistance(h, c.hue) - c.radius));
+
+function pickHues(claims: { hue: number; radius: number }[], rng: Rng): number[] {
   const chosen: number[] = [];
-  for (let role = 0; role < SPRITE_ROWS; role++) {
+  for (let role = 0; role < ROLES; role++) {
     let best = 0;
     let bestScore = -Infinity;
     for (let h = 0; h < 360; h += 5) {
       const apart = Math.min(180, ...chosen.map((c) => hueDistance(h, c) - ROLE_SEPARATION));
-      const score = Math.min(clear(h), apart) + rng.range(0, 12);
+      const score = Math.min(clearance(claims, h), apart) + rng.range(0, 12);
       if (score > bestScore) [best, bestScore] = [h, score];
     }
     chosen.push(best);
@@ -110,30 +123,66 @@ interface RoleRanges {
   extraArms: number;
   tail: [number, number, number];
   bulk: [number, number];
+  /** Weights for biped, digitigrade, crawler, slug legs. */
+  legs: [number, number, number, number];
 }
 
-// Per shape: how far each trait may wander. Chances are 0–1; tail = [chance, min, max].
-const ROLES: RoleRanges[] = [
-  { hunch: 0.2, heft: [0.85, 1.2], horns: 0.35, hornLength: [0.05, 0.12], spikes: [0, 4], eyes: [1, 5, 2, 2], extraArms: 0.25, tail: [0.3, 0.1, 0.25], bulk: [0.9, 1.12] },
-  { hunch: 0.12, heft: [0.9, 1.25], horns: 0.45, hornLength: [0.06, 0.12], spikes: [2, 5], eyes: [0, 6, 2, 2], extraArms: 0.2, tail: [0.25, 0.1, 0.2], bulk: [0.95, 1.1] },
-  { hunch: 0.15, heft: [0.8, 1.2], horns: 0.3, hornLength: [0.04, 0.1], spikes: [0, 3], eyes: [6, 2, 2, 0], extraArms: 0.15, tail: [0.35, 0.1, 0.25], bulk: [0.9, 1.05] },
-  { hunch: 0.12, heft: [0.95, 1.25], horns: 0.7, hornLength: [0.07, 0.13], spikes: [3, 5], eyes: [0, 5, 3, 2], extraArms: 0.35, tail: [0.3, 0.1, 0.2], bulk: [1.0, 1.1] },
-  { hunch: 0, heft: [0.9, 1.2], horns: 0.8, hornLength: [0.08, 0.14], spikes: [2, 6], eyes: [0, 2, 3, 4], extraArms: 0.4, tail: [0.4, 0.15, 0.3], bulk: [0.95, 1.02] },
+// Per role: how far each trait may wander. Chances are 0–1; tail = [chance, min, max].
+const RANGES: RoleRanges[] = [
+  { hunch: 0.2, heft: [0.85, 1.2], horns: 0.35, hornLength: [0.05, 0.12], spikes: [0, 4], eyes: [1, 5, 2, 2], extraArms: 0.25, tail: [0.3, 0.1, 0.25], bulk: [0.9, 1.12], legs: [4, 3, 2, 1] },
+  { hunch: 0.12, heft: [0.9, 1.25], horns: 0.45, hornLength: [0.06, 0.12], spikes: [2, 5], eyes: [0, 6, 2, 2], extraArms: 0.2, tail: [0.25, 0.1, 0.2], bulk: [0.95, 1.1], legs: [5, 3, 1, 1] },
+  { hunch: 0.15, heft: [0.8, 1.2], horns: 0.3, hornLength: [0.04, 0.1], spikes: [0, 3], eyes: [6, 2, 2, 0], extraArms: 0.15, tail: [0.35, 0.1, 0.25], bulk: [0.9, 1.05], legs: [3, 3, 2, 2] },
+  { hunch: 0.12, heft: [0.95, 1.25], horns: 0.7, hornLength: [0.07, 0.13], spikes: [3, 5], eyes: [0, 5, 3, 2], extraArms: 0.35, tail: [0.3, 0.1, 0.2], bulk: [1.0, 1.1], legs: [5, 3, 1, 0] },
+  { hunch: 0, heft: [0.9, 1.2], horns: 0.8, hornLength: [0.08, 0.14], spikes: [2, 6], eyes: [0, 2, 3, 4], extraArms: 0.4, tail: [0.4, 0.15, 0.3], bulk: [0.95, 1.02], legs: [1, 0, 0, 0] },
 ];
+/** Chance a mutant has glowing markings. */
+const GLOW_CHANCE = 0.3;
 
-/** The level's mutants, one look per sprite shape. Deterministic in seed and theme. */
+/** The level's mutants, one look per sprite row. Deterministic in seed and theme. */
 export function enemyLooks(seed: string, theme: ThemeName): EnemyLook[] {
   const rng = new Rng(seed).fork('bestiary').fork('looks');
-  const hues = pickHues(THEME_COLORS[theme] ?? THEME_COLORS.base, rng.fork('hues'));
-  return ROLES.map((R, shape) => {
-    const r = rng.fork(`shape${shape}`);
-    const hue = hues[shape]!;
-    const s = r.range(0.4, 0.62);
-    const v = r.range(0.5, 0.7);
-    const pattern = r.int(0, 3);
+  const claims = themeHues(THEME_COLORS[theme] ?? THEME_COLORS.base);
+  const roleHues = pickHues(claims, rng.fork('hues'));
+  const looks: EnemyLook[] = [];
+  ROW_ROLE.forEach((role, row) => {
+    const R = RANGES[role]!;
+    const r = rng.fork(`row${row}`);
+    const first = row > 0 && ROW_ROLE[row - 1] === role ? looks[row - 1]! : undefined;
+    // Colour: the role's hue for the first variant; the second shifts it towards clearer ground and
+    // flips its lightness.
+    let hue = roleHues[role]!;
+    let v = r.range(0.45, 0.8);
+    const s = r.range(0.3, 0.8);
+    if (first) {
+      const shift = r.range(30, 50);
+      hue = clearance(claims, hue + shift) >= clearance(claims, hue - shift) ? hue + shift : hue - shift;
+      const [, , v0] = hsv(first.skin);
+      v = v0 > 0.62 ? r.range(0.4, v0 - 0.18) : r.range(Math.min(0.85, v0 + 0.15), 0.85);
+    }
+    const pattern = first ? (first.pattern + r.int(1, 3)) % 4 : r.int(0, 3);
+    const scheme = r.int(0, 2); // 0 a darker shade, 1 the complement, 2 a triad
+    const accent =
+      pattern === 3
+        ? rgb(hue, s * 0.5, Math.min(1, v * 1.08))
+        : scheme === 0
+          ? rgb(hue + r.range(-25, 25), Math.min(1, s * 1.1), v * 0.55)
+          : rgb(hue + (scheme === 1 ? 180 : r.chance(0.5) ? 120 : -120), Math.min(1, s * 0.9 + 0.1), v * 0.7);
+    // Glowing markings in the hue farthest from both the theme and the skin.
+    let glow: Rgb | null = null;
+    if (r.chance(GLOW_CHANCE)) {
+      let best = 0;
+      let bestScore = -Infinity;
+      for (let h = 0; h < 360; h += 10) {
+        const score = Math.min(clearance(claims, h), hueDistance(h, hue)) + r.range(0, 20);
+        if (score > bestScore) [best, bestScore] = [h, score];
+      }
+      glow = rgb(best, 0.85, 1);
+    }
+    let legs = role === BOSS_ROLE ? 0 : weighted(r, R.legs);
+    if (first && legs === first.legs && role !== BOSS_ROLE) legs = (legs + 1 + r.int(0, 2)) % 4;
     const tail = r.chance(R.tail[0]) ? r.range(R.tail[1], R.tail[2]) : 0;
     const horns = r.chance(R.horns) ? (r.chance(0.35) ? 2 : 1) : 0;
-    return {
+    looks.push({
       hunch: r.range(0, R.hunch),
       heft: r.range(...R.heft),
       head: r.range(0.85, 1.28),
@@ -145,31 +194,28 @@ export function enemyLooks(seed: string, theme: ThemeName): EnemyLook[] {
       extraArms: r.chance(R.extraArms),
       tail,
       bulk: r.range(...R.bulk),
+      legs,
       pattern,
       patternScale: pattern === 1 ? r.range(14, 26) : pattern === 2 ? r.range(10, 18) : r.range(6, 12),
       skin: rgb(hue, s, v),
-      // Pale belly, or darker markings a little round the wheel.
-      accent: pattern === 3 ? rgb(hue, s * 0.5, Math.min(1, v * 1.08)) : rgb((hue + r.range(-25, 25) + 360) % 360, Math.min(1, s * 1.1), v * 0.55),
-    };
+      accent,
+      glow,
+    });
   });
+  return looks;
 }
 
-/** Baseline looks (hand-built maps): the M7 mutants' plans and colours. */
-export const BASELINE_LOOKS: EnemyLook[] = (
-  [
-    [0.36, 0.4, 0.26],
-    [0.5, 0.22, 0.17],
-    [0.34, 0.38, 0.46],
-    [0.55, 0.3, 0.12],
-    [0.36, 0.2, 0.36],
-  ] as Rgb[]
-).map((skin, shape) => ({
-  hunch: 0, heft: 1, head: 1, jaw: 1, horns: 0, hornLength: 0.1, spikes: shape === 1 || shape === 3 ? 4 : 0,
-  eyes: shape === 2 ? 1 : shape === 4 ? 4 : 2, extraArms: false, tail: 0, bulk: 1, pattern: 0, patternScale: 8,
-  skin, accent: skin.map((c) => c * 0.6) as unknown as Rgb,
-}));
+/** Baseline looks (hand-built maps): the M7 mutants' plans and colours, both variants alike. */
+export const BASELINE_LOOKS: EnemyLook[] = ROW_ROLE.map((role) => {
+  const skin = ([[0.36, 0.4, 0.26], [0.5, 0.22, 0.17], [0.34, 0.38, 0.46], [0.55, 0.3, 0.12], [0.36, 0.2, 0.36]] as Rgb[])[role]!;
+  return {
+    hunch: 0, heft: 1, head: 1, jaw: 1, horns: 0, hornLength: 0.1, spikes: role === 1 || role === 3 ? 4 : 0,
+    eyes: role === 2 ? 1 : role === 4 ? 4 : 2, extraArms: false, tail: 0, bulk: 1, legs: 0, pattern: 0, patternScale: 8,
+    skin, accent: skin.map((c) => c * 0.6) as unknown as Rgb, glow: null,
+  };
+});
 
-/** The bake's uniforms: `uPlan` from the looks, `uAspect` from each shape's quad width / height. */
+/** The bake's uniforms: \`uPlan\` from the looks, \`uAspect\` from each row's quad width / height. */
 export function lookUniforms(looks: readonly EnemyLook[], aspects: readonly number[]): Record<string, UniformValue> {
   const plan = new Float32Array(SPRITE_ROWS * SPRITE_PLAN_VEC4S * 4);
   looks.forEach((l, i) => {
@@ -179,7 +225,8 @@ export function lookUniforms(looks: readonly EnemyLook[], aspects: readonly numb
         l.horns, l.hornLength, l.spikes, l.eyes,
         ...l.skin, l.pattern,
         ...l.accent, l.patternScale,
-        l.extraArms ? 1 : 0, l.tail, l.bulk, 0,
+        l.extraArms ? 1 : 0, l.tail, l.bulk, l.legs,
+        ...(l.glow ?? [0, 0, 0]), l.glow ? 1 : 0,
       ],
       i * SPRITE_PLAN_VEC4S * 4,
     );

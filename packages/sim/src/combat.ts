@@ -1,4 +1,5 @@
 import {
+  defOf,
   FIRE_COOLDOWN,
   MAG_SIZE,
   MELEE_DAMAGE,
@@ -125,7 +126,7 @@ function pelletTarget(world: World, state: SimState, ox: number, oy: number, oz:
   if (a <= 1e-9) return -1;
   state.enemies.forEach((e, i) => {
     if (e.mode === 'dead') return;
-    const def = world.enemyDefs[e.type];
+    const def = defOf(world.enemyDefs, e);
     const fx = ox - e.x;
     const fy = oy - e.y;
     const b = 2 * (dx * fx + dy * fy);
@@ -147,7 +148,7 @@ function pelletTarget(world: World, state: SimState, ox: number, oy: number, oz:
 function damage(world: World, state: SimState, hits: ReadonlyMap<number, number>): void {
   for (const [i, amount] of hits) {
     const e = state.enemies[i]!;
-    const def = world.enemyDefs[e.type];
+    const def = defOf(world.enemyDefs, e);
     e.hp -= amount;
     state.events.push({ type: 'hit', enemy: i });
     if (e.hp <= 0) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CELL_SIZE as C, CellPlan, DoorKind, EnemyType, MapBuilder, STEP_TICKS, ThingType, dropsKeyFlags, emitCellPlan, enemyDefsFor, type MapData } from '@proc-fps/core';
+import { CELL_SIZE as C, CellPlan, DoorKind, EnemyType, MapBuilder, STEP_TICKS, ThingType, dropsKeyFlags, emitCellPlan, enemyDefsFor, BASELINE_DEFS, defOf, type MapData } from '@proc-fps/core';
 import { generate } from '@proc-fps/gen';
 import {
   DOOR_OPEN_TICKS,
@@ -338,9 +338,10 @@ describe('per-level enemies', () => {
     const map = generate('bestiary-7', { level: 3 });
     const world = createWorld(map);
     expect(world.enemyDefs).toEqual(enemyDefsFor('bestiary-7'));
-    expect(world.enemyDefs).not.toEqual(ENEMY_DEFS);
+    expect(world.enemyDefs).not.toEqual(BASELINE_DEFS);
     const state = createSimState(world);
-    for (const e of state.enemies) expect(e.hp).toBe(world.enemyDefs[e.type].hp);
-    expect(createWorld(arena({ w: 3, h: 3 })).enemyDefs).toBe(ENEMY_DEFS);
+    for (const e of state.enemies) expect(e.hp).toBe(defOf(world.enemyDefs, e).hp);
+    expect(state.enemies.some((e) => e.variant === 1)).toBe(true); // the generator uses both variants
+    expect(createWorld(arena({ w: 3, h: 3 })).enemyDefs).toBe(BASELINE_DEFS);
   });
 });

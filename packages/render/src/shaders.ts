@@ -335,12 +335,12 @@ float box(vec2 p, vec2 c, vec2 h, float r) {
 }
 void main() {
   vec2 p = vUV;
-  if (vTile >= 0) { // baked enemy sprite: alpha 0 empty, 0.5 body, 1 eye
+  if (vTile >= 0) { // baked enemy sprite: alpha 0 empty, 0.5 body, 0.68 glowing marking, 1 eye
     ivec2 origin = ivec2(vTile % 32, vTile / 32) * 64;
     vec4 t = texelFetch(uSpriteAtlas, origin + ivec2(clamp(p, 0.0, 0.999) * 64.0), 0);
     if (t.a < 0.25) discard;
     // Eyes glow whatever the light, brighter through the wind-up: the telegraph.
-    vec3 c = t.a > 0.75 ? mix(vec3(0.9, 0.15, 0.05), vec3(1.0, 0.95, 0.5), vCharge) * (0.8 + vCharge) : t.rgb * lightBand(vLight, vWorld, uEye);
+    vec3 c = t.a > 0.75 ? mix(vec3(0.9, 0.15, 0.05), vec3(1.0, 0.95, 0.5), vCharge) * (0.8 + vCharge) : t.a > 0.6 ? t.rgb : t.rgb * lightBand(vLight, vWorld, uEye);
     outColor = vec4(mix(c, vec3(1.0), vFlash * 0.85), 1.0);
     return;
   }
@@ -413,13 +413,17 @@ void main() {
   outColor = vec4(mix(lit, vec3(1.0), vFlash * 0.85), 1.0);
 }`;
 
-/** Sprite atlas: row = enemy shape (0–4), column = direction × SPRITE_FRAMES + frame. */
+/**
+ * Sprite atlas: row = enemy kind, column = direction × SPRITE_FRAMES + frame. The rows are the
+ * three ordinary roles twice (each level's two variants: grunt, grunt, brute, brute, sniper,
+ * sniper), then the mini boss and the boss; see spriteRow.
+ */
 export const SPRITE_TILE = 64;
 export const SPRITE_DIRECTIONS = 8;
 export const SPRITE_FRAMES = 4;
-export const SPRITE_ROWS = 5;
-/** vec4s of body plan per enemy shape (see enemyLooks in bestiary.ts). */
-export const SPRITE_PLAN_VEC4S = 5;
+export const SPRITE_ROWS = 8;
+/** vec4s of body plan per sprite row (see enemyLooks in bestiary.ts). */
+export const SPRITE_PLAN_VEC4S = 6;
 
 /**
  * Bakes enemy sprites once per level: each enemy is a small 3D signed-distance model of a mutant
@@ -427,10 +431,11 @@ export const SPRITE_PLAN_VEC4S = 5;
  * orthographically from 8 directions in 4 frames (walk A, walk B, attack, dead). Each role keeps
  * its silhouette (grunt, brute, sniper, mini boss, boss), and the level's plan (render/bestiary.ts,
  * `uPlan`) breeds it: hunch, bulk, limb heft, head and jaw size, horns, back spikes, eye count,
- * an extra arm pair, a tail, and a skin palette and pattern chosen to stand out from the theme.
+ * an extra arm pair, a tail, one of four leg types (biped, digitigrade, crawler, slug), glowing
+ * markings, and a skin palette and pattern chosen to stand out from the theme.
  * Model space: y up, height 1 = the sprite's height, facing +z, +x on the model's left, so a
  * camera turning counter-clockwise around it moves towards +x. Output alpha: 0 = empty,
- * 0.5 = body, 1 = eye (glows in SPRITE_FS).
+ * 0.5 = body, 0.68 = a glowing marking (self-lit in SPRITE_FS), 1 = eye (glows in SPRITE_FS).
  *
  * Written for fast compiles on Direct3D (ANGLE, so Firefox and Chrome on Windows), whose compiler
  * inlines every call and unrolls every loop it can: the shared parts are evaluated once after the
@@ -442,9 +447,9 @@ export const SPRITE_BAKE_FS = /* glsl */ `#version 300 es
 precision highp float;
 // Sprite width / height per shape, so the model fills the same quad the game draws.
 uniform float uAspect[${SPRITE_ROWS}];
-// Per shape, ${SPRITE_PLAN_VEC4S} vec4s (see enemyLooks): 0 (hunch, limb heft, head size, jaw size),
+// Per row, ${SPRITE_PLAN_VEC4S} vec4s (see enemyLooks): 0 (hunch, limb heft, head size, jaw size),
 // 1 (horn pairs, horn length, back spikes, eyes), 2 (skin rgb, pattern), 3 (accent rgb, pattern
-// scale), 4 (extra arm pair, tail length, bulk, unused).
+// scale), 4 (extra arm pair, tail length, bulk, leg type), 5 (marking glow rgb, glows if > 0.5).
 uniform vec4 uPlan[${SPRITE_ROWS * SPRITE_PLAN_VEC4S}];
 // The shape row this draw bakes.
 uniform int uRow;
@@ -526,6 +531,50 @@ float tail(vec3 p, vec3 root, float swing) {
   return min(capsule(p, root, m, 0.035), capsule(p, m, tip, 0.02));
 }
 
+// Legs from hips at (±hx, hy), thickness r, by the plan's leg type: 0 a biped's bent legs,
+// 1 digitigrade (the knee bent back, a long ankle, clawed toes), 2 a crawler's two splayed,
+// jointed legs a side, 3 a slug's fleshy foot. Claws and toe tips go to bone.
+float legs(vec3 p, float hx, float hy, float r, float swing, inout float bone) {
+  int kind = int(P4.w + 0.5);
+  if (kind == 3) {
+    float d = capsule(p, vec3(0.0, hy, 0.0), vec3(0.0, 0.08, -0.05), r * 2.2);
+    return smin(d, rbox(p, vec3(0.0, 0.05, swing * 0.3), vec3(hx + r * 1.6, 0.05, 0.17), 0.05), 0.07);
+  }
+  // Every leg is three segments (hip, knee, ankle, foot); the type only places the joints, so the
+  // compiler sees one leg (see the note on Z).
+  float d = 1e9;
+  int perSide = kind == 2 ? 2 : 1;
+  for (int s = Z - 1; s <= 1; s += 2) {
+    float sx = float(s);
+    float sw = swing * sx;
+    for (int k = Z; k < perSide; k++) {
+      vec3 hip = vec3(hx * sx, hy, 0.0);
+      vec3 knee;
+      vec3 ankle;
+      vec3 foot;
+      if (kind == 2) {
+        float fz = k == 0 ? 0.1 : -0.1;
+        float lift = k == 0 ? sw : -sw;
+        hip.z = fz * 0.5;
+        knee = vec3(sx * (hx + 0.15), hy + 0.05, fz * 1.4 + lift);
+        foot = vec3(sx * (hx + 0.23), 0.02, fz * 2.0 + lift);
+        ankle = mix(knee, foot, 0.5);
+      } else if (kind == 1) {
+        knee = vec3(sx * hx * 1.2, hy * 0.62, -0.07 + sw);
+        ankle = vec3(sx * hx * 1.2, hy * 0.25, 0.04 + sw);
+        foot = vec3(sx * hx * 1.2, 0.02, 0.1 + sw);
+      } else {
+        knee = vec3(sx * hx * 1.25, hy * 0.55, 0.06 + sw);
+        foot = vec3(sx * hx * 1.25, 0.02, sw);
+        ankle = mix(knee, foot, 0.5);
+      }
+      d = min(d, min(capsule(p, hip, knee, r), min(capsule(p, knee, ankle, r * 0.85), capsule(p, ankle, foot, r * 0.7))));
+      if (kind != 0) bone = min(bone, sphere(p, foot, r * 0.45));
+    }
+  }
+  return d;
+}
+
 // A second, smaller pair of arms below the first, reaching forward like a mantis's; claws to bone.
 float extraArms(vec3 p, vec3 shoulder, float swing, bool attack, inout float bone) {
   if (P4.x < 0.5) return 1e9;
@@ -552,6 +601,8 @@ vec2 body(vec3 p, int shape, int frame) {
   float flesh = 1e9;
   // Where the shared parts attach, set by each silhouette.
   vec3 hc, hornC, eyeC, spikeA, spikeB, tailRoot, shoulder2;
+  // Hip half-width, height and leg thickness; the boss (z = 0) stands on its own stumps.
+  vec3 hips = vec3(0.0);
   float hr, hornScale, eyeSize, spikeLen;
   if (shape == 0) { // grunt: a hunched shambler with lopsided shoulders, claws and a gaping jaw
     hc = vec3(0.0, 0.8, 0.15);
@@ -579,9 +630,7 @@ vec2 body(vec3 p, int shape, int frame) {
       bone = min(bone, capsule(p, rh, rh + vec3(float(i) * 0.02, -0.06, 0.03), 0.009));
       bone = min(bone, capsule(p, lh, lh + vec3(float(i) * 0.02, -0.06, 0.03), 0.009));
     }
-    // Bent legs.
-    skin = min(skin, min(capsule(p, vec3(0.07, 0.44, 0.0), vec3(0.09, 0.24, 0.06 + swing), 0.05), capsule(p, vec3(0.09, 0.24, 0.06 + swing), vec3(0.09, 0.02, swing), 0.045)));
-    skin = min(skin, min(capsule(p, vec3(-0.07, 0.44, 0.0), vec3(-0.09, 0.24, 0.06 - swing), 0.05), capsule(p, vec3(-0.09, 0.24, 0.06 - swing), vec3(-0.09, 0.02, -swing), 0.045)));
+    hips = vec3(0.07, 0.44, 0.05);
     // Ribs showing through.
     for (int i = Z; i < 3; i++) flesh = min(flesh, capsule(p, vec3(-0.09, 0.56 + float(i) * 0.045, 0.14), vec3(0.09, 0.56 + float(i) * 0.045, 0.14), 0.008));
     tailRoot = vec3(0.0, 0.42, -0.1);
@@ -603,7 +652,7 @@ vec2 body(vec3 p, int shape, int frame) {
     vec3 lf = vec3(-0.3, attack ? 0.6 : 0.1, 0.06 + reach + swing);
     skin = min(skin, min(capsule(p, vec3(0.25, 0.66, 0.0), rf, 0.075 * heft), capsule(p, vec3(-0.25, 0.66, 0.0), lf, 0.075 * heft)));
     skin = min(skin, min(sphere(p, rf, 0.1 * heft), sphere(p, lf, 0.1 * heft)));
-    skin = min(skin, min(capsule(p, vec3(0.09, 0.36, 0.0), vec3(0.11, 0.03, swing), 0.07), capsule(p, vec3(-0.09, 0.36, 0.0), vec3(-0.11, 0.03, -swing), 0.07)));
+    hips = vec3(0.09, 0.36, 0.07);
     flesh = min(flesh, sphere(p, vec3(0.12, 0.5, 0.15), 0.05)); // a raw wound
     if (shape == 3) bone = min(bone, min(capsule(p, vec3(0.24, 0.76, 0.0), vec3(0.34, 0.9, -0.02), 0.03), capsule(p, vec3(-0.24, 0.76, 0.0), vec3(-0.34, 0.9, -0.02), 0.03))); // shoulder spurs
     tailRoot = vec3(0.0, 0.4, -0.14);
@@ -618,8 +667,7 @@ vec2 body(vec3 p, int shape, int frame) {
     skin = smin(skin, capsule(p, hc + vec3(0.0, -0.03, 0.01), hc + vec3(0.0, 0.07, -0.1) * headS, hr), 0.03); // long skull
     skin = max(skin, -rbox(p, hc + vec3(0.0, -0.045, 0.06) * headS, vec3(0.03 * jaw, 0.008, 0.03), 0.004)); // a slit mouth
     for (int i = Z; i < 4; i++) flesh = min(flesh, capsule(p, vec3(-0.06, 0.55 + float(i) * 0.05, 0.075), vec3(0.06, 0.55 + float(i) * 0.05, 0.075), 0.007));
-    skin = min(skin, min(capsule(p, vec3(0.05, 0.47, 0.0), vec3(0.06, 0.24, -0.05 + swing), 0.035), capsule(p, vec3(0.06, 0.24, -0.05 + swing), vec3(0.05, 0.02, swing), 0.03)));
-    skin = min(skin, min(capsule(p, vec3(-0.05, 0.47, 0.0), vec3(-0.06, 0.24, -0.05 - swing), 0.035), capsule(p, vec3(-0.06, 0.24, -0.05 - swing), vec3(-0.05, 0.02, -swing), 0.03)));
+    hips = vec3(0.05, 0.47, 0.035);
     bone = capsule(p, vec3(0.07, 0.72, -0.06), vec3(0.06, attack ? 0.82 : 0.7, 0.34), 0.026); // rifle
     skin = min(skin, capsule(p, vec3(0.1, 0.78, 0.0), vec3(0.07, 0.72, 0.16), 0.03 * heft));
     tailRoot = vec3(0.0, 0.45, -0.06);
@@ -647,6 +695,7 @@ vec2 body(vec3 p, int shape, int frame) {
     spikeA = vec3(0.0, 0.5, -0.32); spikeB = vec3(0.0, 0.78, -0.12); spikeLen = 0.12;
   }
   skin = min(skin, min(tail(p, tailRoot, swing), extraArms(p, shoulder2, swing, attack, bone)));
+  if (hips.z > 0.0) skin = min(skin, legs(p, hips.x, hips.y, hips.z, swing, bone));
   bone = min(bone, min(horns(p, hornC, hr, hornScale), spikes(p, spikeA, spikeB, spikeLen)));
   float eye = eyes(p, eyeC, hr, eyeSize);
   return pick(pick(vec2(skin, 0.0), vec2(eye, 1.0)), pick(vec2(bone, 2.0), vec2(flesh, 3.0)));
@@ -680,19 +729,22 @@ float noise3(vec3 p) {
 void main() {
   ivec2 px = ivec2(gl_FragCoord.xy);
   ivec2 tile = px / ${SPRITE_TILE};
-  int shape = tile.y;
-  if (shape != uRow) discard;
+  int row = tile.y;
+  if (row != uRow) discard;
+  // Rows: grunt, grunt, brute, brute, sniper, sniper (two variants each), mini boss, boss.
+  int shape = row < 6 ? row / 2 : row - 3;
   int dir = tile.x / ${SPRITE_FRAMES};
   int frame = tile.x % ${SPRITE_FRAMES};
   vec2 uv = (vec2(px % ${SPRITE_TILE}) + 0.5) / ${SPRITE_TILE}.0;
-  gAspect = uAspect[shape];
+  gAspect = uAspect[row];
   Z = int(min(gAspect, 0.0));
-  int base = shape * ${SPRITE_PLAN_VEC4S};
+  int base = row * ${SPRITE_PLAN_VEC4S};
   P0 = uPlan[base];
   P1 = uPlan[base + 1];
   vec4 P2 = uPlan[base + 2];
   vec4 P3 = uPlan[base + 3];
   P4 = uPlan[base + 4];
+  vec4 P5 = uPlan[base + 5];
   // Orthographic camera orbiting the model: direction 0 looks at its front.
   float th = float(dir) * 0.7853982;
   vec3 fwd = -vec3(sin(th), 0.0, cos(th));
@@ -735,6 +787,11 @@ void main() {
     : pattern == 2 ? step(0.64, noise3(sp * ps + 7.0))
     : pattern == 3 ? step(0.3, n.z) * step(0.3, sp.y) * step(sp.y, 0.78)
     : smoothstep(0.55, 0.7, noise3(sp * ps)) * 0.7;
+  // Glowing markings: the pattern's accent areas light up in the plan's glow colour.
+  if (hit.y == 0.0 && P5.w > 0.5 && m > 0.5) {
+    outColor = vec4(P5.rgb * (0.85 + 0.3 * n1) * (frame == 3 ? 0.35 : 1.0), 0.68);
+    return;
+  }
   skin = mix(skin, P3.rgb * (0.8 + 0.3 * n1), m);
   vec3 col = hit.y == 2.0 ? vec3(0.7, 0.66, 0.52) : hit.y == 3.0 ? vec3(0.45, 0.05, 0.05) : skin;
   if (frame == 3) col *= vec3(0.75, 0.45, 0.4); // dead: bloodied and darker

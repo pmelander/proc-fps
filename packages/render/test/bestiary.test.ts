@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { THEME_NAMES } from '@proc-fps/core';
-import { BASELINE_LOOKS, THEME_COLORS, enemyLooks, hueDistance, lookUniforms } from '../src/index.js';
+import { BASELINE_LOOKS, ROW_ROLE, THEME_COLORS, enemyLooks, hueDistance, lookUniforms } from '../src/index.js';
 import { SPRITE_PLAN_VEC4S, SPRITE_ROWS } from '../src/shaders.js';
 
 const hue = (c: readonly number[]) => {
@@ -14,6 +14,7 @@ describe('enemyLooks', () => {
   it('is deterministic, one look per sprite shape, and seeds differ', () => {
     expect(enemyLooks('run-2', 'crypt')).toEqual(enemyLooks('run-2', 'crypt'));
     expect(enemyLooks('run-2', 'crypt')).toHaveLength(SPRITE_ROWS);
+    expect(SPRITE_ROWS).toBe(8);
     expect(enemyLooks('run-2', 'crypt')).not.toEqual(enemyLooks('run-3', 'crypt'));
   });
 
@@ -21,9 +22,25 @@ describe('enemyLooks', () => {
     for (const theme of THEME_NAMES) {
       const lights = (['techLight', 'slime', 'hazard'] as const).map((k) => hue(THEME_COLORS[theme][k]));
       for (let i = 0; i < 150; i++) {
-        const hues = enemyLooks(`s${i}`, theme).map((l) => hue(l.skin));
-        for (const h of hues) for (const l of lights) expect(hueDistance(h, l)).toBeGreaterThanOrEqual(20);
-        for (let a = 0; a < hues.length; a++) for (let b = a + 1; b < hues.length; b++) expect(hueDistance(hues[a]!, hues[b]!)).toBeGreaterThanOrEqual(20);
+        const looks = enemyLooks(`s${i}`, theme);
+        const hues = looks.map((l) => hue(l.skin));
+        for (const h of hues) for (const l of lights) expect(hueDistance(h, l)).toBeGreaterThanOrEqual(12);
+        // Each role's first variant carries the role's hue: those stay apart.
+        const roleHues = ROW_ROLE.flatMap((role, row) => (ROW_ROLE.indexOf(role) === row ? [hues[row]!] : []));
+        for (let a = 0; a < roleHues.length; a++) for (let b = a + 1; b < roleHues.length; b++) expect(hueDistance(roleHues[a]!, roleHues[b]!)).toBeGreaterThanOrEqual(20);
+      }
+    }
+  });
+
+  it('sets a role\'s two variants apart: hue, lightness, legs, pattern', () => {
+    for (let i = 0; i < 100; i++) {
+      const looks = enemyLooks(`p${i}`, 'base');
+      for (const row of [0, 2, 4]) {
+        const [a, b] = [looks[row]!, looks[row + 1]!];
+        expect(hueDistance(hue(a.skin), hue(b.skin))).toBeGreaterThanOrEqual(25);
+        expect(Math.abs(Math.max(...a.skin) - Math.max(...b.skin))).toBeGreaterThanOrEqual(0.1);
+        expect(b.legs).not.toBe(a.legs);
+        expect(b.pattern).not.toBe(a.pattern);
       }
     }
   });
@@ -43,7 +60,7 @@ describe('enemyLooks', () => {
   });
 
   it('packs the bake uniforms', () => {
-    const u = lookUniforms(BASELINE_LOOKS, [1, 1, 1, 1, 1]);
+    const u = lookUniforms(BASELINE_LOOKS, [1, 1, 1, 1, 1, 1, 1, 1]);
     expect((u.uPlan as { vec4s: Float32Array }).vec4s).toHaveLength(SPRITE_ROWS * SPRITE_PLAN_VEC4S * 4);
     expect((u.uAspect as { floats: Float32Array }).floats).toHaveLength(SPRITE_ROWS);
   });

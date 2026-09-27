@@ -6,9 +6,17 @@ import type { VertexLayout } from './backend.js';
  * atlas (SPRITE_BAKE_FS: 8 directions × 4 frames); projectiles are drawn procedurally.
  */
 
-/** Atlas tile for an enemy shape (row), view direction 0–7 and frame (0/1 walk, 2 attack, 3 dead). */
-export function spriteTile(shape: number, direction: number, frame: number): number {
-  return shape * 32 + direction * 4 + frame;
+/** Atlas tile for a sprite row (see spriteRow), view direction 0–7 and frame (0/1 walk, 2 attack, 3 dead). */
+export function spriteTile(row: number, direction: number, frame: number): number {
+  return row * 32 + direction * 4 + frame;
+}
+
+/**
+ * The atlas row for an enemy shape (SpriteShape.Grunt … Boss) and its variant: the three ordinary
+ * roles have two rows each (the level's two variants), then the mini boss and the boss.
+ */
+export function spriteRow(shape: number, variant: number): number {
+  return shape <= SpriteShape.Sniper ? shape * 2 + (variant ? 1 : 0) : shape + 3;
 }
 
 /** pos(3) uv(2) shape(1) charge(1) flash(1) light(1) tile(1) */

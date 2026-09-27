@@ -1,4 +1,4 @@
-import { DEG_TO_RAD, MAG_SIZE, PLAYER_MAX_HEALTH, ThingType, isEnemyThing, type EnemyType, type Heading } from '@proc-fps/core';
+import { DEG_TO_RAD, MAG_SIZE, PLAYER_MAX_HEALTH, defOf, variantOf, ThingType, isEnemyThing, type EnemyType, type Heading } from '@proc-fps/core';
 import type { World } from './world.js';
 
 /** No buffered step. */
@@ -60,6 +60,8 @@ export type EnemyMode = 'idle' | 'alert' | 'chase' | 'windup' | 'pain' | 'dead';
 
 export interface EnemyState {
   type: EnemyType;
+  /** Which of the level's two variants of its role (0 or 1; see THING_VARIANT). */
+  variant: number;
   /** Destination cell while stepping; current cell when idle. */
   cx: number;
   cy: number;
@@ -174,9 +176,9 @@ export function createSimState(world: World): SimState {
     const [ex, ey] = world.grid.cellOf(t.x, t.y);
     const [px, py] = world.grid.center(ex, ey);
     return [{
-      type: t.type, cx: ex, cy: ey, fromCx: ex, fromCy: ey, level: 0, fromLevel: 0, stepTick: 0,
+      type: t.type, variant: variantOf(t), cx: ex, cy: ey, fromCx: ex, fromCy: ey, level: 0, fromLevel: 0, stepTick: 0,
       x: px, y: py, z: world.grid.floorAt(ex, ey),
-      hp: world.enemyDefs[t.type].hp, mode: 'idle', timer: 0, cooldown: 0,
+      hp: defOf(world.enemyDefs, { type: t.type, variant: variantOf(t) }).hp, mode: 'idle', timer: 0, cooldown: 0,
     }];
   });
   return {

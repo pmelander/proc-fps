@@ -27,7 +27,7 @@ This file summarises the decisions made so far, the current state of the code, a
 | Package | Contents |
 |---|---|
 | `core` | `map.ts` (format v1: slabs, `hashMap`), `cells.ts` (`CellPlan`: cells → sectors with automatic T-junction splits), `rng.ts` (sfc32 + named forks), `dmath.ts` (deterministic trig), `math.ts` (render-side mat4), `geometry.ts` (sector loops, `SectorLocator`), `builder.ts` (`MapBuilder`, `rect`), `grid.ts` (`CellGrid`, `validateGridAlignment`), `validate.ts`, `constants.ts`, `textures.ts`. `maps/test01.json` is built by `scripts/build-test-maps.ts`. |
-| `gen` | `generate.ts` (v0.15.0: mission → layout → room templates → cell plan → sectors), `mission.ts` (mission graph), `layout.ts` (grid embedding), `rooms.ts` (room templates), `population.ts` (enemies, health and ammo by level and depth), `validate.ts` (structural + grid + reachability + traps), `scripts/stats.ts` (headless health check). |
+| `gen` | `generate.ts` (v0.16.0: mission → layout → room templates → cell plan → sectors), `mission.ts` (mission graph), `layout.ts` (grid embedding), `rooms.ts` (room templates), `population.ts` (enemies, health and ammo by level and depth), `validate.ts` (structural + grid + reachability + traps), `scripts/stats.ts` (headless health check). |
 | `sim` | `input.ts` (`InputFrame`, quantization), `world.ts`, `state.ts`, `player.ts` (grid movement), `sim.ts`, `replay.ts`. |
 | `render` | `backend.ts` (interface), `webgl2.ts`, `mesh.ts` (map → per-sector mesh), `palette.ts` (64 colours), `shaders.ts`, `renderer.ts` (`LevelRenderer`). |
 | `app` | `main.ts` (loop, interpolation, HUD, compass), `input.ts` (DOM → `InputFrame`), `automap.ts`. |
@@ -85,13 +85,17 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 
 **Verified:**
 - The typecheck is clean.
-- 103 tests pass.
+- 105 tests pass.
 - 2000 seeds produce 0 validation failures (about 12 ms per map including validation).
 - The production build succeeds (about 45 kB JS).
 - Headless Chromium (SwiftShader) renders correctly.
 
 **Not yet verified:** real mouse and keyboard play. Pointer lock can't run headless.
 
+- Enemy variety (after M12):
+  - Each level breeds two variants of every ordinary role (grunt, brute, sniper), so it holds six kinds of ordinary enemy plus its mini boss and boss. Stats (`enemyDefsFor` now returns a pair per role; read one with `defOf(defs, enemy)`): the second variant takes the opposite speed trait (one quick and frail, one slow and tough) and, for grunts, another spit pattern. The generator marks second-variant enemies with `THING_VARIANT` (flag 1 << 5): 40% of rooms hold only the first, 40% only the second, 20% mix them. `EnemyState.variant` carries it into the sim.
+  - Looks (`enemyLooks` now returns 8, one per sprite row: grunt, grunt, brute, brute, sniper, sniper, mini boss, boss; `spriteRow`): the second variant shifts the role's hue 30–50° towards clearer ground, flips its lightness, stands on different legs, wears another pattern and grows its own body plan. New traits: four leg types (biped, digitigrade, crawler with two splayed legs a side, slug), glowing markings (30%: the pattern's accent areas glow in the hue farthest from the theme and the skin; self-lit in SPRITE_FS, atlas alpha 0.68), wider saturation and value, and accents from several schemes (a darker shade, the complement, a triad, a pale belly).
+  - The bake shader stays cheap to compile: legs are evaluated once after the silhouette, and all four types share one three-segment leg.
 - The chainsword (after M12):
   - Melee is a chainsword in the left hand, drawn only while it attacks. Firing with an enemy within `MELEE_REACH` (190: the cell ahead and both diagonals) and just over 45° of the aim swings it instead of shooting; right-click or V swings it anywhere (a new replayed `melee` input).
   - An attack lasts `MELEE_TICKS` (48, 0.8 s): the blade comes up, then grinds `MELEE_HITS` (4) times, `MELEE_HIT_INTERVAL` (6) apart from tick `MELEE_FIRST_HIT` (8), each `MELEE_DAMAGE` (20) to everyone in the arc, and every hit makes them flinch, so a grind also stuns them out of their attacks. From the start through the grind (`MELEE_IFRAMES`, 30 ticks) nothing hurts the player: blows are turned away (`shielded` event, a clang and a pale blue glow from their direction). Nothing else fires until the attack ends; it needs no rounds and runs during a reload.
@@ -223,5 +227,5 @@ In the map format a door is a one-cell sector with its kind in `Sector.special` 
 
 Ideas noted during play-testing, not yet scheduled. Each line points at whatever already exists for it.
 
-- **Revisit procedural enemies.** Play-testing says the mutants need more variety, a more varied colour scheme, or both. Today (M11) each level breeds five silhouettes with seeded parts and hues kept away from the theme; more variety could mean more than one variant per role in a level, new body plans beyond the five silhouettes, wider palettes (two-tone, markings, saturation and value ranges), or per-room variants.
+- **Bug: clipping out of a lift at the top.** Entering a lift on the top storey and bumping into the wall in front of it lets the player clip outside and fall straight down to the storey below. Likely in the lift/step interplay (`lifts.ts`, `MoveGate.tryStep`, `CellGrid.stepTarget` treating a lift cell as standing at either end): a step off the raised platform towards a cell that is only reachable from the lift's bottom end.
 
