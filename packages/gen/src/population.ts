@@ -1,4 +1,4 @@
-import { EnemyType, THING_HIGH, THING_VARIANT, ThingType, VARIANT_TYPES, dropsKeyFlags, type DifficultyDef, type Rng } from '@proc-fps/core';
+import { EnemyType, isEnemyThing, THING_HIGH, THING_VARIANT, ThingType, VARIANT_TYPES, dropsKeyFlags, type DifficultyDef, type Rng } from '@proc-fps/core';
 import type { Layout } from './layout.js';
 import type { Mission } from './mission.js';
 import type { RoomDesign } from './rooms.js';
@@ -29,16 +29,17 @@ export interface PopulationInput {
 }
 
 /**
- * Armour and power-ups (core/powerups.ts): per room kind, the chance of each. Secret rooms pay
- * best; the gate room before the boss may hold armour; ordinary rooms rarely hold anything, and
- * power-ups only from level 2 there.
+ * Armour (core/powerups.ts): per room kind, the chance of a vest. Secret rooms pay best; the gate
+ * room before the boss may hold one; ordinary rooms rarely do.
  */
-const POWERUP_CHANCE: Record<'secret' | 'loot' | 'gate' | 'room', [armor: number, berserk: number, overcharge: number]> = {
-  secret: [0.6, 0.3, 0.25],
-  loot: [0.4, 0.15, 0.12],
-  gate: [0.5, 0, 0],
-  room: [0.06, 0.03, 0.03],
-};
+const ARMOR_CHANCE: Record<'secret' | 'loot' | 'gate' | 'room', number> = { secret: 0.6, loot: 0.4, gate: 0.5, room: 0.06 };
+/**
+ * The timed power-ups (berserk, overcharge) lie where the fighting is, never behind a key door
+ * where the rooms around are already cleared by the time it opens: in the mini boss's and the
+ * boss's arenas (berserk first in the one, overcharge in the other), and, from level 2, in the
+ * level's most crowded ordinary room.
+ */
+const TIMED_CHANCE = { miniboss: 0.55, boss: 0.6, crowded: 0.45 } as const;
 
 /** Chance a loot or secret room also holds a grenade. */
 const GRENADE_CHANCE = 0.5;
@@ -196,16 +197,25 @@ export function populate(input: PopulationInput): Placed[] {
   // Armour and power-ups, from their own stream (placed after everything else, so they never
   // reshuffle it).
   const powerups = rng.fork('powerups');
+  const drop = (id: number, type: number) => free[id]!.length > 0 && put(id, type, powerups.int(0, free[id]!.length - 1));
   mission.nodes.forEach((node, id) => {
     const kind = node.kind === 'secret' || node.kind === 'loot' ? node.kind : id === gateRoom ? 'gate' : node.kind === 'room' ? 'room' : null;
-    if (!kind) return;
-    const [armor, berserk, overcharge] = POWERUP_CHANCE[kind];
-    const late = kind !== 'room' || level >= 2;
-    const drop = (type: number) => free[id]!.length > 0 && put(id, type, powerups.int(0, free[id]!.length - 1));
-    if (powerups.chance(armor)) drop(ThingType.Armor);
-    if (late && powerups.chance(berserk)) drop(ThingType.Berserk);
-    else if (late && powerups.chance(overcharge)) drop(ThingType.Overcharge);
+    if (kind && powerups.chance(ARMOR_CHANCE[kind])) drop(id, ThingType.Armor);
   });
+  // The timed ones: in the arenas, and in the room with the most enemies.
+  const inRoom = (id: number) => {
+    const r = layout.rooms[id]!;
+    return placed.filter(([type, x, y]) => isEnemyThing(type) && x >= r.x0 && x < r.x1 && y >= r.y0 && y < r.y1).length;
+  };
+  mission.nodes.forEach((node, id) => {
+    if (node.kind === 'miniboss' && powerups.chance(TIMED_CHANCE.miniboss)) drop(id, powerups.chance(0.65) ? ThingType.Berserk : ThingType.Overcharge);
+    if (node.kind === 'boss' && powerups.chance(TIMED_CHANCE.boss)) drop(id, powerups.chance(0.65) ? ThingType.Overcharge : ThingType.Berserk);
+  });
+  if (level >= 2) {
+    const rooms = mission.nodes.flatMap((n, id) => (n.kind === 'room' ? [id] : []));
+    const crowded = rooms.reduce((best, id) => (inRoom(id) > inRoom(best) ? id : best), rooms[0] ?? -1);
+    if (crowded >= 0 && inRoom(crowded) >= 4 && powerups.chance(TIMED_CHANCE.crowded)) drop(crowded, powerups.chance(0.5) ? ThingType.Berserk : ThingType.Overcharge);
+  }
 
   return placed;
 }

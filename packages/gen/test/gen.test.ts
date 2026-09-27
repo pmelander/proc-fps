@@ -238,3 +238,20 @@ describe('armour and power-ups', () => {
     expect(count(4, [EnemyType.Warden])).toBeGreaterThan(0);
   });
 });
+
+describe('timed power-ups', () => {
+  it('lie where the fighting is (the arenas, a crowded room), never in loot or secret rooms', { timeout: 120_000 }, () => {
+    let seen = 0;
+    for (let i = 0; i < 30; i++) {
+      const g = generateDetailed(`tp-${i}`, { level: 3 });
+      for (const t of g.map.things) {
+        if (t.type !== ThingType.Berserk && t.type !== ThingType.Overcharge) continue;
+        const [x, y] = [Math.floor(t.x / C), Math.floor(t.y / C)];
+        const room = g.layout.rooms.findIndex((r) => x >= r.x0 && x < r.x1 && y >= r.y0 && y < r.y1);
+        expect(['miniboss', 'boss', 'room']).toContain(g.mission.nodes[room]!.kind);
+        seen++;
+      }
+    }
+    expect(seen).toBeGreaterThan(10);
+  });
+});

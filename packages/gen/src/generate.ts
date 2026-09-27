@@ -30,7 +30,7 @@ import { ATRIUM_LIFT, atriumDesign, designRoom, plainDesign, type RoomDesign } f
  * Bump on ANY change that alters output for an existing seed.
  * seed + GENERATOR_VERSION must always reproduce the same map.
  */
-export const GENERATOR_VERSION = '0.22.0';
+export const GENERATOR_VERSION = '0.23.0';
 
 /** Layout attempts per mission, and missions tried, before giving up on a seed. */
 const LAYOUT_TRIES = 8;

@@ -85,7 +85,7 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 
 **Verified:**
 - The typecheck is clean.
-- 161 tests pass.
+- 162 tests pass.
 - 2000 seeds produce 0 validation failures (about 12 ms per map including validation).
 - The production build succeeds (about 45 kB JS).
 - Headless Chromium (SwiftShader) renders correctly.
@@ -99,7 +99,7 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
   - **Armour** (`ThingType.Armor`): a vest adds 50, to 100 (`ARMOR`); it soaks up half of every hurt (hazard floors included) until it runs out, and stays on the floor while the armour is full. A thinner steel bar under the health shows it while there is any.
   - **Berserk** (`ThingType.Berserk`): heals 50 when picked up; for 20 s the chainsword hits three times as hard (60 a hit: one fells a brute) and every hit that lands heals 3 per enemy struck (`BERSERK`). A throbbing blood-red box on the floor; a roar, a banner, a pulsing red tint round the screen and a badge counting down (blinking for its last 3 s).
   - **Overcharge** (`ThingType.Overcharge`): for 15 s the guns hit twice as hard (bolter bursts too) and fire half as fast again (`OVERCHARGE`). A pulsing energy cell; an electric hum, a banner, a tint in the theme's light and a badge.
-  - `PlayerState.armor`, `.berserk`, `.overcharge`; `armor`, `powerup` and `powerdown` events. Placement (`population.ts`, its own `powerups` stream, after everything else): secret rooms pay best (armour 60%, berserk 30%, else overcharge 25%), loot rooms less, the gate room before the boss may hold armour, ordinary rooms rarely, power-ups there only from level 2.
+  - `PlayerState.armor`, `.berserk`, `.overcharge`; `armor`, `powerup` and `powerdown` events. Placement (`population.ts`, its own `powerups` stream, after everything else): armour in secret rooms (60%), loot rooms (40%), the gate room before the boss (50%) and now and then an ordinary room. The timed power-ups lie where the fighting is (generator v0.23.0; play-testing found that behind a key door the rooms around are already cleared, so a timer ran out unused): in the mini boss's arena (55%, mostly berserk), the boss's (60%, mostly overcharge), and from level 2 the level's most crowded ordinary room (45%, when it holds at least four).
   - The pixel font gained a shield (⛨) and a bolt (⚡) for the HUD. `?map=test07` holds one of each pickup by the start.
 - More enemy roles (M24), each with one clear answer:
   - **Charger** (`EnemyType.Charger`, attack `charge`): when the player stands in a straight, clear lane 2–6 cells away on its level, it lowers its horns (a 36-tick wind-up, a rasping bellow) and rushes down the lane at 7 ticks a cell (`CHARGE_STEP_TICKS`). The player in the next cell takes 30; anything else in the way (a wall, a closed door, another enemy) is a crash that stuns it for 70 ticks (`CHARGE_STUN`), a free shot. Step out of the lane during the wind-up.
