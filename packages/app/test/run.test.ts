@@ -83,3 +83,31 @@ describe('loading screen', async () => {
     expect(html).toContain('A tip.');
   });
 });
+
+describe('run perks', async () => {
+  const { choosePerk, runPerks, perkPickedAt } = await import('../src/run.js');
+  const { endScreen } = await import('../src/screens.js');
+  it('keeps one pick per cleared level, saved with the run, and drops junk from storage', () => {
+    const store = memory();
+    let run = runFor('r1', 'normal', store);
+    run = choosePerk(run, 1, 'hide', store);
+    run = choosePerk(run, 2, 'slugs', store);
+    run = choosePerk(run, 2, 'undying', store); // a second pick for level 2 replaces the first
+    expect(runPerks(run)).toEqual(['hide', 'undying']);
+    expect(perkPickedAt(run, 2)).toBe('undying');
+    expect(runPerks(loadRun(store))).toEqual(['hide', 'undying']);
+    store.setItem('proc-fps.run', JSON.stringify({ ...run, perks: [{ level: 3, id: 'nonsense' }, { level: 1, id: 'hide' }] }));
+    expect(runPerks(loadRun(store))).toEqual(['hide']);
+  });
+
+  it('asks for a pick before the way on opens, then shows the pick taken', () => {
+    const stats = { kills: 1, enemies: 1, secrets: 0, secretTotal: 0, seconds: 30 };
+    const run = { id: 'r', difficulty: 'normal' as const, started: 0, deaths: 0, levels: [] };
+    const asking = endScreen('won', { level: 1 }, stats, run, { offer: ['hide', 'slugs', 'undying'], held: [] });
+    expect(asking.match(/data-perk=/g)).toHaveLength(3);
+    expect(asking).not.toContain('data-action="next"');
+    const taken = endScreen('won', { level: 1 }, stats, run, { offer: ['hide', 'slugs', 'undying'], chosen: 'slugs', held: [] });
+    expect(taken).toContain('data-action="next"');
+    expect(taken).toContain('class="chosen" data-perk="slugs"');
+  });
+});

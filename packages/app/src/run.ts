@@ -1,4 +1,4 @@
-import { DIFFICULTY, isDifficulty, type Difficulty } from '@proc-fps/core';
+import { DIFFICULTY, isDifficulty, isPerk, type Difficulty, type PerkId } from '@proc-fps/core';
 
 /**
  * A run: a sequence of levels at one difficulty, tracked across page loads (each level is its own
@@ -28,6 +28,8 @@ export interface RunRecord {
   levels: LevelRecord[];
   /** Deaths on the level being played now. */
   deaths: number;
+  /** The perk picked after each cleared level (core/perks.ts); absent in runs saved before M26. */
+  perks?: { level: number; id: PerkId }[];
 }
 
 export interface BestRun {
@@ -85,12 +87,25 @@ export function levelScore(r: Pick<LevelRecord, 'level' | 'kills' | 'secrets' | 
 }
 
 export const runScore = (run: RunRecord): number => run.levels.reduce((a, l) => a + l.score, 0);
+/** The perks the run holds, in the order they were picked. */
+export const runPerks = (run: RunRecord | null): PerkId[] => (run?.perks ?? []).map((p) => p.id);
+/** The perk picked after clearing this level, if any. */
+export const perkPickedAt = (run: RunRecord | null, level: number): PerkId | undefined => run?.perks?.find((p) => p.level === level)?.id;
+
+/** Files the perk picked after clearing a level (replacing an earlier pick for it). */
+export function choosePerk(run: RunRecord, level: number, id: PerkId, store: Store | null = browserStore()): RunRecord {
+  const next: RunRecord = { ...run, perks: [...(run.perks ?? []).filter((p) => p.level !== level), { level, id }].sort((a, b) => a.level - b.level) };
+  saveRun(next, store);
+  return next;
+}
 export const runKills = (run: RunRecord): number => run.levels.reduce((a, l) => a + l.kills, 0);
 
 /** The run in progress, if any. */
 export function loadRun(store: Store | null = browserStore()): RunRecord | null {
   const run = read<RunRecord>(store, RUN_KEY);
-  return run && typeof run.id === 'string' && isDifficulty(run.difficulty) && Array.isArray(run.levels) ? run : null;
+  if (!run || typeof run.id !== 'string' || !isDifficulty(run.difficulty) || !Array.isArray(run.levels)) return null;
+  if (run.perks !== undefined) run.perks = Array.isArray(run.perks) ? run.perks.filter((p) => p && typeof p.level === 'number' && isPerk(p.id)) : [];
+  return run;
 }
 
 export function saveRun(run: RunRecord, store: Store | null = browserStore()): void {

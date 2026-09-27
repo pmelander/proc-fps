@@ -2,7 +2,7 @@ import {
   ARMOR,
   BERSERK,
   OVERCHARGE,
-  PLAYER_MAX_HEALTH,
+  UNDYING_HEALTH,
   BLAST_EDGE,
   BLAST_RADIUS,
   type EnemyDef,
@@ -27,6 +27,7 @@ import {
   dsin,
 } from '@proc-fps/core';
 import { alert, makeNoise } from './ai.js';
+import { magSizeOf, reloadTicksOf } from './world.js';
 import { floorNow } from './lifts.js';
 import { castRay, cellOpen } from './raycast.js';
 import { HOMING, steer } from './shots.js';
@@ -54,6 +55,12 @@ export function hurtPlayer(state: SimState, amount: number, from?: { x: number; 
   const soak = Math.min(p.armor, Math.round(amount * ARMOR.absorb));
   p.armor -= soak;
   amount -= soak;
+  if (amount >= p.health && p.undying) {
+    // Undying: the killing blow leaves the player standing, once a level.
+    p.undying = false;
+    amount = Math.max(0, p.health - UNDYING_HEALTH);
+    state.events.push({ type: 'undying' });
+  }
   p.health = Math.max(0, p.health - amount);
   state.events.push(from ? { type: 'hurt', amount, from } : { type: 'hurt', amount });
   if (p.health === 0) {
@@ -74,11 +81,11 @@ export function playerFire(world: World, state: SimState, trigger: boolean, relo
   const p = state.player;
   if (p.fireCooldown > 0) p.fireCooldown--;
   if (p.reload > 0 && --p.reload === 0) {
-    p.mags[p.weapon] = WEAPONS[p.weapon]!.magSize;
+    p.mags[p.weapon] = magSizeOf(world, p.weapon);
     state.events.push({ type: 'reloaded' });
   }
   const startReload = () => {
-    p.reload = WEAPONS[p.weapon]!.reloadTicks;
+    p.reload = reloadTicksOf(world, p.weapon);
     state.events.push({ type: 'reload' });
   };
   if (p.switching > 0 && --p.switching === 0 && p.mags[p.weapon] === 0) startReload();
@@ -90,7 +97,7 @@ export function playerFire(world: World, state: SimState, trigger: boolean, relo
     state.events.push({ type: 'switch', weapon: select });
   }
   const gun = WEAPONS[p.weapon]!;
-  if (reload && p.reload === 0 && p.switching === 0 && p.mags[p.weapon]! < gun.magSize) startReload();
+  if (reload && p.reload === 0 && p.switching === 0 && p.mags[p.weapon]! < magSizeOf(world, p.weapon)) startReload();
 
   // Everyone alive within the chainsword's reach and arc.
   const fx = dcos(p.angle);
@@ -118,7 +125,9 @@ export function playerFire(world: World, state: SimState, trigger: boolean, relo
         // Berserk: savage hits, and each one that lands heals.
         const berserk = p.berserk > 0;
         damage(world, state, new Map(struck.map((i) => [i, MELEE_DAMAGE * (berserk ? BERSERK.melee : 1)])), 'melee');
-        if (berserk) p.health = Math.min(PLAYER_MAX_HEALTH, p.health + BERSERK.leech * struck.length);
+        // Berserk and the Bloodlust perk heal for every enemy struck.
+        const leech = (berserk ? BERSERK.leech : 0) + world.mods.meleeLeech;
+        if (leech) p.health = Math.min(world.mods.maxHealth, p.health + leech * struck.length);
       }
     }
     if (++p.melee > MELEE_TICKS) p.melee = 0;
@@ -129,7 +138,7 @@ export function playerFire(world: World, state: SimState, trigger: boolean, relo
   // A shot needs a loaded magazine.
   if (p.reload > 0) return;
   // Overcharge: harder hits, faster shots.
-  const boost = p.overcharge > 0 ? OVERCHARGE.damage : 1;
+  const boost = (p.overcharge > 0 ? OVERCHARGE.damage : 1) * world.mods.damageScale;
   p.fireCooldown = p.overcharge > 0 ? Math.round(gun.cooldown / OVERCHARGE.rate) : gun.cooldown;
   state.events.push({ type: 'shot', weapon: p.weapon });
   p.mags[p.weapon]!--;

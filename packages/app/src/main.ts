@@ -1,4 +1,4 @@
-import { ARMOR, CELL_SIZE, DIFFICULTY, DoorKind, isDifficulty, type Difficulty, EnemyType, PELLETS, PELLET_SPREAD, WEAPONS, WEAPON_RANGE, WEAPON_SWITCH_TICKS, WeaponId, dcos, defOf, dsin, MAG_SIZE, MELEE_FIRST_HIT, MELEE_IFRAMES, MELEE_TICKS, RELOAD_TICKS, HEADING_DX, HEADING_DY, PLAYER_EYE_HEIGHT, STEP_TICKS, TICK_DT, isEnemyThing, type MapData } from '@proc-fps/core';
+import { ARMOR, CELL_SIZE, DIFFICULTY, perkOffer, isPerk, DoorKind, isDifficulty, type Difficulty, EnemyType, PELLETS, PELLET_SPREAD, WEAPONS, WEAPON_RANGE, WEAPON_SWITCH_TICKS, WeaponId, dcos, defOf, dsin, MAG_SIZE, MELEE_FIRST_HIT, MELEE_IFRAMES, MELEE_TICKS, RELOAD_TICKS, HEADING_DX, HEADING_DY, PLAYER_EYE_HEIGHT, STEP_TICKS, TICK_DT, isEnemyThing, type MapData } from '@proc-fps/core';
 import { GENERATOR_VERSION, generate, isLevelType, validateGenerated, type LevelType } from '@proc-fps/gen';
 import { BASELINE_LOOKS, HIDDEN_OFFSET, LevelRenderer, SpriteShape, THEME_COLORS, WebGL2Backend, enemyLooks, spriteRow, spriteTile, type Sprite } from '@proc-fps/render';
 import {
@@ -17,6 +17,8 @@ import {
   liftHeight,
   pickupCell,
   stepSim,
+  magSizeOf,
+  reloadTicksOf,
   type EnemyState,
   type PlayerState,
   type SimState,
@@ -37,8 +39,8 @@ import { Gore } from './gore.js';
 import { ScreenBlood } from './screenblood.js';
 import { Weapon } from './weapon.js';
 import { newRunId, runUrl, titleScreen } from './title.js';
-import { endRun, levelScore, loadBest, recordDeath, recordLevel, runFor, runScore, type RunRecord } from './run.js';
-import { TIPS, endScreen, loadingScreen, pauseScreen, summaryScreen, type PauseInfo } from './screens.js';
+import { choosePerk, endRun, levelScore, loadBest, perkPickedAt, recordDeath, recordLevel, runFor, runPerks, runScore, type RunRecord } from './run.js';
+import { TIPS, endScreen, loadingScreen, pauseScreen, summaryScreen, type PauseInfo, type PerkPick } from './screens.js';
 import { Menu } from './ui/menu.js';
 import { OptionsPanel } from './ui/optionspanel.js';
 import { loadOptions, type Options } from './options.js';
@@ -402,8 +404,15 @@ function showDamageFrom(from: { x: number; y: number }, p: PlayerState, layer: H
   layer.append(hit);
 }
 
-/** Resolves once the page has painted what is on it now: loading yields with it between stages. */
-const painted = () => new Promise<void>((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
+/**
+ * Resolves once the page has painted what is on it now: loading yields with it between stages. A
+ * hidden tab paints nothing (no animation frames), so a timer carries on without it.
+ */
+const painted = () =>
+  new Promise<void>((resolve) => {
+    requestAnimationFrame(() => setTimeout(resolve, 0));
+    setTimeout(resolve, 100);
+  });
 
 async function main(): Promise<void> {
   // The pixel font first, so nothing ever shows in a fallback face.
@@ -499,13 +508,15 @@ async function main(): Promise<void> {
   const launcher = new Launcher(document.getElementById('launcher') as HTMLCanvasElement);
   const ammoGrenades = document.querySelector('#ammo .grenades') as HTMLDivElement;
   let shownGrenades = -1;
-  const world = createWorld(map);
+  // The run's perks change the player: the sim applies them, and the replay records them.
+  const perks = runPerks(run);
+  const world = createWorld(map, perks);
   const state = createSimState(world);
   // Dev builds only: the running game, for poking at from the console.
   if (import.meta.env.DEV) Object.assign(window, { __game: { world, state, map } });
   let prev: PlayerState = clonePlayer(state.player);
   let prevEnemies: EnemyState[] = state.enemies.map((e) => ({ ...e }));
-  const recorder = new ReplayRecorder(map);
+  const recorder = new ReplayRecorder(map, perks);
   const audio = new AudioEngine(map.meta.seed ?? map.meta.name);
   // The exit hums from its cell.
   const exitAt = world.exit ? (([x, y]) => ({ x, y }))(world.grid.center(world.exit[0], world.exit[1])) : null;
@@ -556,7 +567,7 @@ async function main(): Promise<void> {
     void canvas.requestPointerLock();
   };
   // The pause screen: the level's title card until the first click, then "Paused".
-  const pauseInfo: PauseInfo = { level: here.level, run: run ? { difficulty: run.difficulty, score: runScore(run) } : null };
+  const pauseInfo: PauseInfo = { level: here.level, run: run ? { difficulty: run.difficulty, score: runScore(run) } : null, perks };
   if (map.meta.levelType) pauseInfo.levelType = map.meta.levelType;
   if (map.meta.theme) pauseInfo.theme = map.meta.theme;
   if (map.meta.seed) pauseInfo.seed = map.meta.seed;
@@ -613,8 +624,20 @@ async function main(): Promise<void> {
     endMenu?.close();
     skipTally?.();
     end.innerHTML = html;
-    endMenu = new Menu(end, { choose: (item) => endAction(item.dataset.action), sound: menuSound, delay: 500 });
+    endMenu = new Menu(end, { choose: (item) => (item.dataset.perk ? pickPerk(item.dataset.perk) : endAction(item.dataset.action)), sound: menuSound, delay: 500 });
     skipTally = tally(end, (k) => audio.play(k === 'tick' ? 'tally' : 'tallyDone'));
+  };
+  // After a clear in a run: three perks on offer, one to keep (saved with the run at once).
+  let endHtml: (pick?: PerkPick) => string = () => '';
+  const heldBefore = () => (run?.perks ?? []).filter((p) => p.level !== here.level).map((p) => p.id);
+  const perkPick = (): PerkPick | undefined =>
+    run && !here.map ? { offer: perkOffer(run.id, here.level, heldBefore()), chosen: perkPickedAt(run, here.level), held: heldBefore() } : undefined;
+  const pickPerk = (id: string) => {
+    if (!run || !isPerk(id)) return;
+    run = choosePerk(run, here.level, id);
+    audio.play('armorPickup');
+    showEnd(endHtml(perkPick()));
+    skipTally?.(); // the tally already ran: show its totals at once
   };
   const endAction = (action: string | undefined) => {
     if (action === 'next') {
@@ -831,6 +854,10 @@ async function main(): Promise<void> {
           audio.play(e.kind);
           say(e.kind === 'berserk' ? 'Berserk!' : 'Overcharge!', now, 1.6);
         }
+        if (e.type === 'undying') {
+          audio.play('berserk');
+          say('Undying!', now, 1.6);
+        }
         if (e.type === 'powerdown') {
           audio.play('powerDown');
           [notice, noticeUntil] = [e.kind === 'berserk' ? 'The berserk fades' : 'The overcharge runs out', now + NOTICE_SECONDS];
@@ -880,7 +907,7 @@ async function main(): Promise<void> {
           for (const add of state.enemies.slice(-e.count)) gore.splash(add.x, add.y, add.z + 20, 0, 0, 24);
         }
         if (e.type === 'reload') {
-          const seconds = WEAPONS[state.player.weapon]!.reloadTicks * TICK_DT;
+          const seconds = reloadTicksOf(world, state.player.weapon) * TICK_DT;
           if (state.player.weapon === WeaponId.Bolter) bolter.reload(now, seconds);
           else weapon.reload(now, seconds);
         }
@@ -948,7 +975,7 @@ async function main(): Promise<void> {
       : 1;
     const bobbing = state.player.stepTick / STEP_TICKS;
     weapon.update(now, dt, bobbing, p.mags[WeaponId.Scattergun]! / MAG_SIZE, lowerOf(WeaponId.Scattergun));
-    bolter.update(now, dt, bobbing, p.mags[WeaponId.Bolter]! / WEAPONS[WeaponId.Bolter]!.magSize, lowerOf(WeaponId.Bolter));
+    bolter.update(now, dt, bobbing, p.mags[WeaponId.Bolter]! / magSizeOf(world, WeaponId.Bolter), lowerOf(WeaponId.Bolter));
     chainsword.update(now);
     // Armour under the health; power-ups as badges with their seconds left, and a tint.
     if (p.armor !== shownArmor) {
@@ -969,13 +996,13 @@ async function main(): Promise<void> {
     launcher.update(now);
     if (p.grenades !== shownGrenades) {
       shownGrenades = p.grenades;
-      ammoGrenades.innerHTML = `<span class="label">Grenades</span>` + Array.from({ length: GRENADE.max }, (_, i) => `<span class="nade${i < p.grenades ? ' full' : ''}"></span>`).join('');
+      ammoGrenades.innerHTML = `<span class="label">Grenades</span>` + Array.from({ length: GRENADE.max + world.mods.grenadeMax }, (_, i) => `<span class="nade${i < p.grenades ? ' full' : ''}"></span>`).join('');
     }
     screenBlood.update(dt);
 
     if (p.health !== shownHealth) {
       shownHealth = p.health;
-      const f = Math.max(0, p.health) / PLAYER_MAX_HEALTH;
+      const f = Math.max(0, p.health) / world.mods.maxHealth;
       healthFill.style.width = `${Math.round(Math.min(1, f) * 100)}%`;
       healthValue.textContent = String(Math.max(0, p.health));
       healthBar.classList.toggle('mid', f <= 0.5 && f > 0.25);
@@ -985,17 +1012,18 @@ async function main(): Promise<void> {
     // progress while it refills; the weapon slots above, the one in hand lit.
     const gun = WEAPONS[p.weapon]!;
     const mag = p.mags[p.weapon]!;
-    const reloadDone = p.reload > 0 ? Math.round((1 - p.reload / gun.reloadTicks) * 20) * 5 : -1;
+    const magSize = magSizeOf(world, p.weapon);
+    const reloadDone = p.reload > 0 ? Math.round((1 - p.reload / reloadTicksOf(world, p.weapon)) * 20) * 5 : -1;
     const ammoKey = `${p.weapon}|${mag}|${reloadDone}`;
     if (ammoKey !== shownAmmo) {
       shownAmmo = ammoKey;
-      const thin = gun.magSize > 12;
+      const thin = magSize > 12;
       ammoPips.classList.toggle('thin', thin);
       ammoPips.innerHTML = reloadDone >= 0
         ? `<div class="reloading" style="--p: ${reloadDone}%">RELOADING</div>`
-        : Array.from({ length: gun.magSize }, (_, i) => `<div class="pip${i < mag ? ' full' : ''}"></div>`).join('');
+        : Array.from({ length: magSize }, (_, i) => `<div class="pip${i < mag ? ' full' : ''}"></div>`).join('');
       ammoCount.textContent = String(mag);
-      ammoSize.textContent = `/ ${gun.magSize}`;
+      ammoSize.textContent = `/ ${magSize}`;
       ammoType.textContent = gun.ammo;
       ammoSlots.innerHTML = WEAPONS.map((w, i) => `<span class="${i === p.weapon ? 'on' : ''}">${i + 1} ${w.name}</span>`).join('');
       ammo.classList.toggle('empty', mag === 0);
@@ -1034,7 +1062,8 @@ async function main(): Promise<void> {
           });
         }
         if (run && ending === 'dead') run = recordDeath(run);
-        showEnd(endScreen(ending, { ...here, ...(map.meta.levelType ? { levelType: map.meta.levelType } : {}) }, stats, run));
+        endHtml = (pick) => endScreen(ending, { ...here, ...(map.meta.levelType ? { levelType: map.meta.levelType } : {}) }, stats, run, pick);
+        showEnd(endHtml(ending === 'won' ? perkPick() : undefined));
         // Free the mouse for the buttons (E still moves on).
         if (document.pointerLockElement) document.exitPointerLock();
       }

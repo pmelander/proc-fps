@@ -16,7 +16,11 @@ import {
   isLift,
   keyOfThing,
   secretCount,
+  WEAPONS,
+  perkMods,
   type MapData,
+  type Mods,
+  type PerkId,
 } from '@proc-fps/core';
 
 /**
@@ -85,9 +89,16 @@ export interface World {
   readonly secrets: number;
   /** This level's enemy stats per role and variant (see `defOf`): seeded on generated maps, the baseline otherwise. */
   readonly enemyDefs: EnemyDefs;
+  /** The run's perks, folded (core/perks.ts); no perks outside a run. */
+  readonly perks: readonly PerkId[];
+  readonly mods: Mods;
 }
 
-export function createWorld(map: MapData): World {
+/** A gun's magazine and reload time, with the run's perks. */
+export const magSizeOf = (world: World, weapon: number): number => Math.max(1, Math.round(WEAPONS[weapon]!.magSize * world.mods.magScale));
+export const reloadTicksOf = (world: World, weapon: number): number => Math.max(1, Math.round(WEAPONS[weapon]!.reloadTicks * world.mods.reloadScale));
+
+export function createWorld(map: MapData, perks: readonly PerkId[] = []): World {
   const grid = new CellGrid(map);
   const doors = doorSectors(map).map((sector) => {
     const s = map.sectors[sector]!;
@@ -123,7 +134,7 @@ export function createWorld(map: MapData): World {
   });
   const exitThing = map.things.find((t) => t.type === ThingType.Exit);
   const exit = exitThing ? grid.cellOf(exitThing.x, exitThing.y) : null;
-  return { map, locator: new SectorLocator(map), grid, doors, doorAt, lifts, liftAt, pickups, exit, secrets: secretCount(map), enemyDefs: scaleDamage(enemyDefsFor(map.meta.seed), DIFFICULTY[difficultyOf(map)].damage) };
+  return { map, locator: new SectorLocator(map), grid, doors, doorAt, lifts, liftAt, pickups, exit, secrets: secretCount(map), enemyDefs: scaleDamage(enemyDefsFor(map.meta.seed), DIFFICULTY[difficultyOf(map)].damage), perks: [...perks], mods: perkMods(perks) };
 }
 
 /** True for things that are floor pickups (carried keys come from enemies). */

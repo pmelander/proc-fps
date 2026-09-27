@@ -13,4 +13,5 @@ export * from './enemies.js';
 export * from './bestiary.js';
 export * from './weapons.js';
 export * from './powerups.js';
+export * from './perks.js';
 export * from './difficulty.js';

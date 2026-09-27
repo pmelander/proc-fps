@@ -885,3 +885,67 @@ describe('line of sight', async () => {
     expect(s.state.player.health).toBe(PLAYER_MAX_HEALTH);
   });
 });
+
+describe('run perks', async () => {
+  const { PERKS, PERK_IDS, perkMods, perkOffer, UNDYING_HEALTH, ARMOR } = await import('@proc-fps/core');
+  const { hurtPlayer, ReplayRecorder, runReplay, hashState, magSizeOf } = await import('../src/index.js');
+  const withPerks = (perks: Parameters<typeof perkMods>[0]) => {
+    const map = arena({ w: 6, h: 1 });
+    const world = createWorld(map, perks);
+    return { world, state: createSimState(world) };
+  };
+
+  it('stack up to their max, and fold into mods', () => {
+    const m = perkMods(['hide', 'hide', 'hide', 'hide', 'slugs', 'drums', 'plating', 'plating']);
+    expect(m.maxHealth).toBe(PLAYER_MAX_HEALTH + 60); // hide is capped at 3
+    expect(m.damageScale).toBeCloseTo(1.15);
+    expect(m.magScale).toBe(1.5);
+    expect(m.startArmor).toBe(50);
+    expect(perkMods([]).maxHealth).toBe(PLAYER_MAX_HEALTH);
+  });
+
+  it('are offered three at a time, the same for a run and level, never one already maxed', () => {
+    const offer = perkOffer('run-a', 2, []);
+    expect(offer).toHaveLength(3);
+    expect(new Set(offer).size).toBe(3);
+    expect(perkOffer('run-a', 2, [])).toEqual(offer);
+    const maxed = PERK_IDS.filter((id) => PERKS[id].max === 1);
+    for (let l = 1; l < 30; l++) for (const id of perkOffer('run-b', l, maxed)) expect(maxed).not.toContain(id);
+  });
+
+  it('change the player from the start of each level', () => {
+    const { world, state } = withPerks(['hide', 'plating', 'drums', 'pockets']);
+    expect(state.player.health).toBe(PLAYER_MAX_HEALTH + 20);
+    expect(state.player.armor).toBe(25);
+    expect(state.player.mags[0]).toBe(Math.round(WEAPONS[0]!.magSize * 1.5));
+    expect(magSizeOf(world, 0)).toBe(state.player.mags[0]);
+    expect(state.player.grenades).toBe(GRENADE.start + 1);
+  });
+
+  it('undying turns one killing blow a level, not two', () => {
+    const { state } = withPerks(['undying']);
+    hurtPlayer(state, 500);
+    expect(state.player.health).toBe(UNDYING_HEALTH);
+    expect(state.dead).toBe(false);
+    expect(events(state, 'undying')).toHaveLength(1);
+    hurtPlayer(state, 500);
+    expect(state.dead).toBe(true);
+  });
+
+  it('are recorded in replays, which reproduce the run exactly', () => {
+    const map = arena({ w: 8, h: 1, things: [[EnemyType.Grunt, 5, 0]] });
+    const perks = ['slugs', 'hands'] as const;
+    const world = createWorld(map, perks);
+    const state = createSimState(world);
+    const rec = new ReplayRecorder(map, perks);
+    for (let t = 0; t < 200; t++) {
+      const f = { ...EMPTY_INPUT, fire: t % 20 === 0 };
+      rec.record(f);
+      stepSim(world, state, f);
+    }
+    const replay = rec.finish();
+    expect(replay.perks).toEqual(perks);
+    expect(hashState(runReplay(map, replay))).toBe(hashState(state));
+    expect(ARMOR.max).toBeGreaterThan(0);
+  });
+});

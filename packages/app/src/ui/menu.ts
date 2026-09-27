@@ -75,7 +75,8 @@ export class Menu {
     else if ((e.code === 'ArrowLeft' || e.code === 'KeyA' || e.code === 'ArrowRight' || e.code === 'KeyD') && item && this.opts.adjust && 'adjust' in item.dataset) {
       this.opts.sound?.('adjust');
       this.opts.adjust(item, e.code === 'ArrowLeft' || e.code === 'KeyA' ? -1 : 1);
-    } else if (choose.includes(e.code) && item) {
+    } else if (e.code === 'ArrowLeft' || e.code === 'KeyA') this.select(this.index - 1);
+    else if (e.code === 'ArrowRight' || e.code === 'KeyD') this.select(this.index + 1); else if (choose.includes(e.code) && item) {
       this.opts.sound?.('choose');
       this.opts.choose(item);
     } else if (e.code === 'Escape' && this.opts.back) {

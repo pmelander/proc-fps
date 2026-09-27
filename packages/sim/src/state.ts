@@ -1,7 +1,7 @@
-import { DEG_TO_RAD, GRENADE, PLAYER_MAX_HEALTH, WEAPONS, dcos, dsin, defOf, isHigh, variantOf, ThingType, isEnemyThing, type EnemyType, type Heading } from '@proc-fps/core';
+import { ARMOR, DEG_TO_RAD, GRENADE, WEAPONS, dcos, dsin, defOf, isHigh, variantOf, ThingType, isEnemyThing, type EnemyType, type Heading } from '@proc-fps/core';
 import type { BossPattern } from './boss.js';
 import type { Emitter, ShotKind } from './shots.js';
-import type { World } from './world.js';
+import { magSizeOf, type World } from './world.js';
 
 /** No buffered step. */
 export const NO_QUEUE = -1;
@@ -69,6 +69,8 @@ export interface PlayerState {
   armor: number;
   berserk: number;
   overcharge: number;
+  /** The Undying perk's save, still to come this level. */
+  undying: boolean;
 }
 
 /** `charge`: a charger rushing down its lane (see ai.ts). */
@@ -182,6 +184,8 @@ export type SimEvent =
   | { type: 'armor'; amount: number }
   | { type: 'powerup'; kind: 'berserk' | 'overcharge' }
   | { type: 'powerdown'; kind: 'berserk' | 'overcharge' }
+  /** The Undying perk turned a killing blow. */
+  | { type: 'undying' }
   /** A reload started (the cell ran dry, or R), and finished. */
   /** An enemy's glob burst where it landed; a split shot burst into its fan. */
   | { type: 'splash'; x: number; y: number; z: number }
@@ -292,20 +296,21 @@ export function createSimState(world: World): SimState {
       sector: world.grid.sectorAt(cx, cy),
       angle,
       pitch: 0,
-      health: PLAYER_MAX_HEALTH,
+      health: world.mods.maxHealth,
       fireCooldown: 0,
       weapon: 0,
-      mags: WEAPONS.map((w) => w.magSize),
+      mags: WEAPONS.map((_, i) => magSizeOf(world, i)),
       switching: 0,
       shots: 0,
       reload: 0,
       melee: 0,
-      grenades: GRENADE.start,
+      grenades: Math.min(GRENADE.max + world.mods.grenadeMax, GRENADE.start + world.mods.grenadeStart),
       grenadeCooldown: 0,
       hazardTicks: 0,
-      armor: 0,
+      armor: Math.min(ARMOR.max, world.mods.startArmor),
       berserk: 0,
       overcharge: 0,
+      undying: world.mods.undying,
     },
     doors: world.doors.map(() => 0),
     lifts: world.lifts.map((): LiftState => ({ pos: 0, target: 0, wait: 0, armed: true })),

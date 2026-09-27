@@ -443,6 +443,51 @@ body:not(.loading) #loading {
   color: var(--bone-hi);
   text-shadow: var(--shadow);
 }
+/* The perk pick: three cards in a row, the chosen one lit. */
+#end .kicker.pick {
+  margin: calc(var(--u) * 4) 0 0;
+  color: var(--accent);
+}
+#end .menu.perks {
+  gap: calc(var(--u) * 4);
+  align-items: stretch;
+}
+#end .menu.perks button {
+  display: grid;
+  gap: calc(var(--u) * 2);
+  align-content: start;
+  width: min(calc(var(--u) * 112), 30vw);
+  padding: calc(var(--u) * 3);
+  border: calc(var(--u) * 5) solid transparent;
+  border-image: var(--plate) 5 fill / calc(var(--u) * 5) / 0 repeat;
+  image-rendering: pixelated;
+  text-align: center;
+  white-space: normal;
+  color: var(--bone);
+}
+#end .menu.perks button::before {
+  content: none;
+}
+#end .menu.perks .sel,
+#end .menu.perks .chosen {
+  border-image-source: var(--plate-lit);
+  color: var(--bone-hi);
+}
+#end .menu.perks .passed {
+  opacity: 0.4;
+}
+#end .menu.perks .name {
+  font: var(--f1) / 1.25 var(--heavy);
+  color: var(--rust);
+}
+#end .menu.perks .blurb {
+  color: var(--bone);
+  text-shadow: none;
+}
+#end .menu.perks .held {
+  color: var(--bone-dim);
+  text-shadow: none;
+}
 #end .plate.list {
   padding: calc(var(--u) * 2);
 }

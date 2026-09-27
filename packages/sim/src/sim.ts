@@ -111,8 +111,8 @@ export function stepSim(world: World, state: SimState, input: InputFrame): void 
     const at = pickupCell(state, k);
     if (state.taken[i] || !at || at[0] !== cx || at[1] !== cy) return;
     if (k.kind === 'health') {
-      if (p.health >= PLAYER_MAX_HEALTH) return;
-      const amount = Math.min(HEALTH_PICKUP, PLAYER_MAX_HEALTH - p.health);
+      if (p.health >= world.mods.maxHealth) return;
+      const amount = Math.min(Math.round(HEALTH_PICKUP * world.mods.healthPickupScale), world.mods.maxHealth - p.health);
       p.health += amount;
       state.events.push({ type: 'health', amount });
     } else if (k.kind === 'armor') {
@@ -123,15 +123,15 @@ export function stepSim(world: World, state: SimState, input: InputFrame): void 
       state.events.push({ type: 'armor', amount });
     } else if (k.kind === 'berserk' || k.kind === 'overcharge') {
       if (k.kind === 'berserk') {
-        p.berserk = BERSERK.ticks;
-        p.health = Math.min(PLAYER_MAX_HEALTH, p.health + BERSERK.heal);
+        p.berserk = Math.round(BERSERK.ticks * world.mods.powerupScale);
+        p.health = Math.min(world.mods.maxHealth, p.health + BERSERK.heal);
       } else {
-        p.overcharge = OVERCHARGE.ticks;
+        p.overcharge = Math.round(OVERCHARGE.ticks * world.mods.powerupScale);
       }
       state.events.push({ type: 'powerup', kind: k.kind });
     } else if (k.kind === 'grenade') {
       // Stays on the floor while the player carries all they can.
-      if (p.grenades >= GRENADE.max) return;
+      if (p.grenades >= GRENADE.max + world.mods.grenadeMax) return;
       p.grenades++;
       state.events.push({ type: 'grenadePickup' });
     } else {

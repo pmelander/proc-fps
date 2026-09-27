@@ -85,7 +85,7 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 
 **Verified:**
 - The typecheck is clean.
-- 163 tests pass.
+- 170 tests pass.
 - 2000 seeds produce 0 validation failures (about 12 ms per map including validation).
 - The production build succeeds (about 45 kB JS).
 - Headless Chromium (SwiftShader) renders correctly.
@@ -93,6 +93,12 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 **Not yet verified:** real mouse and keyboard play. Pointer lock can't run headless.
 
 - The game is called **Null Sector** (chosen over Hellseed, Gridfall, Cursed Protocol and others; not yet checked against existing games or trademarks). The name shows on the title logo and the page titles; the repository, the `@proc-fps/*` packages and the browser-storage keys (`proc-fps.run`, `.best`, `.difficulty`, so saved runs carry over) keep the working name.
+- Run upgrades (M26), `core/src/perks.ts`:
+  - Ten perks (`PERKS`), each stacking up to its `max`: Ablative plating (start each level with 25 more armour, ×4), Thick hide (20 more health, at most and at the start, ×3), Deep pockets (a grenade more to carry and to start with, ×2), Quick hands (reloads a quarter faster, ×2), Drum magazines (half as many rounds again, ×1), Heavy slugs (guns 15% harder, ×3), Bloodlust (every chainsword hit heals 2, ×2), Overclock (berserk and overcharge half as long again, ×2), Scavenger (health packs half as much again, ×2), Undying (once a level a killing blow leaves you at 25, ×1).
+  - `perkMods` folds the perks held into `Mods`; `createWorld(map, perks)` keeps them as `world.mods`, and the sim reads them wherever it used the constants (`magSizeOf`, `reloadTicksOf`, the health cap, pickups, power-up timers, gun damage, chainsword healing, `PlayerState.undying` and an `undying` event). `ReplayRecorder(map, perks)` records them (`Replay.perks`, optional, so old replays still play).
+  - `perkOffer(run, level, held)` offers three, deterministic in the run and the level, never one already at its max. The end of a cleared level in a run shows them as cards under the tally (`endScreen(…, pick)`); the way on opens once one is picked, and the pick is saved with the run at once (`RunRecord.perks`, one per level, `choosePerk`), so a reload cannot pick twice. The pause screen lists the perks held; the HUD follows the new health cap, magazine sizes and grenade count.
+  - Menus: left and right now move along a row of items too.
+  - Loading no longer stalls in a background tab: the wait for a repaint between stages gives up after 100 ms (hidden tabs draw no frames).
 - Loading screen (after M25): the page starts black (`body.loading` hides all but `#loading`), so the unstyled HUD never flashes while a level loads. main.ts is async: the pixel font first, then the map and the theme's skin, then a loading screen (`loadingScreen` in screens.ts: the level's title card, a bar through `LOADING_STAGES`, the stage, and one of `TIPS`), yielding a paint between stages (baking the walls, breeding the mutants, waking the horde); ready, the pause screen's title card takes over.
 - Resolution option (after M25): Options → Resolution draws the scene at 240 (the default, the look it was made for), 300, 360, 420 or 480 rows (`LevelRenderer.lowResHeight` is settable; the canvas follows). Cost grows with the pixel count: 480 rows is 4× the fill and palette matching of 240, about a fifth of full 1080p. Textures and sprites keep their texel size, so they read chunkier against a sharper frame, and the dither gets finer. The automap stays at 240 rows.
 - Boss bar fix (after M25): the options' volume pips shared the `.bar` class with the boss bar, whose track collapsed to nothing; the pips are `.meter` now. Dev builds expose the running game as `window.__game` (world, state, map) for poking at from the console.
@@ -279,6 +285,10 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 - **M22 — options:** ✅ complete. Mouse speed, invert look, field of view, music and sound volume, screen shake, flashes and head bob, from the title and pause screens, kept in the browser.
 - **M23 — per-theme palettes:** ✅ complete. Each theme quantizes to its own 64 colours, built from its own colours; the HUD, menus and automap follow.
 - **M24 — more enemy roles:** ✅ complete (generator v0.21.0). The charger (rushes down a straight lane), the bloater (bursts beside the player, or when killed, taking others with it) and the warden (a front shield, lowered only to fire).
+- **M26 — run upgrades:** ✅ complete. After each cleared level of a run, pick one of three perks to keep for the rest of it (ten perks, stacking up to their limits); the sim applies them and replays record them.
+- **M27 — a third weapon:** planned. Something slow and heavy (a railgun or a flak cannon) with its own job against wardens and crowds.
+- **M28 — a new level theme:** planned. Flooded or ice, with its own palette, textures and hazards.
+- **M29 — traps and hazards:** planned. Crushers, collapsing floors or turrets, placed by the generator and telegraphed.
 - **M25 — pickups:** ✅ complete (generator v0.22.0). Armour that soaks half of every hurt, berserk (a savage, healing chainsword) and overcharge (harder, faster guns).
 
 ## Doors (decided)
