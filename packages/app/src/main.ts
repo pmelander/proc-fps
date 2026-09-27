@@ -28,6 +28,7 @@ import type { SoundId } from './audio/sounds.js';
 import { drawAutomap } from './automap.js';
 import { Chainsword } from './chainsword.js';
 import { Gore } from './gore.js';
+import { ScreenBlood } from './screenblood.js';
 import { Weapon } from './weapon.js';
 import { InputSampler } from './input.js';
 import { KEY_COLORS, KEY_NAMES } from './keys.js';
@@ -166,7 +167,9 @@ const SOUND_OF: Partial<Record<string, SoundId>> = {
 const FLASH_SECONDS = 0.12;
 /** Kill sounds pitch down with size; gib counts grow with it. */
 const DEATH_PITCH: Record<number, number> = { 32: 1, 33: 0.8, 34: 1.2, 40: 0.65, 41: 0.5 };
-const GIBS: Record<number, number> = { 32: 14, 33: 20, 34: 12, 40: 40, 41: 70 };
+const GIBS: Record<number, number> = { 32: 22, 33: 30, 34: 18, 40: 60, 41: 100 };
+/** Kills this close (map units) splatter the screen, more the closer they are. */
+const SPLATTER_RANGE = 2.5 * 128;
 /** A killing blow throws the corpse this far (map units) over CORPSE_THROW_SECONDS. */
 const CORPSE_THROW = 40;
 const CORPSE_THROW_SECONDS = 0.3;
@@ -278,6 +281,7 @@ function main(): void {
   const ammoCount = ammo.querySelector('.count b') as HTMLElement;
   let shownAmmo = '';
   const gore = new Gore();
+  const screenBlood = new ScreenBlood(document.getElementById('bloodscreen') as HTMLCanvasElement);
   const throws: Throws = new Map();
   let joltUntil = 0;
   const hurtFlash = document.getElementById('hurt') as HTMLDivElement;
@@ -396,17 +400,27 @@ function main(): void {
           const enemy = enemyAt(e.enemy);
           const def = world.enemyDefs[enemy.type];
           const mid = enemy.z + def.height * 0.6;
+          const dx = enemy.x - state.player.x;
+          const dy = enemy.y - state.player.y;
+          const len = Math.hypot(dx, dy) || 1;
           if (e.type === 'kill') {
-            // Spectacular: burst into gibs thrown along the blow, and throw the corpse after them.
-            const dx = enemy.x - state.player.x;
-            const dy = enemy.y - state.player.y;
-            const len = Math.hypot(dx, dy) || 1;
+            // Spectacular: burst into gibs thrown along the blow, throw the corpse after them, and
+            // leave a pool where it lands with a smear along the way.
             gore.burst(enemy.x, enemy.y, mid, dx / len, dy / len, GIBS[enemy.type] ?? 14, def.radius);
             throws.set(e.enemy, { at: now, dx: dx / len, dy: dy / len });
+            for (let k = 0; k <= 4; k++) {
+              const along = (CORPSE_THROW * k) / 4;
+              gore.pool(enemy.x + (dx / len) * along, enemy.y + (dy / len) * along, enemy.z, def.radius * (k === 4 ? 0.9 : 0.35));
+            }
+            if (len < SPLATTER_RANGE) {
+              const side = Math.sin(Math.atan2(dy, dx) - state.player.angle); // + left of the view
+              screenBlood.splatter(1 - len / SPLATTER_RANGE, -side);
+            }
             audio.play('kill', enemy, listener, DEATH_PITCH[enemy.type] ?? 1);
             audio.play('gib', enemy, listener);
           } else {
-            gore.splash(enemy.x, enemy.y, mid);
+            // Blood sprays out of the far side, away from the blow.
+            gore.splash(enemy.x, enemy.y, mid, dx / len, dy / len, e.type === 'melee' ? 10 : 16);
             if (e.type === 'hit') audio.play('hit', enemy, listener);
           }
         }
@@ -417,7 +431,14 @@ function main(): void {
           audio.play('saw');
         }
         if (e.type === 'melee') {
-          audio.play('sawHit', enemyAt(e.enemy), listener);
+          const enemy = enemyAt(e.enemy);
+          audio.play('sawHit', enemy, listener);
+          chainsword.bite();
+          screenBlood.splatter(0.25);
+          // Blood thrown back off the blade, towards the player.
+          const [bx, by] = [state.player.x - enemy.x, state.player.y - enemy.y];
+          const bl = Math.hypot(bx, by) || 1;
+          gore.burst(enemy.x, enemy.y, enemy.z + world.enemyDefs[enemy.type].height * 0.55, bx / bl, by / bl, 5, 10);
           joltUntil = now + JOLT_SECONDS;
         }
         if (e.type === 'shielded') {
@@ -488,6 +509,7 @@ function main(): void {
     renderer.render(view, now, [...buildSprites(world, state, prevEnemies, t, view, spawnAngles, throws, now), ...gore.sprites(goreWorld)]);
     weapon.update(now, dt, state.player.stepTick / STEP_TICKS, p.mag / MAG_SIZE);
     chainsword.update(now);
+    screenBlood.update(dt);
 
     if (p.health !== shownHealth) {
       shownHealth = p.health;

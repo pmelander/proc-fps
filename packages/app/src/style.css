@@ -269,13 +269,18 @@ canvas[hidden] {
   pointer-events: none;
   transform-origin: 60% 100%;
 }
+/* Blood on the screen (screenblood.ts): over the view and weapons, under the HUD. */
+#bloodscreen {
+  image-rendering: pixelated;
+  pointer-events: none;
+}
 /* The chainsword (chainsword.ts), left hand; shown only while it attacks. */
 #saw {
   position: fixed;
   inset: auto 50% -2vh auto;
   width: auto;
-  height: 46vh;
-  aspect-ratio: 150 / 120;
+  height: 58vh;
+  aspect-ratio: 190 / 150;
   image-rendering: pixelated;
   pointer-events: none;
   transform-origin: 20% 100%;

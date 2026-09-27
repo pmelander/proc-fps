@@ -59,6 +59,8 @@ export interface Sprite {
   light: number;
   /** Baked sprite atlas tile (see SPRITE_BAKE_FS), or -1 to draw `shape` procedurally. */
   tile: number;
+  /** Lies flat on the floor (a pool of blood): a width × height quad in the map plane at z. */
+  flat?: boolean;
 }
 
 const CORNERS = [
@@ -75,12 +77,13 @@ export function buildSpriteVertices(sprites: readonly Sprite[], yaw: number): Fl
   let o = 0;
   for (const s of sprites) {
     for (const [u, v] of CORNERS) {
-      const mx = s.x + rx * u * s.width;
-      const my = s.y + ry * u * s.width;
+      // Flat sprites lie in the map plane (x across, y along); the rest stand facing the camera.
+      const mx = s.flat ? s.x + u * s.width : s.x + rx * u * s.width;
+      const my = s.flat ? s.y + (v - 0.5) * s.height : s.y + ry * u * s.width;
       // World: X = map.x, Y = height, Z = -map.y
       // Written field by field: hundreds of gore particles per frame, so no per-vertex arrays.
       out[o] = mx;
-      out[o + 1] = s.z + v * s.height;
+      out[o + 1] = s.flat ? s.z : s.z + v * s.height;
       out[o + 2] = -my;
       out[o + 3] = u + 0.5;
       out[o + 4] = v;
