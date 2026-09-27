@@ -5,7 +5,8 @@ import { FIRE_COOLDOWN, MAG_SIZE, PELLETS, PELLET_SPREAD, PLAYER_DAMAGE, RELOAD_
  * another gun is up. Switching takes WEAPON_SWITCH_TICKS (the old gun lowers, the new one rises)
  * and drops a reload in progress. The chainsword (MELEE_*) works with either gun.
  *
- * - The energy scattergun: PELLETS pellets in a fixed spread, devastating up close.
+ * - The energy scattergun: PELLETS pellets in a fixed spread, devastating up close; its pellets
+ *   lose damage with range (full out to two cells, a quarter from eight), so at range it only sprays.
  * - The heavy bolter: fast, accurate, explosive bolts. One pellet per shot, walking a small fixed
  *   pattern shot by shot (fixed, so replays hold); each bolt bursts where it hits and hurts
  *   everything within its splash radius, so it thins packed hordes and reaches snipers the
@@ -28,6 +29,16 @@ export interface WeaponDef {
   /** Each pellet bursts where it hits: this much damage to every enemy this close (0 = no burst). */
   splashRadius: number;
   splashDamage: number;
+  /** Pellet damage falls off with range: full out to `from`, down to `min` of it at `to` and beyond (map units). */
+  falloff?: { from: number; to: number; min: number };
+}
+
+/** The share of a pellet's damage it still does at distance `t`. */
+export function falloffAt(w: WeaponDef, t: number): number {
+  const f = w.falloff;
+  if (!f || t <= f.from) return 1;
+  if (t >= f.to) return f.min;
+  return 1 - ((1 - f.min) * (t - f.from)) / (f.to - f.from);
 }
 
 export const WeaponId = { Scattergun: 0, Bolter: 1 } as const;
@@ -41,10 +52,11 @@ export const WEAPONS: readonly WeaponDef[] = [
   {
     name: 'scattergun', ammo: 'Scatter cell', cooldown: FIRE_COOLDOWN, magSize: MAG_SIZE, reloadTicks: RELOAD_TICKS,
     damage: PLAYER_DAMAGE, pellets: PELLETS, spread: PELLET_SPREAD, splashRadius: 0, splashDamage: 0,
+    falloff: { from: 256, to: 1024, min: 0.25 },
   },
   {
     name: 'heavy bolter', ammo: 'Bolt drum', cooldown: 9, magSize: 30, reloadTicks: 120,
-    damage: 14, pellets: 1, spread: BOLT_SPREAD, splashRadius: 56, splashDamage: 8,
+    damage: 12, pellets: 1, spread: BOLT_SPREAD, splashRadius: 56, splashDamage: 7,
   },
 ];
 

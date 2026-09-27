@@ -41,16 +41,20 @@ const RECIPES: Record<SoundId, Recipe> = {
     { wave: 'square', freq: 1300, freqEnd: 500, attack: 0, sustain: 0.01, release: 0.04, volume: 0.35, duty: 0.25 },
     { wave: 'noise', freq: 3000, freqEnd: 1200, attack: 0.05, sustain: 0.005, release: 0.04, volume: 0.3 },
   ],
-  // A heavy bolter round: a sharp crack and a short, punchy thump (it fires fast).
+  // A heavy bolter round: a crack, a punch, a short blast of noise, a distorted boom and a sub-bass
+  // thump, all kept short enough to stack at its rate of fire without turning to mush.
   bolt: [
-    { wave: 'noise', freq: 3600, freqEnd: 900, attack: 0, sustain: 0.01, release: 0.05, volume: 0.6 },
-    { wave: 'square', freq: 420, freqEnd: 90, attack: 0, sustain: 0.01, release: 0.07, volume: 0.3, duty: 0.3 },
-    { wave: 'sine', freq: 90, freqEnd: 35, attack: 0, sustain: 0.03, release: 0.14, volume: 0.8 },
+    { wave: 'noise', freq: 3000, freqEnd: 800, attack: 0, sustain: 0.012, release: 0.05, volume: 0.55 },
+    { wave: 'square', freq: 260, freqEnd: 60, attack: 0, sustain: 0.015, release: 0.09, volume: 0.3, duty: 0.35 },
+    { wave: 'noise', freq: 900, freqEnd: 90, attack: 0.002, sustain: 0.04, release: 0.25, volume: 0.6, lowpass: 1400 },
+    { wave: 'saw', freq: 60, freqEnd: 28, attack: 0, sustain: 0.04, release: 0.22, volume: 0.45, lowpass: 320 },
+    { wave: 'sine', freq: 55, freqEnd: 24, attack: 0, sustain: 0.05, release: 0.3, volume: 0.9 },
   ],
-  // A bolt bursting where it hit.
+  // A bolt bursting where it hit: a deep, rolling thud.
   boltBlast: [
-    { wave: 'noise', freq: 1400, freqEnd: 150, attack: 0, sustain: 0.03, release: 0.22, volume: 0.6, lowpass: 2200 },
-    { wave: 'sine', freq: 70, freqEnd: 30, attack: 0, sustain: 0.04, release: 0.2, volume: 0.55 },
+    { wave: 'noise', freq: 1000, freqEnd: 80, attack: 0, sustain: 0.04, release: 0.35, volume: 0.7, lowpass: 1800 },
+    { wave: 'saw', freq: 55, freqEnd: 25, attack: 0, sustain: 0.04, release: 0.25, volume: 0.4, lowpass: 300 },
+    { wave: 'sine', freq: 60, freqEnd: 22, attack: 0, sustain: 0.05, release: 0.35, volume: 0.7 },
   ],
   // Swapping guns: a heavy mechanical clunk and a latch.
   switch: [

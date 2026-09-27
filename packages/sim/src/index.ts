@@ -11,6 +11,7 @@ export {
   WEAPONS,
   WEAPON_SWITCH_TICKS,
   WeaponId,
+  falloffAt,
   RELOAD_TICKS,
   MELEE_DAMAGE,
   MELEE_FIRST_HIT,

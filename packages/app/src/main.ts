@@ -544,7 +544,7 @@ function main(): void {
         if (e.type === 'health') [notice, noticeUntil] = [`+${e.amount} health`, now + NOTICE_SECONDS];
         if (e.type === 'shot' && e.weapon === WeaponId.Bolter) {
           // A bolt: a sharp crack from alternating barrels, a lighter jolt, a tracer to its burst.
-          audio.play('bolt', undefined, undefined, 0.95 + Math.random() * 0.1);
+          audio.play('bolt', undefined, undefined, 0.88 + Math.random() * 0.1);
           bolter.fire(now, state.player.shots % 2);
           renderer.flash = Math.max(renderer.flash, 0.55);
           boltTracer(world, state, gore);

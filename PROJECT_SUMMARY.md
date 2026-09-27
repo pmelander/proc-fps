@@ -85,7 +85,7 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 
 **Verified:**
 - The typecheck is clean.
-- 113 tests pass.
+- 114 tests pass.
 - 2000 seeds produce 0 validation failures (about 12 ms per map including validation).
 - The production build succeeds (about 45 kB JS).
 - Headless Chromium (SwiftShader) renders correctly.
@@ -93,9 +93,9 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 **Not yet verified:** real mouse and keyboard play. Pointer lock can't run headless.
 
 - More weapons (M15):
-  - Guns are data (`core/src/weapons.ts`, `WEAPONS`): cooldown, magazine, reload, damage, pellets and spread, and an optional burst. The scattergun as before; the heavy bolter fires every 9 ticks (6.7 a second), one bolt walking a small fixed pattern (`BOLT_SPREAD`, so replays hold), 14 damage, and each bolt bursts where it lands for 8 more to every enemy within 56 units of its body (a `blast` event). Its drum holds 30 and reloads in 2 s. Ammo stays infinite.
+  - Guns are data (`core/src/weapons.ts`, `WEAPONS`): cooldown, magazine, reload, damage, pellets and spread, and an optional burst. The scattergun's pellets lose damage with range (`falloffAt`: full out to 2 cells, falling to a quarter at 8), so point-blank it is devastating and at range it only sprays. The heavy bolter fires every 9 ticks (6.7 a second), one bolt walking a small fixed pattern (`BOLT_SPREAD`, so replays hold), 12 damage, and each bolt bursts where it lands for 7 more to every enemy within 56 units of its body (a `blast` event). Its drum holds 30 and reloads in 2 s. Ammo stays infinite.
   - Switching: 1 and 2, the mouse wheel, or Q for the last gun; the request resolves to a weapon index before it is recorded (a new `weapon` input), so replays hold. A switch takes `WEAPON_SWITCH_TICKS` (24): the old gun lowers, the new one rises, nothing fires meanwhile, a reload in progress is dropped, the new gun's cooldown starts clear, and each gun keeps its own magazine (`PlayerState.mags`). The chainsword works with either.
-  - The bolter view model (`bolter.ts`): a boxy gunmetal body with red and brass trim, a brass-banded drum on top, twin barrels firing in turn with a flash at that muzzle, and a glowing strip down its side that drains with the drum. Bolts leave a bright tracer and burst in a fireball with sparks and chips; sounds for the bolt, the burst and the switch.
+  - The bolter view model (`bolter.ts`): a boxy gunmetal body with red and brass trim, a brass-banded drum on top, twin barrels firing in turn with a flash at that muzzle, and a glowing strip down its side that drains with the drum. Bolts leave a bright tracer and burst in a fireball with sparks and chips. Its sound is layered like the scattergun's (crack, punch, noise blast, distorted boom, sub-bass thump) but short enough to stack at its rate, the burst a deep rolling thud; the switch a mechanical clunk.
   - The ammo panel names the ammunition (scatter cell, bolt drum), shows a pip per round (thin ticks for the 30-round drum) and the weapon slots with the one in hand lit.
 - Rendering performance (M14):
   - The biggest cost was the palette post pass: it matched 64 colours per pixel at full screen resolution times the device pixel ratio. Its dither is per scene pixel, so quantizing at the scene's 240 rows gives the same image: the canvas now holds exactly the low-res scene and CSS scales it up pixelated (`image-rendering: pixelated`), about 20× less fill at 1080p and 80× on a high-DPI screen.

@@ -1,5 +1,6 @@
 import {
   defOf,
+  falloffAt,
   WEAPONS,
   WEAPON_SWITCH_TICKS,
   MELEE_DAMAGE,
@@ -123,7 +124,7 @@ export function playerFire(world: World, state: SimState, trigger: boolean, relo
     const dy = cp * dsin(p.angle + yaw);
     const dz = dsin(p.pitch + pitch);
     const { target, t } = pelletTarget(world, state, ox, oy, oz, dx, dy, dz);
-    if (target >= 0) add(target, gun.damage);
+    if (target >= 0) add(target, Math.max(1, Math.round(gun.damage * falloffAt(gun, t))));
     if (gun.splashRadius > 0 && t < WEAPON_RANGE) {
       // The bolt bursts where it hit: everyone within the splash radius (of their body) is caught.
       const bx = ox + dx * t;

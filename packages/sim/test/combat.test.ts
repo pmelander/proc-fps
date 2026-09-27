@@ -12,6 +12,7 @@ import {
   WEAPONS,
   WEAPON_SWITCH_TICKS,
   WeaponId,
+  falloffAt,
   MELEE_DAMAGE,
   MELEE_FIRST_HIT,
   MELEE_HITS,
@@ -315,6 +316,22 @@ describe('weapons', () => {
     step({ fire: true, look: -0.185 }); // the floor about 40 units short of the grunt
     expect(events(state, 'blast')).toHaveLength(1);
     expect(state.enemies[0]!.hp).toBeLessThan(hp);
+  });
+
+  it('loses scattergun damage with range', () => {
+    // The same brute takes a full blast point-blank, a fraction of it from nine cells away.
+    const scatter = WEAPONS[WeaponId.Scattergun]!;
+    const near = sim(arena({ w: 12, h: 3, py: 1, things: [[EnemyType.Brute, 2, 1]] }));
+    const far = sim(arena({ w: 12, h: 3, py: 1, things: [[EnemyType.Brute, 9, 1]] }));
+    const hp = far.state.enemies[0]!.hp;
+    near.step({ fire: true });
+    far.step({ fire: true });
+    expect(near.state.enemies[0]!.mode).toBe('dead');
+    const lost = hp - far.state.enemies[0]!.hp;
+    expect(lost).toBeGreaterThan(0);
+    expect(lost).toBeLessThanOrEqual(scatter.pellets * Math.round(scatter.damage * falloffAt(scatter, 9 * 128 - 30)));
+    expect(falloffAt(scatter, 100)).toBe(1);
+    expect(falloffAt(scatter, 5000)).toBe(0.25);
   });
 
   it('keeps the scattergun burst-free', () => {
