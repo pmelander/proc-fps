@@ -16,7 +16,7 @@ interface Particle {
   vy: number;
   vz: number;
   size: number;
-  kind: 'gib' | 'drop' | 'pool' | 'stuck' | 'spark' | 'tracer' | 'chip' | 'fire';
+  kind: 'gib' | 'drop' | 'pool' | 'stuck' | 'spark' | 'tracer' | 'chip' | 'fire' | 'beam';
   age: number;
 }
 
@@ -33,6 +33,9 @@ const CHIP_LIFE = 25;
 const SPARK_GRAVITY = 450;
 /** A bolt's fireball: swells and burns out fast. */
 const FIRE_LIFE = 0.22;
+/** A sniper's beam: sprites this far apart along it, gone after BEAM_LIFE seconds. */
+const BEAM_SPACING = 12;
+const BEAM_LIFE = 0.28;
 
 export interface GoreWorld {
   /** Floor height at a map point, or undefined for solid (walls). */
@@ -86,6 +89,16 @@ export class Gore {
     this.add({ x, y, z, vx, vy, vz, size, kind: 'tracer', age: SPARK_LIFE - life });
   }
 
+  /** A sniper's shot: a glowing line from (x0, y0, z0) to (x1, y1, z1) that fades out fast. */
+  beam(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): void {
+    const len = Math.hypot(x1 - x0, y1 - y0, z1 - z0);
+    const n = Math.max(2, Math.ceil(len / BEAM_SPACING));
+    for (let i = 0; i <= n; i++) {
+      const t = i / n;
+      this.add({ x: x0 + (x1 - x0) * t, y: y0 + (y1 - y0) * t, z: z0 + (z1 - z0) * t, vx: 0, vy: 0, vz: 0, size: 6, kind: 'beam', age: 0 });
+    }
+  }
+
   /** A bolt bursting: a ball of fire that swells and fades, with sparks and chips. */
   blast(x: number, y: number, z: number): void {
     for (let i = 0; i < 3; i++) this.add({ x: x + (this.rand() - 0.5) * 10, y: y + (this.rand() - 0.5) * 10, z: z - 10 + this.rand() * 10, vx: 0, vy: 0, vz: 30, size: 18 + this.rand() * 14, kind: 'fire', age: 0 });
@@ -123,8 +136,9 @@ export class Gore {
   update(dt: number, world: GoreWorld): void {
     this.particles = this.particles.filter((p) => {
       p.age += dt;
-      const life = p.kind === 'gib' ? GIB_LIFE : p.kind === 'drop' ? DROP_LIFE : p.kind === 'spark' || p.kind === 'tracer' ? SPARK_LIFE : p.kind === 'chip' ? CHIP_LIFE : p.kind === 'fire' ? FIRE_LIFE : POOL_LIFE;
+      const life = p.kind === 'gib' ? GIB_LIFE : p.kind === 'drop' ? DROP_LIFE : p.kind === 'spark' || p.kind === 'tracer' ? SPARK_LIFE : p.kind === 'chip' ? CHIP_LIFE : p.kind === 'fire' ? FIRE_LIFE : p.kind === 'beam' ? BEAM_LIFE : POOL_LIFE;
       if (p.age > life) return false;
+      if (p.kind === 'beam') return true;
       if (p.kind === 'tracer' || p.kind === 'fire') {
         p.x += p.vx * dt;
         p.y += p.vy * dt;
@@ -171,9 +185,14 @@ export class Gore {
 
   sprites(world: GoreWorld): Sprite[] {
     return this.particles.map((p) => {
-      const glowing = p.kind === 'spark' || p.kind === 'tracer' || p.kind === 'fire';
+      const glowing = p.kind === 'spark' || p.kind === 'tracer' || p.kind === 'fire' || p.kind === 'beam';
       const shape = p.kind === 'gib' ? SpriteShape.Gib : glowing ? SpriteShape.Spark : p.kind === 'chip' ? SpriteShape.Chip : SpriteShape.Blood;
       const base = { shape, charge: 0, flash: 0, light: glowing ? 1 : world.light(p.x, p.y), tile: -1 };
+      if (p.kind === 'beam') {
+        // Thins as it fades.
+        const s = p.size * (1 - p.age / BEAM_LIFE);
+        return { ...base, x: p.x, y: p.y, z: p.z - s / 2, width: s, height: s };
+      }
       if (p.kind === 'fire') {
         // Swells to full size in a third of its life, then shrinks as it burns out.
         const k = p.age / FIRE_LIFE;

@@ -19,8 +19,8 @@ describe('generator', () => {
 });
 
 describe('level types', () => {
-  it('a run paces them: compound, ascent, compound, descent, …', () => {
-    expect([1, 2, 3, 4, 5, 6].map(levelTypeFor)).toEqual(['compound', 'ascent', 'compound', 'descent', 'compound', 'ascent']);
+  it('a run paces them, leaning vertical: compound, ascent, descent, ascent, compound, descent, …', () => {
+    expect([1, 2, 3, 4, 5, 6, 7].map(levelTypeFor)).toEqual(['compound', 'ascent', 'descent', 'ascent', 'compound', 'descent', 'compound']);
     expect(generate('pace', { level: 2 }).meta.levelType).toBe('ascent');
   });
 

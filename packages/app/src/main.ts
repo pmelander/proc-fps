@@ -4,6 +4,7 @@ import { BASELINE_LOOKS, HIDDEN_OFFSET, LevelRenderer, SpriteShape, THEME_COLORS
 import {
   PLAYER_MAX_HEALTH,
   castRay,
+  lineOfSight,
   ReplayRecorder,
   clonePlayer,
   createSimState,
@@ -250,6 +251,21 @@ function buildSprites(
     sprites.push({ x: q.x, y: q.y, z: q.z - PROJECTILE_SIZE / 2, width: PROJECTILE_SIZE, height: PROJECTILE_SIZE, shape: SpriteShape.Projectile, charge: 0, flash: 0, light: 1, tile: -1 });
   }
   return sprites;
+}
+
+/** A sniper's beam, render-only: from its eye to the player's chest, or to the first wall. */
+function sniperBeam(world: World, state: SimState, e: EnemyState, gore: Gore): void {
+  const def = defOf(world.enemyDefs, e);
+  const p = state.player;
+  const [sx, sy, sz] = [e.x, e.y, e.z + def.height * 0.75];
+  let [tx, ty, tz] = [p.x, p.y, p.z + 44];
+  if (!lineOfSight(world, state, sx, sy, tx, ty)) {
+    const len = Math.hypot(tx - sx, ty - sy, tz - sz) || 1;
+    const [dx, dy, dz] = [(tx - sx) / len, (ty - sy) / len, (tz - sz) / len];
+    const d = castRay(world, state, sx, sy, sz, dx, dy, dz, WEAPON_RANGE);
+    [tx, ty, tz] = [sx + dx * d, sy + dy * d, sz + dz * d];
+  }
+  gore.beam(sx, sy, sz, tx, ty, tz);
 }
 
 /**
@@ -537,6 +553,9 @@ function main(): void {
             ? kind === 'melee' ? 'windupMelee' : kind === 'hitscan' ? 'windupHitscan' : 'windup'
             : kind === 'melee' ? 'melee' : kind === 'hitscan' ? 'snipe' : 'launch';
           audio.play(id, enemy, listener);
+          // A sniper's shot shows: a glowing line from its eye to the player, or to the wall if
+          // they broke line of sight in time.
+          if (e.type === 'attack' && kind === 'hitscan') sniperBeam(world, state, enemy, gore);
         }
         if (e.type === 'key') [notice, noticeUntil] = [`Picked up the ${KEY_NAMES[e.key]} key`, now + NOTICE_SECONDS];
         if (e.type === 'locked') [notice, noticeUntil] = [`Needs the ${KEY_NAMES[e.key]} key`, now + NOTICE_SECONDS];

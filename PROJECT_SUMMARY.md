@@ -27,7 +27,7 @@ This file summarises the decisions made so far, the current state of the code, a
 | Package | Contents |
 |---|---|
 | `core` | `map.ts` (format v1: slabs, `hashMap`), `cells.ts` (`CellPlan`: cells → sectors with automatic T-junction splits), `rng.ts` (sfc32 + named forks), `dmath.ts` (deterministic trig), `math.ts` (render-side mat4), `geometry.ts` (sector loops, `SectorLocator`), `builder.ts` (`MapBuilder`, `rect`), `grid.ts` (`CellGrid`, `validateGridAlignment`), `validate.ts`, `constants.ts`, `textures.ts`. `maps/test01.json` is built by `scripts/build-test-maps.ts`. |
-| `gen` | `generate.ts` (v0.17.0: mission → layout → room templates → cell plan → sectors), `mission.ts` (mission graph), `layout.ts` (grid embedding), `rooms.ts` (room templates), `population.ts` (enemies, health and ammo by level and depth), `validate.ts` (structural + grid + reachability + traps), `scripts/stats.ts` (headless health check). |
+| `gen` | `generate.ts` (v0.18.0: mission → layout → room templates → cell plan → sectors), `mission.ts` (mission graph), `layout.ts` (grid embedding), `rooms.ts` (room templates), `population.ts` (enemies, health and ammo by level and depth), `validate.ts` (structural + grid + reachability + traps), `scripts/stats.ts` (headless health check). |
 | `sim` | `input.ts` (`InputFrame`, quantization), `world.ts`, `state.ts`, `player.ts` (grid movement), `sim.ts`, `replay.ts`. |
 | `render` | `backend.ts` (interface), `webgl2.ts`, `mesh.ts` (map → per-sector mesh), `palette.ts` (64 colours), `shaders.ts`, `renderer.ts` (`LevelRenderer`). |
 | `app` | `main.ts` (loop, interpolation, HUD, compass), `input.ts` (DOM → `InputFrame`), `automap.ts`. |
@@ -85,13 +85,14 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 
 **Verified:**
 - The typecheck is clean.
-- 117 tests pass.
+- 118 tests pass.
 - 2000 seeds produce 0 validation failures (about 12 ms per map including validation).
 - The production build succeeds (about 45 kB JS).
 - Headless Chromium (SwiftShader) renders correctly.
 
 **Not yet verified:** real mouse and keyboard play. Pointer lock can't run headless.
 
+- Small fixes after M16 (generator v0.18.0): a sniper's shot draws a glowing line from its eye to where it lands (the player, or the wall if they broke line of sight), fading in a quarter second; even volleys shift half a step (alternating sides) so one projectile always flies at the aim (a symmetric even fan left a gap exactly where the player stood); runs lean vertical (a third of levels flat, was half).
 - Enemy behaviour (M16):
   - Lifts: the pathing field no longer treats lifts as walls, so enemies route through them between storeys. They ride by the player's rules (`liftAllows` in ai.ts): never on or off a moving lift; onto one that is not level they call it and wait, but never one the player stands on; off one towards a floor it is not level with they send it there and ride; and the way off must be open at the lift's real height. An enemy's height follows the platform (`floorNow`).
   - Flanking: two enemies in five (by index and variant, `flankSide`) flank to the player's left or right: while their path is longer than 4 steps they make for the reachable cell about 3 cells to that side of the player (across the player's facing, a second distance field per side, computed at most once a tick), then close in directly. Round a loop, a horde now comes from both ways.
@@ -126,7 +127,7 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
   - The gun's side cell shows the rounds left; a reload dips and rolls the gun while the cell refills, with an eject-and-charge sound and a double click when ready.
   - HUD: a health bar top centre (green, amber at half, flashing red at a quarter) with the compass under it; bottom right the ammo type (scatter cell), a glowing pip per round in the theme's light colour, the count and an infinite reserve, and a progress bar while reloading. Held keys moved to the bottom left.
 - Level types and verticality (M12):
-  - Three types (`gen/src/levels.ts`), each a profile of mission size, room sizes, storey count and how storeys join. **Compound:** one storey, wide, more rooms, detours and dead ends, bigger rooms; hordes and flanking. **Ascent:** start on storey 0, the gate, boss and exit at the top of 3–5 storeys. **Descent:** the same upside down, taken mostly by drops. A run paces them by level (`levelTypeFor`): compound, ascent, compound, descent, …; `?seed=<s>&type=<t>` and the seed browser's type menu pick one.
+  - Three types (`gen/src/levels.ts`), each a profile of mission size, room sizes, storey count and how storeys join. **Compound:** one storey, wide, more rooms, detours and dead ends, bigger rooms; hordes and flanking. **Ascent:** start on storey 0, the gate, boss and exit at the top of 3–5 storeys. **Descent:** the same upside down, taken mostly by drops. A run paces them by level (`levelTypeFor`), leaning vertical: compound, ascent, descent, ascent, compound, descent, … (a third flat; v0.18.0, it was half); `?seed=<s>&type=<t>` and the seed browser's type menu pick one.
   - Storeys come from each room's progress along the critical path (`MissionNode.progress`: 0 at the start, 1 at the gate, boss and exit, spread evenly along both arcs of the main cycle; branches take their host's), so the climb or fall spreads over the whole level. A connection climbs at most two storeys (a tall lift); fewer storeys when the mission is too short.
   - **Drops:** a corridor down one storey may run at the upper floor and end high in the lower room's wall, a ledge you jump from (gravity takes you down) and cannot climb back to. Each drop is kept only if the level still cannot strand the player: `strandsPlayer` (`progress.ts`) searches (room, keys held) states on the mission graph with drops one way. Descents keep most (drops 3–4 per level typically), ascents a few as shortcuts back down.
   - **Atriums:** ordinary rooms with a neighbour a storey up may become tall rooms ringed by a grating catwalk at that storey. Corridors from above arrive on the catwalk, corridors level with the room pass under it, and a lift in an inner corner joins them (`atriumDesign`).
@@ -248,7 +249,5 @@ In the map format a door is a one-cell sector with its kind in `Sector.special` 
 
 Ideas noted during play-testing, not yet scheduled. Each line points at whatever already exists for it.
 
-- **Visible sniper shots.** A sniper's hitscan shot should draw a glowing line from its muzzle to where it lands (the player, or the wall if they broke line of sight), fading out fast, so the player sees where it came from. Render-only: the sim's `attack` event for a hitscan enemy gives the shooter; the app draws the beam (a stretched glowing sprite or a chain of spark sprites along the ray, like the bolter tracers).
-- **Even volleys leave a gap at the aim.** A volley fans symmetrically around the aim (`ai.ts` attack: offsets (k − (volley − 1) / 2) × spread), so an even count (twin-bolt grunts, 4- or 6-shot bosses) puts no projectile where the player stands: standing still dodges them. Fix: shift even fans by half a spread so one projectile flies at the aim (alternating sides per volley), or always add a centre shot.
-- **More vertical levels.** The ascents and descents play best; make them a little more common than compounds. Today `levelTypeFor` alternates compound, ascent, compound, descent (half flat); e.g. compound, ascent, descent, ascent, compound, descent (a third flat).
+- **More interesting boss fights.** Today the mini boss and boss are big, tough enemies with wider volleys in an arena. Ideas: attack phases that change as their health drops (volley patterns, a charge, summoning a wave of grunts), telegraphed area attacks to dodge (a ground slam, a sweeping beam), arena features (cover pillars that break, hazard floors that switch on), a health bar on the HUD while the fight is on, and a proper death (a long gib burst, a pause).
 - **Grenade launcher, limited ammo.** A left-hand launcher like the chainsword, fired with E; grenades are scarce: one now and then in a loot room, a count on the HUD. Needs: a grenade pickup (thing type) placed by the generator in some loot rooms, a count in `PlayerState`, a lobbed projectile with an arc, a fuse or impact burst with splash (reuse the bolter's blast), a left-hand view model and sounds. Controls (decided): fire it with E, and doors move to Space only (today E and Space both open doors).

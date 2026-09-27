@@ -13,8 +13,8 @@
 export type LevelType = 'compound' | 'ascent' | 'descent';
 export const LEVEL_TYPES: readonly LevelType[] = ['compound', 'ascent', 'descent'];
 
-/** A run alternates flat and vertical levels: compound, ascent, compound, descent, … */
-const PACING: readonly LevelType[] = ['compound', 'ascent', 'compound', 'descent'];
+/** A run leans vertical: compound, ascent, descent, ascent, compound, descent, … (a third flat). */
+const PACING: readonly LevelType[] = ['compound', 'ascent', 'descent', 'ascent', 'compound', 'descent'];
 
 export function levelTypeFor(level: number): LevelType {
   return PACING[(Math.max(1, Math.floor(level)) - 1) % PACING.length]!;

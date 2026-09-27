@@ -370,6 +370,20 @@ describe('enemy behaviour', () => {
     expect(state.player.health).toBeLessThan(PLAYER_MAX_HEALTH);
   });
 
+  it('aims one projectile of an even volley straight at the player', () => {
+    // A level whose grunts spit twin bolts: one of the pair must fly at the player, not both beside.
+    let seed = '';
+    for (let i = 0; i < 200 && !seed; i++) if (enemyDefsFor(`twin-${i}`)[EnemyType.Grunt][0]!.volley === 2) seed = `twin-${i}`;
+    expect(seed).not.toBe('');
+    const map = arena({ w: 8, h: 1, things: [[EnemyType.Grunt, 5, 0]] });
+    map.meta.seed = seed;
+    const { state, step } = sim(map);
+    for (let t = 0; t < 400 && !state.projectiles.length; t++) step({});
+    expect(state.projectiles).toHaveLength(2);
+    // The player is straight west along the row: a bolt at the aim has no sideways speed.
+    expect(Math.min(...state.projectiles.map((q) => Math.abs(q.vy)))).toBeLessThan(1e-9);
+  });
+
   it('flankers go round the other way', () => {
     // A ring corridor (x 0–6, y 0–4) round a solid middle. The player stands at the top middle
     // facing south; a brute at (4, 0) has a shorter way round to the right. Things before it in a

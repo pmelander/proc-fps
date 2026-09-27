@@ -348,7 +348,9 @@ function attack(world: World, state: SimState, e: EnemyState, def: EnemyDef, ind
     if (lineOfSight(world, state, e.x, e.y, p.x, p.y)) hurtPlayer(state, def.damage, { x: e.x, y: e.y });
     return;
   }
-  // Projectiles, aimed where the player is now, fanned for volleys.
+  // Projectiles, aimed where the player is now, fanned for volleys. An even fan is shifted half a
+  // step (to alternating sides, volley by volley) so one projectile always flies at the aim:
+  // a symmetric even fan leaves a gap exactly where the player stands.
   const sx = e.x;
   const sy = e.y;
   const sz = e.z + def.height * EYE;
@@ -357,7 +359,8 @@ function attack(world: World, state: SimState, e: EnemyState, def: EnemyDef, ind
   const az = p.z + AIM_HEIGHT - sz;
   const len = Math.sqrt(ax * ax + ay * ay + az * az) || 1;
   for (let k = 0; k < def.volley; k++) {
-    const a = (k - (def.volley - 1) / 2) * def.spread;
+    const shift = def.volley % 2 === 0 ? (state.tick % 2 === 0 ? 0.5 : -0.5) : 0;
+    const a = (k - (def.volley - 1) / 2 + shift) * def.spread;
     const c = dcos(a);
     const s = dsin(a);
     const dx = (ax * c - ay * s) / len;
