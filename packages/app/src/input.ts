@@ -18,7 +18,8 @@ export class InputSampler {
   private pendingTurn = 0;
   private pendingLook = 0;
   private fire = false;
-  private melee = false;
+  /** The right button: the grenade. */
+  private throwing = false;
   /** A weapon asked for since the last tick: a slot (1, 2, …), a step of the wheel, or Q for the last one. */
   private wantSlot = -1;
   private wantStep = 0;
@@ -45,16 +46,16 @@ export class InputSampler {
     });
     addEventListener('mousedown', (e) => {
       if (this.locked && e.button === 0) this.fire = true;
-      if (this.locked && e.button === 2) this.melee = true;
+      if (this.locked && e.button === 2) this.throwing = true;
     });
     addEventListener('mouseup', (e) => {
       if (e.button === 0) this.fire = false;
-      if (e.button === 2) this.melee = false;
+      if (e.button === 2) this.throwing = false;
     });
     addEventListener('wheel', (e) => {
       if (this.locked && e.deltaY !== 0) this.wantStep += e.deltaY > 0 ? 1 : -1;
     });
-    // The right button swings the chainsword: no context menu while playing.
+    // The right button lobs a grenade: no context menu while playing.
     addEventListener('contextmenu', (e) => {
       if (this.locked) e.preventDefault();
     });
@@ -89,11 +90,12 @@ export class InputSampler {
       look: 0,
       run: this.keys.has('ShiftLeft') || this.keys.has('ShiftRight'),
       fire: this.fire,
-      // Space opens key doors and secret walls; E lobs a grenade.
-      use: this.keys.has('Space'),
-      grenade: this.keys.has('KeyE'),
+      // E (or Space) opens key doors and secret walls; the right button lobs a grenade.
+      use: this.keys.has('KeyE') || this.keys.has('Space'),
+      grenade: this.throwing,
       reload: this.keys.has('KeyR'),
-      melee: this.melee || this.keys.has('KeyV'),
+      // The chainsword has no key of its own: firing with an enemy in reach swings it (sim).
+      melee: false,
       weapon: this.wantSlot >= 0 && this.wantSlot < weapons ? this.wantSlot
         : this.wantStep !== 0 ? (((weapon + this.wantStep) % weapons) + weapons) % weapons
         : this.wantLast ? this.lastWeapon

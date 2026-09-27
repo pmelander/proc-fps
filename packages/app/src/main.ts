@@ -850,7 +850,7 @@ function main(): void {
     launcher.update(now);
     if (p.grenades !== shownGrenades) {
       shownGrenades = p.grenades;
-      ammoGrenades.innerHTML = `<span class="label">E grenades</span>` + Array.from({ length: GRENADE.max }, (_, i) => `<span class="nade${i < p.grenades ? ' full' : ''}"></span>`).join('');
+      ammoGrenades.innerHTML = `<span class="label">Grenades</span>` + Array.from({ length: GRENADE.max }, (_, i) => `<span class="nade${i < p.grenades ? ' full' : ''}"></span>`).join('');
     }
     screenBlood.update(dt);
 
@@ -926,7 +926,7 @@ function main(): void {
     compassLetter.textContent = HEADING_LETTERS[p.heading];
 
     const want = doorPrompt(world, state);
-    const promptHtml = !want ? '' : want.kind === 'use' ? '<span class="keycap">Space</span>' : KEY_ICON(KEY_COLORS[want.key]!);
+    const promptHtml = !want ? '' : want.kind === 'use' ? '<span class="keycap">E</span>' : KEY_ICON(KEY_COLORS[want.key]!);
     if (promptHtml !== shownPrompt) {
       prompt.innerHTML = shownPrompt = promptHtml;
       prompt.hidden = !promptHtml;
