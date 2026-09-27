@@ -80,9 +80,13 @@ const CORNERS = [
   [-0.5, 0], [0.5, 1], [-0.5, 1],
 ] as const;
 
-/** Two triangles per sprite, facing a camera with this yaw (map radians). Pure: runs in Node for tests. */
-export function buildSpriteVertices(sprites: readonly Sprite[], yaw: number): Float32Array {
-  const out = new Float32Array(sprites.length * CORNERS.length * SPRITE_FLOATS_PER_VERTEX);
+/**
+ * Two triangles per sprite, facing a camera with this yaw (map radians). Writes into `scratch` when
+ * it is big enough (no allocation per frame) and returns the part used. Pure: runs in Node for tests.
+ */
+export function buildSpriteVertices(sprites: readonly Sprite[], yaw: number, scratch?: Float32Array): Float32Array {
+  const need = sprites.length * CORNERS.length * SPRITE_FLOATS_PER_VERTEX;
+  const out = scratch && scratch.length >= need ? scratch.subarray(0, need) : new Float32Array(need);
   // Camera right in map space is the view direction turned 90° clockwise.
   const rx = Math.sin(yaw);
   const ry = -Math.cos(yaw);

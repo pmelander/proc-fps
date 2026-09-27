@@ -40,6 +40,21 @@ canvas[hidden] {
   text-shadow: 1px 1px 0 #000;
   pointer-events: none;
 }
+/* F3 perf overlay (main.ts). */
+#perf {
+  position: fixed;
+  top: 70px;
+  left: 10px;
+  margin: 0;
+  padding: 6px 8px;
+  font: 12px/1.35 ui-monospace, monospace;
+  color: #9fe8ff;
+  background: rgb(0 0 0 / 0.55);
+  pointer-events: none;
+}
+#perf[hidden] {
+  display: none;
+}
 #start {
   position: fixed;
   inset: 0;

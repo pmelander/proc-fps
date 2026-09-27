@@ -85,13 +85,18 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 
 **Verified:**
 - The typecheck is clean.
-- 105 tests pass.
+- 108 tests pass.
 - 2000 seeds produce 0 validation failures (about 12 ms per map including validation).
 - The production build succeeds (about 45 kB JS).
 - Headless Chromium (SwiftShader) renders correctly.
 
 **Not yet verified:** real mouse and keyboard play. Pointer lock can't run headless.
 
+- Rendering performance (M14):
+  - The biggest cost was the palette post pass: it matched 64 colours per pixel at full screen resolution times the device pixel ratio. Its dither is per scene pixel, so quantizing at the scene's 240 rows gives the same image: the canvas now holds exactly the low-res scene and CSS scales it up pixelated (`image-rendering: pixelated`), about 20× less fill at 1080p and 80× on a high-DPI screen.
+  - Portal culling (`visibility.ts`, `PortalGraph`): from the camera's sector the view floods through two-sided lines, each narrowing the horizontal angle window, with sectors within 24 units of the camera rooted too (standing on a portal mid-step). Heights and door states are ignored, so it is conservative. On generated levels it keeps about 7% of sectors and 7–10% of triangles, in 7–16 µs a frame. The visible sectors' index ranges are merged where contiguous and drawn in one call (`DrawCall.ranges`). A test casts rays across the field of view from random poses in generated levels: every sector a ray passes through must be kept.
+  - Sprite quads (gore can be over a thousand) are written into one reused buffer instead of a new array each frame.
+  - F3 shows frame time, update and render CPU time, sectors and triangles drawn, ranges, sprites and the canvas size; F4 toggles culling for comparison.
 - A heavier shot and its debris (after M12): the shot sound is a low zap, a crack, a long blast, a distorted boom and a sub-bass thump, played a little lower or higher each time. Each shot throws a tracer spark along every pellet (the sim's fixed spread, traced in the app with `castRay`), and where a pellet strikes a wall or floor a burst of white-hot sparks and stone chips that bounce and settle (new `Spark` and `Chip` sprites; pellets that hit an enemy make blood instead).
 - Fixed: stepping off a raised lift towards a lower cell (the wall above a corridor's opening) walked through the wall and fell a storey. The grid lets a lift stand at whichever end suits a step; the sim now also requires the opening at the lift's real height.
 - Enemy variety (after M12):
@@ -174,9 +179,9 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 
 ## Known gaps (roughly in priority order)
 
-1. **Portal culling.** The mesh is already grouped per sector (`LevelRenderer.sectorRanges`), but everything is drawn in one call.
-2. **Back-face culling** is off. Walls are single quads owned by the visible side.
-3. **Sector lookup** (`SectorLocator`) is O(lines). That's fine now; use the grid or a BSP later.
+1. **Back-face culling** is off. Walls are single quads owned by the visible side. Levels are about 1,000 triangles and culling draws about a tenth of them, so this is worth little now.
+2. **Sector lookup** (`SectorLocator`) is O(lines). That's fine now (the camera's sector is found once a frame); use the grid or a BSP later.
+3. **GPU timing** is not measured: the perf overlay shows CPU time only (timer queries are off by default in Firefox).
 4. **Pinch points:** `chainLoops` doesn't support loops touching at a single vertex, so generators must avoid them. `emitCellPlan` detects them and throws, naming the vertex.
 5. **Middle textures on two-sided lines** (grates, windows) need alpha. Not implemented.
 6. **Sub-cell decorative geometry** needs a Decorative line flag and renderer-only handling.
@@ -201,6 +206,11 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 - **M9 — weapon redesign and bridges:** ✅ complete (generator v0.13.0). A futuristic energy scattergun seen correctly over the barrel, and catwalks carrying corridors between storeys across lower rooms.
 - **M10 — play-test polish:** ✅ complete (generator v0.14.0). Lifts stop after each trip, blast doors, a filled automap, and held keys on the HUD.
 - **M12 — level types and verticality:** ✅ complete (generator v0.15.0). Compound, ascent and descent levels paced through a run; 3–5 storeys; one-way drops kept only where they cannot strand the player; atriums; validation over (cell, keys held) states.
+- **M13 — play-test polish II:** ✅ complete (generator v0.16.0). An 8-shot magazine with reload, the ammo panel and a top-centre health bar; a heavier, slower tempo; damage direction glows; the left-hand chainsword with invulnerability frames; much more gore (pools, wall and screen splatter); two enemy variants per role with leg types and glowing markings; a heavier shot with tracers and impact debris; the raised-lift clipping fix.
+- **M14 — rendering performance:** ✅ complete. The palette post pass now runs at the scene's low resolution (the canvas holds 240 rows and CSS scales it up pixelated; same image, a twentieth of the fill at 1080p), portal culling draws only the sectors the camera can see (about 7% of a level's sectors), visible ranges draw in one call, sprite quads reuse one buffer, and F3 shows a perf overlay (F4 toggles culling).
+- **M15 — more weapons:** planned. A second gun type (a heavy bolter or a plasma weapon) with its own feel, ammo display and view model, and weapon switching.
+- **M16 — enemy behaviour:** planned. Enemies that ride lifts and follow the player between storeys, snipers placed on catwalks and ledges, flanking.
+- **M17 — run structure:** planned. A title screen, a run summary, score and kills tracked across a run, difficulty options.
 - **M11 — procedural enemies:** ✅ complete. Every generated level breeds its own mutants: seeded stat variants per role (core `enemyDefsFor`) and seeded body plans and skins that stand out from the theme (render `enemyLooks`). The exit gets a glowing pad, a light beacon and a hum.
 
 ## Doors (decided)

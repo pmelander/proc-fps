@@ -87,6 +87,8 @@ export interface DrawCall {
   /** First index (indexed) or first vertex (non-indexed). */
   first: number;
   count: number;
+  /** Indexed only: draw these index ranges instead of first/count, under one state setup (visible sectors). */
+  ranges?: readonly { readonly first: number; readonly count: number }[];
   uniforms?: Readonly<Record<string, UniformValue>>;
   textures?: Readonly<Record<string, TextureHandle>>;
 }

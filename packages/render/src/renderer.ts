@@ -22,7 +22,19 @@ import {
 } from './shaders.js';
 import { themeUniforms } from './themes.js';
 import { BASELINE_LOOKS, lookUniforms, type EnemyLook } from './bestiary.js';
-import { SPRITE_LAYOUT, buildSpriteVertices, type Sprite } from './sprites.js';
+import { SPRITE_FLOATS_PER_VERTEX, SPRITE_LAYOUT, buildSpriteVertices, type Sprite } from './sprites.js';
+import { PortalGraph } from './visibility.js';
+
+/** What the last frame drew (for the perf overlay). */
+export interface RenderStats {
+  sectors: number;
+  totalSectors: number;
+  /** Index ranges drawn (visible sectors merged where they are contiguous). */
+  ranges: number;
+  triangles: number;
+  totalTriangles: number;
+  sprites: number;
+}
 
 export interface Camera {
   /** Map-space position. */
@@ -46,10 +58,8 @@ const DEFAULTS: RendererOptions = { lowResHeight: 240, fovY: (74 * Math.PI) / 18
 
 /**
  * Draws a level: scene into a low-res target, then a palette-quantizing
- * post pass upscaled with nearest filtering.
- *
- * TODO(M1+): portal culling — flood visible sectors through two-sided lines
- * clipped to the view frustum and draw only their `sectorRanges`.
+ * post pass upscaled with nearest filtering. Only the sectors the camera can see through open
+ * portals are drawn (visibility.ts), their index ranges merged where contiguous.
  */
 export class LevelRenderer {
   private readonly opts: RendererOptions;
@@ -69,6 +79,12 @@ export class LevelRenderer {
   private ib: BufferHandle | null = null;
   private indexCount = 0;
   sectorRanges: SectorRange[] = [];
+  private portals: PortalGraph | null = null;
+  /** Reused every frame for the sprite quads (hundreds of gore particles), so nothing is allocated. */
+  private spriteScratch = new Float32Array(0);
+  /** Portal culling on (the default); off draws every sector, for comparison. */
+  culling = true;
+  stats: RenderStats = { sectors: 0, totalSectors: 0, ranges: 0, triangles: 0, totalTriangles: 0, sprites: 0 };
   /** Muzzle-flash light, 0–1, set by the app each frame. */
   flash = 0;
   /** Per-mover offsets for this frame (door ids, then key pickups); see `mesh.ts`. */
@@ -130,6 +146,7 @@ export class LevelRenderer {
     this.ib = this.backend.createIndexBuffer(mesh.indices);
     this.indexCount = mesh.indices.length;
     this.sectorRanges = mesh.sectors;
+    this.portals = new PortalGraph(map);
     this.bakeAtlas(map);
   }
 
@@ -172,6 +189,11 @@ export class LevelRenderer {
     this.backend.endPass();
   }
 
+  /** Rows the scene is drawn (and palette-quantized) at; the canvas needs no more than this. */
+  get lowResHeight(): number {
+    return this.opts.lowResHeight;
+  }
+
   /** Call after the canvas size changes. */
   resize(): void {
     const h = this.opts.lowResHeight;
@@ -191,12 +213,29 @@ export class LevelRenderer {
 
     be.beginPass({ target, clearColor: [0, 0, 0, 1], clearDepth: true });
     if (this.vb && this.ib) {
+      // The visible sectors' index ranges, merged where one follows on from the last.
+      const halfFov = Math.atan(Math.tan(this.opts.fovY / 2) * (target.width / target.height)) + 0.05;
+      const visible = this.culling && this.portals ? this.portals.visible(cam.x, cam.y, cam.yaw, halfFov) : null;
+      const ranges: SectorRange[] = [];
+      let sectors = 0;
+      let indices = 0;
+      this.sectorRanges.forEach((r, s) => {
+        if (visible && !visible[s]) return;
+        sectors++;
+        if (!r.count) return;
+        indices += r.count;
+        const last = ranges[ranges.length - 1];
+        if (last && last.first + last.count === r.first) last.count += r.count;
+        else ranges.push({ first: r.first, count: r.count });
+      });
+      this.stats = { sectors, totalSectors: this.sectorRanges.length, ranges: ranges.length, triangles: indices / 3, totalTriangles: this.indexCount / 3, sprites: sprites.length };
       be.draw({
         pipeline: this.levelPipeline,
         vertices: this.vb,
         indices: this.ib,
         first: 0,
         count: this.indexCount,
+        ranges,
         uniforms: {
           uViewProj: mat4Mul(proj, view),
           uEye: new Float32Array([cam.x, cam.eyeZ, -cam.y]),
@@ -208,7 +247,9 @@ export class LevelRenderer {
       });
     }
     if (sprites.length) {
-      be.updateVertexBuffer(this.spriteBuffer, buildSpriteVertices(sprites, cam.yaw));
+      const need = sprites.length * 6 * SPRITE_FLOATS_PER_VERTEX;
+      if (this.spriteScratch.length < need) this.spriteScratch = new Float32Array(Math.ceil(need * 1.5));
+      be.updateVertexBuffer(this.spriteBuffer, buildSpriteVertices(sprites, cam.yaw, this.spriteScratch));
       be.draw({
         pipeline: this.spritePipeline,
         vertices: this.spriteBuffer,

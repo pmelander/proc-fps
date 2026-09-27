@@ -327,6 +327,10 @@ function main(): void {
   let joltUntil = 0;
   const hurtFlash = document.getElementById('hurt') as HTMLDivElement;
   const damageLayer = document.getElementById('damage') as HTMLDivElement;
+  // F3: frame timings and what the renderer drew, averaged over the last second or so.
+  const perf = document.getElementById('perf') as HTMLPreElement;
+  const timing = { frame: 0, sim: 0, render: 0 };
+  const smooth = (prev: number, x: number) => prev * 0.95 + x * 0.05;
   const end = document.getElementById('end') as HTMLDivElement;
   let hurtUntil = 0;
   let notice = '';
@@ -389,6 +393,14 @@ function main(): void {
     if (e.code === 'KeyM') audio.toggleMusic();
     if (e.code === 'KeyN') audio.toggleSound();
     if (e.code === 'F2') newRun();
+    if (e.code === 'F4') {
+      e.preventDefault();
+      renderer.culling = !renderer.culling;
+    }
+    if (e.code === 'F3') {
+      e.preventDefault();
+      perf.hidden = !perf.hidden;
+    }
     if (e.code === 'F8') downloadJSON(`replay-${map.meta.seed ?? map.meta.name}-${state.tick}.json`, recorder.finish());
   });
   // The automap shows only while Tab is held.
@@ -397,9 +409,12 @@ function main(): void {
   });
   addEventListener('blur', () => (automap.hidden = true));
 
+  // The scene is drawn and palette-quantized at low resolution (the dither is per scene pixel), so
+  // the canvas holds exactly that and CSS scales it up pixelated: the same image as quantizing at
+  // screen resolution, for a fraction of the work (the post pass matches 64 colours per pixel).
   const resize = () => {
-    const dpr = Math.min(devicePixelRatio || 1, 2);
-    backend.resize(Math.round(canvas.clientWidth * dpr), Math.round(canvas.clientHeight * dpr));
+    const h = renderer.lowResHeight;
+    backend.resize(Math.max(1, Math.round((h * canvas.clientWidth) / Math.max(1, canvas.clientHeight))), h);
     renderer.resize();
   };
   addEventListener('resize', resize);
@@ -416,6 +431,7 @@ function main(): void {
     fps = fps * 0.95 + (dt > 0 ? 1 / dt : 0) * 0.05;
 
     acc += dt;
+    const simStart = performance.now();
     // The world runs only while the game has the mouse (Esc pauses), so nothing happens on the
     // start screen and every simulated tick is in the replay. `&autoplay` (dev) runs it anyway.
     if (!input.locked && !AUTOPLAY) acc = 0;
@@ -550,7 +566,18 @@ function main(): void {
     gore.update(dt, goreWorld);
     renderer.flash = Math.max(0, renderer.flash - dt * 12);
     canvas.style.transform = now < joltUntil ? `translate(${(Math.random() - 0.5) * 10}px, ${(Math.random() - 0.5) * 8}px)` : '';
+    timing.sim = smooth(timing.sim, performance.now() - simStart);
+    const renderStart = performance.now();
     renderer.render(view, now, [...buildSprites(world, state, prevEnemies, t, view, spawnAngles, throws, now), ...gore.sprites(goreWorld)]);
+    timing.render = smooth(timing.render, performance.now() - renderStart);
+    timing.frame = smooth(timing.frame, dt * 1000);
+    if (!perf.hidden) {
+      const s = renderer.stats;
+      perf.textContent =
+        `frame ${timing.frame.toFixed(1)} ms (${(1000 / Math.max(1, timing.frame)).toFixed(0)} fps)  update ${timing.sim.toFixed(2)} ms  render ${timing.render.toFixed(2)} ms\n` +
+        `sectors ${s.sectors}/${s.totalSectors}  triangles ${s.triangles}/${s.totalTriangles}  ranges ${s.ranges}  sprites ${s.sprites}\n` +
+        `canvas ${canvas.width}×${canvas.height}  culling ${renderer.culling ? 'on' : 'off'} (F4)`;
+    }
     weapon.update(now, dt, state.player.stepTick / STEP_TICKS, p.mag / MAG_SIZE);
     chainsword.update(now);
     screenBlood.update(dt);

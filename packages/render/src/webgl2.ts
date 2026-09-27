@@ -217,7 +217,8 @@ export class WebGL2Backend implements RenderBackend {
     }
     for (const [name, value] of Object.entries(call.uniforms ?? {})) this.setUniform(p, name, value);
 
-    if (call.indices) gl.drawElements(gl.TRIANGLES, call.count, gl.UNSIGNED_INT, call.first * 4);
+    if (call.indices && call.ranges) for (const r of call.ranges) gl.drawElements(gl.TRIANGLES, r.count, gl.UNSIGNED_INT, r.first * 4);
+    else if (call.indices) gl.drawElements(gl.TRIANGLES, call.count, gl.UNSIGNED_INT, call.first * 4);
     else gl.drawArrays(gl.TRIANGLES, call.first, call.count);
     gl.bindVertexArray(null);
   }
