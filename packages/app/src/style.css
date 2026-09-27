@@ -221,6 +221,26 @@ canvas[hidden] {
 #ammo.empty .count b {
   color: #ff5a4a;
 }
+/* Damage direction (main.ts): a red glow on the screen edge each hit came from, fading out. */
+#damage {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+#damage .hit {
+  position: absolute;
+  inset: 0;
+  animation: damage-fade 0.9s ease-out forwards;
+}
+@keyframes damage-fade {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
 /* Keys held (main.ts): a row of key icons, bottom left. */
 #keys {
   position: fixed;

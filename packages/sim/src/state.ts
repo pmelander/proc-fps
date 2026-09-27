@@ -116,7 +116,8 @@ export type SimEvent =
   /** A reload started (the cell ran dry, or R), and finished. */
   | { type: 'reload' }
   | { type: 'reloaded' }
-  | { type: 'hurt'; amount: number }
+  /** The player took damage; `from` is where it came from (none for a hazard floor). */
+  | { type: 'hurt'; amount: number; from?: { x: number; y: number } }
   | { type: 'hit'; enemy: number }
   /** An automatic melee strike landed. */
   | { type: 'melee'; enemy: number }

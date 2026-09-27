@@ -224,12 +224,12 @@ function attack(world: World, state: SimState, e: EnemyState, def: EnemyDef, ind
   state.events.push({ type: 'attack', enemy: index });
   if (def.attack === 'melee') {
     // Lands only if the player is still next to it: stepping away during the wind-up dodges.
-    if (adjacent(e, p.cx, p.cy) && Math.abs(p.z - e.z) <= MAX_STEP * 2) hurtPlayer(state, def.damage);
+    if (adjacent(e, p.cx, p.cy) && Math.abs(p.z - e.z) <= MAX_STEP * 2) hurtPlayer(state, def.damage, { x: e.x, y: e.y });
     return;
   }
   if (def.attack === 'hitscan') {
     // Breaking line of sight during the wind-up dodges.
-    if (lineOfSight(world, state, e.x, e.y, p.x, p.y)) hurtPlayer(state, def.damage);
+    if (lineOfSight(world, state, e.x, e.y, p.x, p.y)) hurtPlayer(state, def.damage, { x: e.x, y: e.y });
     return;
   }
   // Projectiles, aimed where the player is now, fanned for volleys.

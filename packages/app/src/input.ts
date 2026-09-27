@@ -1,13 +1,22 @@
 import { EMPTY_INPUT, type InputFrame } from '@proc-fps/sim';
 
-const MOUSE_SENSITIVITY = 0.0025; // rad per pixel
-const KEY_TURN = 0.045; // rad per tick
+const MOUSE_SENSITIVITY = 0.0019; // rad per pixel
+const KEY_TURN = 0.035; // rad per tick
+/**
+ * Heavy armour turns at most this fast (rad per tick: about 275°/s and 170°/s). A faster flick
+ * is not lost, only spread over the next ticks, so the aim still lands where the mouse went.
+ */
+const MAX_TURN = 0.08;
+const MAX_LOOK = 0.05;
 
 /** DOM → InputFrame. The only place that knows about keyboards and mice. */
 export class InputSampler {
   private readonly keys = new Set<string>();
   private mouseDX = 0;
   private mouseDY = 0;
+  /** Look the mouse asked for that the turn cap has not applied yet (radians). */
+  private pendingTurn = 0;
+  private pendingLook = 0;
   private fire = false;
 
   constructor(private readonly element: HTMLElement) {
@@ -36,18 +45,27 @@ export class InputSampler {
 
   /** Consumes accumulated mouse motion; call once per sim tick. */
   sample(): InputFrame {
-    if (!this.locked) return { ...EMPTY_INPUT };
+    if (!this.locked) {
+      this.pendingTurn = this.pendingLook = 0;
+      return { ...EMPTY_INPUT };
+    }
     const k = (code: string) => (this.keys.has(code) ? 1 : 0);
     const frame: InputFrame = {
       move: k('KeyW') + k('ArrowUp') - k('KeyS') - k('ArrowDown'),
       strafe: k('KeyD') - k('KeyA'),
-      turn: -this.mouseDX * MOUSE_SENSITIVITY + (k('ArrowLeft') - k('ArrowRight')) * KEY_TURN,
-      look: -this.mouseDY * MOUSE_SENSITIVITY,
+      turn: 0,
+      look: 0,
       run: this.keys.has('ShiftLeft') || this.keys.has('ShiftRight'),
       fire: this.fire,
       use: this.keys.has('KeyE') || this.keys.has('Space'),
       reload: this.keys.has('KeyR'),
     };
+    this.pendingTurn += -this.mouseDX * MOUSE_SENSITIVITY + (k('ArrowLeft') - k('ArrowRight')) * KEY_TURN;
+    this.pendingLook += -this.mouseDY * MOUSE_SENSITIVITY;
+    frame.turn = Math.max(-MAX_TURN, Math.min(MAX_TURN, this.pendingTurn));
+    frame.look = Math.max(-MAX_LOOK, Math.min(MAX_LOOK, this.pendingLook));
+    this.pendingTurn -= frame.turn;
+    this.pendingLook -= frame.look;
     this.mouseDX = 0;
     this.mouseDY = 0;
     return frame;

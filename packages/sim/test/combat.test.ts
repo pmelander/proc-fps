@@ -198,6 +198,24 @@ describe('enemies', () => {
   });
 });
 
+describe('damage direction', () => {
+  it('hurt events say where the hit came from: a brute in melee, a grunt bolt', () => {
+    for (const [type, x] of [[EnemyType.Brute, 1], [EnemyType.Grunt, 6]] as const) {
+      const { state, step } = sim(arena({ w: 8, h: 1, things: [[type, x, 0]] }));
+      let from: { x: number; y: number } | undefined;
+      for (let t = 0; t < 600 && !from; t++) {
+        step({});
+        const hurt = state.events.find((e) => e.type === 'hurt');
+        if (hurt?.type === 'hurt') from = hurt.from;
+      }
+      // The enemy stands east of the player (who faces east): the hit comes from ahead.
+      expect(from).toBeDefined();
+      expect(from!.x).toBeGreaterThan(state.player.x);
+      expect(Math.abs(from!.y - state.player.y)).toBeLessThan(C);
+    }
+  });
+});
+
 describe('health, death and the exit', () => {
   it('picks up health only when hurt, capped at the maximum', () => {
     const { state, step } = sim(arena({ w: 4, h: 1, things: [[ThingType.Health, 1, 0]] }));

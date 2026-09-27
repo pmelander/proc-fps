@@ -18,7 +18,7 @@ import { Rng } from './rng.js';
 /** Projectiles never cross a cell in less than this many ticks: a sidestep always beats them. */
 export const MIN_PROJECTILE_CELL_TICKS = STEP_TICKS + 6;
 /** A hitscan wind-up is never shorter than this: the telegraph must stay readable. */
-export const MIN_HITSCAN_WINDUP = 50;
+export const MIN_HITSCAN_WINDUP = 58;
 /** An ordinary enemy never has more hit points than this: one close blast (8 × 12) still kills. */
 export const MAX_FODDER_HP = 60;
 

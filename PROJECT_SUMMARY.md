@@ -65,7 +65,7 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 
 - Yaw and pitch are continuous and never affect position. Pitch is clamped to ±1.3 rad.
 - The movement heading is the yaw snapped to a cardinal. It switches only past 45° + `HEADING_HYSTERESIS` (0.14 rad).
-- A step lasts `STEP_TICKS` = 14 ticks (about 230 ms) with a smoothstep ease, which works out to roughly 550 u/s, about Doom walking speed.
+- A step lasts `STEP_TICKS` = 18 ticks (300 ms) with a smoothstep ease, about 430 u/s: a lumbering armoured pace (it was 14 ticks, Doom's walk, until play-testing asked for more time to react).
 - Holding a key repeats steps seamlessly.
 - A press during a step is buffered one deep, and its direction is resolved at press time.
 - With both axes held, the most recently pressed one wins. Movement is 4-way only.
@@ -85,13 +85,17 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 
 **Verified:**
 - The typecheck is clean.
-- 99 tests pass.
+- 100 tests pass.
 - 2000 seeds produce 0 validation failures (about 12 ms per map including validation).
 - The production build succeeds (about 45 kB JS).
 - Headless Chromium (SwiftShader) renders correctly.
 
 **Not yet verified:** real mouse and keyboard play. Pointer lock can't run headless.
 
+- Tempo and damage direction (after M12):
+  - A heavier, slower pace: player steps of 18 ticks (was 14). Enemies slowed with it (step timers about 25% longer, wind-ups about 15% longer, projectiles 20% slower, the hitscan wind-up floor 58), so the tuning rules still hold: enemies are slower than the player and a sidestep dodges any projectile.
+  - Heavier mouse look: lower sensitivity (0.0019 rad/px) and a turn-rate cap in the input sampler (0.08 rad/tick turning, 0.05 looking). A faster flick is spread over the next ticks, not lost, so the aim lands where the mouse went; replays record the capped turn.
+  - Damage direction: `hurt` events carry `from` (the enemy for melee and hitscan, back along a projectile's flight; none for hazard floors), and the HUD glows red on the screen edge it came from (ahead is the top, behind the bottom), fading over 0.9 s.
 - Gun play: a magazine (after M12):
   - Ammo stays infinite, but the scattergun's cell holds `MAG_SIZE` (8) shots. The eighth starts a `RELOAD_TICKS` (78, 1.3 s) reload; R reloads early (a new `reload` input, so replays hold; older replays read it as false). Nothing fires during a reload, but the automatic melee strike still does. The sim emits `reload` and `reloaded`.
   - The gun's side cell shows the rounds left; a reload dips and rolls the gun while the cell refills, with an eject-and-charge sound and a double click when ready.
@@ -206,7 +210,7 @@ In the map format a door is a one-cell sector with its kind in `Sector.special` 
 
 ## Open design questions
 
-- **Step feel.** The default is 230 ms. Around 150 ms is snappier, and changing it is one constant.
+- **Step feel.** Now 300 ms (it was 230 ms). Changing it is one constant, but enemy step timers, wind-ups and projectile speeds are tuned with it.
 - **Run key:** a faster step, or remove it.
 - **Diagonal-facing move feel.** The compass helps; consider whether 8-way is ever wanted. The current answer is no.
 
@@ -214,6 +218,6 @@ In the map format a door is a one-cell sector with its kind in `Sector.special` 
 
 Ideas noted during play-testing, not yet scheduled. Each line points at whatever already exists for it.
 
-- **Heavier, slower tempo.** The player is a lumbering beast in heavy armour (think Space Marine), and the game currently feels too fast. Slow all movement down a bit, mouse look included, so there is more time to react when overwhelmed. Levers: `STEP_TICKS` (tuned together with enemy step timers and projectile speeds, see invariant 7), the turn rate and mouse sensitivity in `app/src/input.ts`, and perhaps a cap on turn speed per tick in the sim.
-- **Damage direction indicators.** When hit, a red glow on the screen edge the damage came from (left, right, behind, ahead). Needs the source position on the `hurt` event (enemy, projectile or hitscan origin; none for hazards) and a HUD overlay in the app.
+- **Revisit procedural enemies.** Play-testing says the mutants need more variety, a more varied colour scheme, or both. Today (M11) each level breeds five silhouettes with seeded parts and hues kept away from the theme; more variety could mean more than one variant per role in a level, new body plans beyond the five silhouettes, wider palettes (two-tone, markings, saturation and value ranges), or per-room variants.
+- **Melee feel.** The automatic melee strike exists (M7: fire with an enemy within MELEE_REACH and 45° of the aim, 60 damage, works mid-reload) but reads as missing in play. Options: strike on its own when an enemy closes in, a dedicated melee key, a stronger visual (the gun swing, a fist, knock-back) and sound.
 

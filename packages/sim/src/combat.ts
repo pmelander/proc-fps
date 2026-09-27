@@ -25,11 +25,12 @@ const PROJECTILE_RADIUS = 6;
 /** Projectiles expire after this many ticks, hit or not. */
 const PROJECTILE_TTL = 600;
 
-export function hurtPlayer(state: SimState, amount: number): void {
+/** Damages the player; `from` (map units) is where the hit came from, for the HUD's direction glow. */
+export function hurtPlayer(state: SimState, amount: number, from?: { x: number; y: number }): void {
   if (state.dead) return;
   const p = state.player;
   p.health = Math.max(0, p.health - amount);
-  state.events.push({ type: 'hurt', amount });
+  state.events.push(from ? { type: 'hurt', amount, from } : { type: 'hurt', amount });
   if (p.health === 0) {
     state.dead = true;
     state.events.push({ type: 'death' });
@@ -153,7 +154,8 @@ export function stepProjectiles(world: World, state: SimState): void {
     const dy = q.y - p.y;
     const reach = PLAYER_RADIUS + PROJECTILE_RADIUS;
     if (dx * dx + dy * dy < reach * reach && q.z >= p.z && q.z <= p.z + PLAYER_HEIGHT) {
-      hurtPlayer(state, q.damage);
+      // It came from back along its flight.
+      hurtPlayer(state, q.damage, { x: q.x - q.vx * 16, y: q.y - q.vy * 16 });
       return false;
     }
     const [cx, cy] = g.cellOf(q.x, q.y);

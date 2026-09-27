@@ -51,10 +51,11 @@ export const TICK_DT = 1 / TICK_RATE;
 /**
  * Grid movement. All level geometry is axis-aligned and snapped to CELL_SIZE;
  * the player moves one cell per step. Speed = CELL_SIZE / (STEP_TICKS · TICK_DT)
- * ≈ 550 units/s at 128 / 14 — roughly Doom walking speed.
- * These three are tuned together with enemy step timers and projectile speeds.
+ * ≈ 430 units/s at 128 / 18: a lumbering, armoured pace (it was 14, Doom's walk, and felt
+ * too quick to react to a horde). These three are tuned together with enemy step timers,
+ * wind-ups and projectile speeds, which slowed with it.
  */
 export const CELL_SIZE = 128;
-export const STEP_TICKS = 14;
+export const STEP_TICKS = 18;
 /** Extra yaw beyond 45° before the movement heading switches cardinal (radians, ≈ 8°). */
 export const HEADING_HYSTERESIS = 0.14;

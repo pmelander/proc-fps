@@ -35,7 +35,7 @@ npm run ci             # typecheck + tests + generator health + build
 
 - The mouse controls yaw and pitch continuously. They never affect position.
 - The movement heading is the yaw snapped to E, N, W, or S. It switches only past 45° plus `HEADING_HYSTERESIS` (about 8°), so looking near a diagonal doesn't flip W between two directions. The HUD arrow shows where W goes.
-- A step is `STEP_TICKS` (14 ticks, about 230 ms) with a smoothstep ease. Holding a key repeats seamlessly. A press made mid-step is buffered one deep, resolved against the heading at press time.
+- A step is `STEP_TICKS` (18 ticks, 300 ms: an armoured pace) with a smoothstep ease. Holding a key repeats seamlessly. A press made mid-step is buffered one deep, resolved against the heading at press time.
 - With W and D both held, the most recently pressed axis wins. There are no diagonal steps.
 - Steps up of at most `MAX_STEP` follow the ease. Stepping off a ledge falls once past the cell edge, and the next step waits for landing.
 - `CellGrid` (core) is derived from the sector map and is the movement and AI truth. `canStep` is shared by the sim, generator validation, and (later) enemies.

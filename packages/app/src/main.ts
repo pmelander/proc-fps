@@ -241,6 +241,21 @@ function buildSprites(
   return sprites;
 }
 
+/**
+ * A red glow on the screen edge a hit came from: ahead is the top, behind the bottom, left and
+ * right the sides, and anything between leans that way. Each fades out by itself.
+ */
+function showDamageFrom(from: { x: number; y: number }, p: PlayerState, layer: HTMLElement): void {
+  const rel = Math.atan2(from.y - p.y, from.x - p.x) - p.angle; // map angles grow to the left
+  const x = 50 - 56 * Math.sin(rel);
+  const y = 50 - 56 * Math.cos(rel);
+  const hit = document.createElement('div');
+  hit.className = 'hit';
+  hit.style.background = `radial-gradient(ellipse 55% 60% at ${x.toFixed(1)}% ${y.toFixed(1)}%, rgb(255 20 10 / 0.6), rgb(200 0 0 / 0.25) 45%, transparent 70%)`;
+  hit.addEventListener('animationend', () => hit.remove());
+  layer.append(hit);
+}
+
 function main(): void {
   const canvas = document.getElementById('view') as HTMLCanvasElement;
   const automap = document.getElementById('automap') as HTMLCanvasElement;
@@ -263,6 +278,7 @@ function main(): void {
   const throws: Throws = new Map();
   let joltUntil = 0;
   const hurtFlash = document.getElementById('hurt') as HTMLDivElement;
+  const damageLayer = document.getElementById('damage') as HTMLDivElement;
   const end = document.getElementById('end') as HTMLDivElement;
   let hurtUntil = 0;
   let notice = '';
@@ -416,6 +432,7 @@ function main(): void {
         }
         if (e.type === 'reload') weapon.reload(now, RELOAD_TICKS * TICK_DT);
         if (e.type === 'hurt') {
+          if (e.from) showDamageFrom(e.from, state.player, damageLayer);
           hurtUntil = now + FLASH_SECONDS * 2;
           joltUntil = now + JOLT_SECONDS;
         }
