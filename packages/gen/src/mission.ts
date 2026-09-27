@@ -154,6 +154,10 @@ export function generateMission(rng: Rng, shape: MissionShape = DEFAULT_MISSION_
     connect(host, add('secret', nodes[host]!.progress), 'secret');
   }
 
+  // A calm start: at most one open doorway out of the start room; the rest get auto doors.
+  let open = 0;
+  for (const e of edges) if ((e.a === start || e.b === start) && e.door === 'open' && open++ > 0) e.door = 'auto';
+
   return { nodes, edges };
 }
 

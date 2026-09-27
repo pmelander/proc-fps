@@ -30,7 +30,7 @@ import { ATRIUM_LIFT, atriumDesign, designRoom, plainDesign, type RoomDesign } f
  * Bump on ANY change that alters output for an existing seed.
  * seed + GENERATOR_VERSION must always reproduce the same map.
  */
-export const GENERATOR_VERSION = '0.18.0';
+export const GENERATOR_VERSION = '0.19.0';
 
 /** Layout attempts per mission, and missions tried, before giving up on a seed. */
 const LAYOUT_TRIES = 8;
@@ -124,12 +124,18 @@ export function generateDetailed(seed: string, options: GenerateOptions = {}): G
 /**
  * Storey per mission node, from its progress along the critical path: an ascent climbs from the
  * start (storey 0) to the gate, boss and exit at the top; a descent is the same, upside down; a
- * compound stays on one storey. Fewer storeys when a connection would otherwise climb more than
+ * compound stays on one storey. The start and its neighbours share a storey. Fewer storeys when a connection would otherwise climb more than
  * MAX_STOREY_JUMP. Branches share their host's progress, so key and secret connections never
  * change storey.
  */
 function assignStoreys(mission: Mission, rng: Rng, profile: LevelProfile): number[] {
-  const at = (count: number) => mission.nodes.map((n) => Math.round((n.progress ?? 0) * (count - 1)));
+  // The start and every room next to it share the start's storey (nothing arrives at the start by
+  // lift, drop or bridge): progress up to the farthest of its neighbours flattens to 0, and the
+  // climb (or fall) spreads over the rest.
+  const start = mission.nodes.find((n) => n.kind === 'start')!.id;
+  const near = Math.max(0, ...mission.edges.flatMap((e) => (e.a === start ? [e.b] : e.b === start ? [e.a] : [])).map((id) => mission.nodes[id]!.progress ?? 0));
+  const progress = (p: number) => (near >= 1 ? 0 : Math.max(0, (p - near) / (1 - near)));
+  const at = (count: number) => mission.nodes.map((n) => Math.round(progress(n.progress ?? 0) * (count - 1)));
   const steep = (st: number[]) => mission.edges.some((e) => Math.abs(st[e.a]! - st[e.b]!) > MAX_STOREY_JUMP);
   let count = rng.int(profile.storeys[0], profile.storeys[1]);
   let storeys = at(count);

@@ -2,7 +2,7 @@
  * Level types: the overall shape of a level, and how a run paces them.
  *
  * - compound: one storey, wide, with more rooms and loops. Hordes and flanking; the breather.
- * - ascent: start at the bottom, exit at the top, 3–5 storeys climbed by lifts, atriums and
+ * - ascent: start at the bottom, exit at the top, 3–6 storeys climbed by lifts, atriums and
  *   bridges, with the occasional drop back down as a shortcut.
  * - descent: start at the top, exit at the bottom, taken mostly by one-way drops: ledges high in
  *   a room's wall you jump from and cannot climb back to.
@@ -52,11 +52,11 @@ export const LEVEL_PROFILES: Record<LevelType, LevelProfile> = {
     roomSize: [4, 8], dropChance: 0, atriumChance: 0, bridgeChance: 0,
   },
   ascent: {
-    type: 'ascent', storeys: [3, 5], shortArc: [1, 3], approach: [1, 3], retreat: [1, 2], detours: [0, 2], deadEnds: [0, 2],
+    type: 'ascent', storeys: [4, 6], shortArc: [1, 3], approach: [1, 3], retreat: [1, 2], detours: [0, 2], deadEnds: [0, 2],
     roomSize: [3, 7], dropChance: 0.35, atriumChance: 0.6, bridgeChance: 0.5,
   },
   descent: {
-    type: 'descent', storeys: [3, 5], shortArc: [1, 3], approach: [1, 3], retreat: [1, 2], detours: [0, 2], deadEnds: [0, 2],
+    type: 'descent', storeys: [4, 6], shortArc: [1, 3], approach: [1, 3], retreat: [1, 2], detours: [0, 2], deadEnds: [0, 2],
     roomSize: [3, 7], dropChance: 0.85, atriumChance: 0.35, bridgeChance: 0.5,
   },
 };

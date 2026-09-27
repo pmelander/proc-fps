@@ -46,6 +46,19 @@ describe('level types', () => {
   });
 });
 
+describe('the start room', () => {
+  it('has at most one open doorway, and its neighbours share its storey (no lift in)', () => {
+    for (let i = 0; i < 60; i++) {
+      const type = LEVEL_TYPES[i % LEVEL_TYPES.length]!;
+      const g = generateDetailed(`calm-${i}`, { type });
+      const start = g.mission.nodes.find((n) => n.kind === 'start')!.id;
+      const links = g.mission.edges.filter((e) => e.a === start || e.b === start);
+      expect(links.filter((e) => e.door === 'open').length).toBeLessThanOrEqual(1);
+      for (const e of links) expect(g.storeys[e.a === start ? e.b : e.a]).toBe(g.storeys[start]);
+    }
+  });
+});
+
 describe('difficulty', () => {
   it('leaves normal maps exactly as they were, and scales enemies, health and damage', async () => {
     const { createWorld, defOf } = await import('@proc-fps/sim').then(async (m) => ({ ...m, defOf: (await import('@proc-fps/core')).defOf }));
