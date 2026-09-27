@@ -4,7 +4,9 @@ import { LevelRenderer, THEME_COLORS, WebGL2Backend } from '@proc-fps/render';
 import { AudioEngine } from './audio/engine.js';
 import { loadBest, loadRun, runScore } from './run.js';
 import { controlsHtml } from './screens.js';
+import { loadOptions } from './options.js';
 import { Menu } from './ui/menu.js';
+import { OptionsPanel } from './ui/optionspanel.js';
 import { installSkin } from './ui/skin.js';
 
 /**
@@ -49,6 +51,8 @@ export function titleScreen(): void {
 
   // Menu sounds, once a click or a key allows audio (no music here).
   const audio = new AudioEngine(SHOWCASE_SEED);
+  let options = loadOptions();
+  audio.setVolumes(options.music / 10, options.sound / 10);
   const unlock = () => audio.unlock({ music: false });
   addEventListener('pointerdown', unlock, { once: true });
   addEventListener('keydown', unlock, { once: true });
@@ -69,6 +73,7 @@ export function titleScreen(): void {
       : '') +
     `<button type="button" data-item data-adjust data-action="difficulty">Difficulty <span class="value"><i data-dir="-1">◀</i> <b class="diff"></b> <i data-dir="1">▶</i></span></button>` +
     (best.length ? `<button type="button" data-item data-action="best">Hall of the fallen</button>` : '') +
+    `<button type="button" data-item data-action="options">Options</button>` +
     `<button type="button" data-item data-action="controls">Controls</button>` +
     `<button type="button" data-item data-action="browse">Seed browser</button>` +
     `</nav>` +
@@ -78,6 +83,7 @@ export function titleScreen(): void {
       .map((b, i) => `<tr><td>${i + 1}</td><td>${fmt(b.score)}</td><td>${b.levels} level${b.levels === 1 ? '' : 's'}</td><td>${b.kills} kills</td><td>${DIFFICULTY[b.difficulty].label}</td></tr>`)
       .join('')}</table>` +
     `<nav class="menu"><button type="button" data-item data-action="back">Back</button></nav></div>` +
+    `<div class="panel plate" data-panel="options" hidden></div>` +
     `<div class="panel plate" data-panel="controls" hidden>${controlsHtml()}<nav class="menu"><button type="button" data-item data-action="back">Back</button></nav></div>` +
     `<footer>W S or arrows to choose · Enter to pick · generator ${GENERATOR_VERSION}</footer>`;
 
@@ -94,6 +100,7 @@ export function titleScreen(): void {
     difficulty: () => DIFFICULTY_BLURB[difficulty],
     best: () => 'The best runs so far.',
     controls: () => 'How to move, fight and find your way.',
+    options: () => 'Mouse, view, sound and comfort.',
     browse: () => 'Preview the levels seeds make.',
   };
   const setDifficulty = (d: Difficulty) => {
@@ -113,13 +120,19 @@ export function titleScreen(): void {
     panel.menu.close();
     panel.el.hidden = true;
     panel = null;
-    main.hidden = false;
-    hint.hidden = false;
+    title.classList.remove('sub');
   };
   const openPanel = (name: string) => {
     const el = title.querySelector(`[data-panel="${name}"]`) as HTMLElement;
-    main.hidden = true;
-    hint.hidden = true;
+    title.classList.add('sub');
+    if (name === 'options') {
+      const apply = (o: typeof options) => {
+        options = o;
+        audio.setVolumes(o.music / 10, o.sound / 10);
+      };
+      new OptionsPanel(el, options, apply, sound, () => title.classList.remove('sub'));
+      return;
+    }
     el.hidden = false;
     panel = { el, menu: new Menu(el, { choose: closePanel, back: closePanel, sound }) };
   };
@@ -129,7 +142,7 @@ export function titleScreen(): void {
       const action = item.dataset.action;
       if (action === 'new') location.href = runUrl(newRunId(), 1, difficulty);
       if (action === 'continue' && saved) location.href = runUrl(saved.id, saved.levels.length + 1, saved.difficulty);
-      if (action === 'best' || action === 'controls') openPanel(action);
+      if (action === 'best' || action === 'controls' || action === 'options') openPanel(action);
       if (action === 'browse') location.href = './browse.html';
     },
     adjust: (_, dir) => {

@@ -90,6 +90,14 @@ export class LevelRenderer {
   /** Per-mover offsets for this frame (door ids, then key pickups); see `mesh.ts`. */
   readonly movers = new Float32Array(MAX_MOVERS);
 
+  /** The vertical field of view in radians (the player's option). */
+  get fovY(): number {
+    return this.opts.fovY;
+  }
+  set fovY(v: number) {
+    this.opts.fovY = v;
+  }
+
   constructor(private readonly backend: RenderBackend, opts: Partial<RendererOptions> = {}) {
     this.opts = { ...DEFAULTS, ...opts };
     this.levelPipeline = backend.createPipeline({

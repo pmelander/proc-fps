@@ -39,6 +39,8 @@ import { newRunId, runUrl, titleScreen } from './title.js';
 import { endRun, levelScore, loadBest, recordDeath, recordLevel, runFor, runScore, type RunRecord } from './run.js';
 import { endScreen, pauseScreen, summaryScreen, type PauseInfo } from './screens.js';
 import { Menu } from './ui/menu.js';
+import { OptionsPanel } from './ui/optionspanel.js';
+import { loadOptions, type Options } from './options.js';
 import { installSkin } from './ui/skin.js';
 import { tally } from './ui/tally.js';
 import { Bolter } from './bolter.js';
@@ -465,6 +467,16 @@ function main(): void {
   const spawnAngles = map.things.filter((t) => isEnemyThing(t.type)).map((t) => (t.angle * Math.PI) / 180);
 
   const input = new InputSampler(canvas);
+  // The player's options (options.ts), applied now and whenever the options panel changes one.
+  let options = loadOptions();
+  const applyOptions = (o: Options) => {
+    options = o;
+    input.sensitivity = o.sensitivity / 10;
+    input.invertLook = o.invert;
+    renderer.fovY = (o.fov * Math.PI) / 180;
+    audio.setVolumes(o.music / 10, o.sound / 10);
+  };
+  applyOptions(options);
   const menuSound = (kind: 'move' | 'choose' | 'adjust' | 'back') => audio.play(kind === 'move' || kind === 'adjust' ? 'menuMove' : kind === 'back' ? 'menuBack' : 'menuChoose');
   const fight = () => {
     audio.unlock(); // browsers allow audio only after a gesture
@@ -483,16 +495,34 @@ function main(): void {
       if (item.dataset.action === 'resume') fight();
       if (item.dataset.action === 'title') location.href = './index.html';
       if (item.dataset.action === 'browse') location.href = './browse.html';
-      if (item.dataset.action === 'controls') {
-        const panel = start.querySelector<HTMLElement>('[data-panel="controls"]');
-        if (panel) panel.hidden = !panel.hidden;
-      }
+      if (item.dataset.action === 'controls' || item.dataset.action === 'options') openPanel(item.dataset.action);
     },
     sound: menuSound,
     chooseKeys: [],
   });
+  // Options and controls open over the pause screen, which hides the rest until they close.
+  const openPanel = (name: string) => {
+    const el = start.querySelector<HTMLElement>(`[data-panel="${name}"]`);
+    if (!el) return;
+    start.classList.add('sub');
+    const closed = () => {
+      start.classList.remove('sub');
+      pauseMenu.refresh();
+    };
+    if (name === 'options') {
+      new OptionsPanel(el, options, applyOptions, menuSound, closed);
+      return;
+    }
+    el.hidden = false;
+    const close = () => {
+      menu.close();
+      el.hidden = true;
+      closed();
+    };
+    const menu = new Menu(el, { choose: close, back: close, sound: menuSound });
+  };
   start.addEventListener('click', (e) => {
-    if (!(e.target as HTMLElement).closest('[data-item]')) fight();
+    if (!(e.target as HTMLElement).closest('[data-item], .panel')) fight();
   });
   // The pause screen shows whenever the mouse is free, except over the end-of-level screen.
   document.addEventListener('pointerlockchange', () => {
@@ -774,7 +804,7 @@ function main(): void {
     const view = {
       x: lerp(prev.x, p.x, t),
       y: lerp(prev.y, p.y, t),
-      eyeZ: lerp(prev.z + bob(prev), p.z + bob(p), t) + PLAYER_EYE_HEIGHT,
+      eyeZ: (options.bob ? lerp(prev.z + bob(prev), p.z + bob(p), t) : lerp(prev.z, p.z, t)) + PLAYER_EYE_HEIGHT,
       yaw: lerpAngle(prev.angle, p.angle, t),
       pitch: lerp(prev.pitch, p.pitch, t),
     };
@@ -791,7 +821,9 @@ function main(): void {
     };
     gore.update(dt, goreWorld);
     renderer.flash = Math.max(0, renderer.flash - dt * 12);
-    canvas.style.transform = now < joltUntil ? `translate(${(Math.random() - 0.5) * 10}px, ${(Math.random() - 0.5) * 8}px)` : '';
+    // Comfort options: faint flashes, no shake.
+    if (!options.flashes) renderer.flash = Math.min(renderer.flash, 0.25);
+    canvas.style.transform = options.shake && now < joltUntil ? `translate(${(Math.random() - 0.5) * 10}px, ${(Math.random() - 0.5) * 8}px)` : '';
     timing.sim = smooth(timing.sim, performance.now() - simStart);
     const renderStart = performance.now();
     renderer.render(view, now, [...buildSprites(world, state, prevEnemies, t, view, spawnAngles, throws, now), ...gore.sprites(goreWorld)]);
@@ -850,6 +882,7 @@ function main(): void {
       ammo.classList.toggle('empty', mag === 0);
     }
     hurtFlash.hidden = now >= hurtUntil;
+    hurtFlash.classList.toggle('faint', !options.flashes);
     if (now >= bannerUntil) banner.hidden = true;
     // The boss bar: the first boss awake and alive, with its name and health.
     const bossIndex = state.enemies.findIndex((x) => isBoss(x.type) && x.mode !== 'idle' && x.mode !== 'dead');

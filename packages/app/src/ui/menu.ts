@@ -86,6 +86,7 @@ export class Menu {
   }
 
   private hover(e: Event): void {
+    if (stack[stack.length - 1] !== this) return;
     const item = (e.target as HTMLElement).closest<HTMLElement>('[data-item]');
     const i = item ? this.items().indexOf(item) : -1;
     if (i >= 0 && i !== this.index) this.select(i);

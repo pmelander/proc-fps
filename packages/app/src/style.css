@@ -225,6 +225,54 @@ h1 {
   background-image: var(--screen-light);
 }
 
+/* A panel (options, controls, best runs) open over a screen hides the rest of it. */
+.screen.sub > :not(.panel),
+.screen.sub > .panel[hidden] {
+  display: none !important;
+}
+.panel {
+  display: grid;
+  gap: calc(var(--u) * 4);
+  justify-items: center;
+  padding: calc(var(--u) * 4) calc(var(--u) * 8);
+  max-width: 92vw;
+}
+.panel .menu {
+  min-width: 0;
+  padding: 0;
+}
+.panel .hint {
+  min-height: calc(var(--u) * 10);
+  color: var(--bone-dim);
+}
+/* The options: label left, value right. */
+.menu.options {
+  min-width: min(calc(var(--u) * 220), 86vw);
+}
+.menu.options [data-item] {
+  font-size: var(--f1);
+  line-height: 1.25;
+}
+.menu.options .v {
+  display: inline-block;
+  min-width: calc(var(--u) * 26);
+  text-align: center;
+}
+.bar {
+  display: inline-flex;
+  gap: var(--u);
+  vertical-align: middle;
+}
+.bar i {
+  width: calc(var(--u) * 2);
+  height: calc(var(--u) * 6);
+  background: var(--iron-mid);
+  box-shadow: 0 0 0 var(--u) var(--ink);
+}
+.bar i.on {
+  background: var(--accent);
+}
+
 /* Tables: the tally, the run's levels, the best runs. */
 table {
   border-collapse: collapse;
@@ -673,6 +721,9 @@ body.ended .hud {
   to {
     opacity: 0;
   }
+}
+#hurt.faint {
+  opacity: 0.35;
 }
 #hurt {
   position: fixed;

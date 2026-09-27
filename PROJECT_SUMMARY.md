@@ -85,7 +85,7 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 
 **Verified:**
 - The typecheck is clean.
-- 142 tests pass.
+- 146 tests pass.
 - 2000 seeds produce 0 validation failures (about 12 ms per map including validation).
 - The production build succeeds (about 45 kB JS).
 - Headless Chromium (SwiftShader) renders correctly.
@@ -93,6 +93,7 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 **Not yet verified:** real mouse and keyboard play. Pointer lock can't run headless.
 
 - The game is called **Null Sector** (chosen over Hellseed, Gridfall, Cursed Protocol and others; not yet checked against existing games or trademarks). The name shows on the title logo and the page titles; the repository, the `@proc-fps/*` packages and the browser-storage keys (`proc-fps.run`, `.best`, `.difficulty`, so saved runs carry over) keep the working name.
+- Options (M22): `app/src/options.ts` holds them (mouse speed 0.1–3×, invert look, vertical field of view 60–90°, music and sound volume 0–10, screen shake, flashes, head bob), sanitized from the browser's storage (`proc-fps.options`; no storage means the defaults). `ui/optionspanel.ts` is the panel on the title and pause screens: left/right or the arrows turn a setting, a line explains the chosen one, Reset and Back; each change is saved and applied at once, so the game behind the pause screen shows it. None reaches the sim: sensitivity scales the turn the input records, so replays hold. Flashes off keeps muzzle, blast and hurt flashes faint; M and N still mute on top of the volumes.
 - UI revamp (M21):
   - A procedural pixel font (`app/src/ui/font.ts`): 5×7 glyphs drawn as text art, built at load time into a real TrueType font (every lit pixel a square; regular and a heavy face one pixel bolder) and registered with `FontFace`, so the whole UI is ordinary text in it. Capitals only (lowercase maps to them), proportional punctuation, digits all one width.
   - The skin (`ui/skin.ts`, `style.css`): a UI pixel `--u` sized to the window (every border, gap and glyph pixel is a whole number of them, so nothing blurs), colours taken from the game's 64-colour palette, and textures drawn in it at load: a riveted iron plate (a nine-slice border image), a Bayer-dithered darkening for overlays like the scene's own dithering, a dithered fire ramp for the logo, hazard stripes. The level's theme light is the accent (menu pointers, ammo, compass), so the UI takes on each level's colour.
@@ -243,17 +244,21 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 - **M8 — catwalks and double-height rooms:** ✅ complete (generator v0.12.0, map format 1). Slabs, level-aware grid, sim and rendering, and catwalk rooms.
 - **M9 — weapon redesign and bridges:** ✅ complete (generator v0.13.0). A futuristic energy scattergun seen correctly over the barrel, and catwalks carrying corridors between storeys across lower rooms.
 - **M10 — play-test polish:** ✅ complete (generator v0.14.0). Lifts stop after each trip, blast doors, a filled automap, and held keys on the HUD.
+- **M11 — procedural enemies:** ✅ complete. Every generated level breeds its own mutants: seeded stat variants per role (core `enemyDefsFor`) and seeded body plans and skins that stand out from the theme (render `enemyLooks`). The exit gets a glowing pad, a light beacon and a hum.
 - **M12 — level types and verticality:** ✅ complete (generator v0.15.0). Compound, ascent and descent levels paced through a run; 3–5 storeys; one-way drops kept only where they cannot strand the player; atriums; validation over (cell, keys held) states.
 - **M13 — play-test polish II:** ✅ complete (generator v0.16.0). An 8-shot magazine with reload, the ammo panel and a top-centre health bar; a heavier, slower tempo; damage direction glows; the left-hand chainsword with invulnerability frames; much more gore (pools, wall and screen splatter); two enemy variants per role with leg types and glowing markings; a heavier shot with tracers and impact debris; the raised-lift clipping fix.
 - **M14 — rendering performance:** ✅ complete. The palette post pass now runs at the scene's low resolution (the canvas holds 240 rows and CSS scales it up pixelated; same image, a twentieth of the fill at 1080p), portal culling draws only the sectors the camera can see (about 7% of a level's sectors), visible ranges draw in one call, sprite quads reuse one buffer, and F3 shows a perf overlay (F4 toggles culling).
 - **M15 — more weapons:** ✅ complete. The heavy bolter (fast, accurate, explosive bolts) beside the scattergun, weapon switching (1/2, wheel, Q), per-weapon magazines, its own view model, sounds, tracers and bursts, and a per-weapon ammo panel with weapon slots.
 - **M16 — enemy behaviour:** ✅ complete (generator v0.17.0). Enemies ride lifts and follow the player between storeys, snipers perch on catwalk tops, and some enemies flank.
-- **M19 — grenade launcher:** ✅ complete (generator v0.20.0). Scarce grenades, found in loot and secret rooms, lobbed from the left hand with E; doors and secret walls moved to Space.
-- **M21 — UI revamp:** ✅ complete. A procedural pixel font built into a TrueType font at load, a pixel-grid skin in the game's palette and the level's theme colour, keyboard menus, a title card per level, a Doom-style end-of-level tally, and a riveted-plate HUD.
-- **M20 — projectile patterns:** ✅ complete. Lobbed globs and homing orbs for grunt variants; walls with a gap, split shots, spirals and homing fans rotated into boss phases.
-- **M18 — boss fights:** ✅ complete. Bosses fight in phases with rotating attacks (volleys, ring bursts, summoned packs, telegraphed slams), an enraged last phase, blows the chainsword cannot shield, a named boss bar, and deaths worth watching.
 - **M17 — run structure:** ✅ complete. A title screen, four difficulties, runs tracked across levels with a score, an end-of-level screen with the run so far, a run summary and the best runs.
-- **M11 — procedural enemies:** ✅ complete. Every generated level breeds its own mutants: seeded stat variants per role (core `enemyDefsFor`) and seeded body plans and skins that stand out from the theme (render `enemyLooks`). The exit gets a glowing pad, a light beacon and a hum.
+- **M18 — boss fights:** ✅ complete. Bosses fight in phases with rotating attacks (volleys, ring bursts, summoned packs, telegraphed slams), an enraged last phase, blows the chainsword cannot shield, a named boss bar, and deaths worth watching.
+- **M19 — grenade launcher:** ✅ complete (generator v0.20.0). Scarce grenades, found in loot and secret rooms, lobbed from the left hand with E; doors and secret walls moved to Space.
+- **M20 — projectile patterns:** ✅ complete. Lobbed globs and homing orbs for grunt variants; walls with a gap, split shots, spirals and homing fans rotated into boss phases.
+- **M21 — UI revamp:** ✅ complete. A procedural pixel font built into a TrueType font at load, a pixel-grid skin in the game's palette and the level's theme colour, keyboard menus, a title card per level, a Doom-style end-of-level tally, and a riveted-plate HUD.
+- **M22 — options:** ✅ complete. Mouse speed, invert look, field of view, music and sound volume, screen shake, flashes and head bob, from the title and pause screens, kept in the browser.
+- **M23 — per-theme palettes:** planned. Each theme quantizes to its own 64 colours (hell reads red, crypt green), and the UI follows.
+- **M24 — more enemy roles:** planned. New ordinary roles beside grunt, brute and sniper, such as a charger, an exploder or a shielded enemy.
+- **M25 — pickups:** planned. Beyond health and grenades: armour, a berserk power-up for the chainsword, and the like.
 
 ## Doors (decided)
 

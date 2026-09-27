@@ -49,10 +49,12 @@ export function pauseScreen(info: PauseInfo, started: boolean): string {
     : `<p class="kicker">${kind || '&nbsp;'}</p><h1 class="heading huge">${what}</h1>`) +
     `<div class="stripe" style="width: 60%"></div>` +
     `<p class="blink">Click to ${started ? 'fight on' : 'fight'}</p>` +
-    `<div class="plate" data-panel="controls" hidden>${controlsHtml()}</div>` +
+    `<div class="panel plate" data-panel="controls" hidden>${controlsHtml()}<nav class="menu"><button type="button" data-item data-action="back">Back</button></nav></div>` +
+    `<div class="panel plate" data-panel="options" hidden></div>` +
     (runLine ? `<p class="run">${runLine}</p>` : '') +
     `<nav class="menu row">` +
     `<button type="button" data-item data-action="resume">${started ? 'Resume' : 'Fight'} <span class="key">Enter</span></button>` +
+    `<button type="button" data-item data-action="options">Options</button>` +
     `<button type="button" data-item data-action="controls">Controls</button>` +
     `<button type="button" data-item data-action="title">Quit to title</button>` +
     `<button type="button" data-item data-action="browse">Seed browser</button>` +

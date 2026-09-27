@@ -27,6 +27,9 @@ export class AudioEngine {
   private buffers = new Map<SoundId, AudioBuffer>();
   musicOn = true;
   soundOn = true;
+  /** Volumes from the options, 0–1, under the M and N mutes. */
+  private musicLevel = 1;
+  private soundLevel = 1;
 
   constructor(private readonly seed: string) {}
 
@@ -41,10 +44,10 @@ export class AudioEngine {
     const master = ctx.createGain();
     master.connect(ctx.destination);
     this.sfx = ctx.createGain();
-    this.sfx.gain.value = SFX_VOLUME;
+    this.sfx.gain.value = SFX_VOLUME * this.soundLevel;
     this.sfx.connect(master);
     this.musicOut = ctx.createGain();
-    this.musicOut.gain.value = this.musicOn ? MUSIC_VOLUME : 0;
+    this.musicOut.gain.value = this.musicOn ? MUSIC_VOLUME * this.musicLevel : 0;
     this.musicOut.connect(master);
     for (const [id, samples] of Object.entries(designSounds(this.seed, SAMPLE_RATE)) as [SoundId, Float32Array<ArrayBuffer>][]) {
       const buf = ctx.createBuffer(1, samples.length, SAMPLE_RATE);
@@ -87,7 +90,16 @@ export class AudioEngine {
 
   toggleMusic(): void {
     this.musicOn = !this.musicOn;
-    if (this.musicOut && this.ctx) this.musicOut.gain.setTargetAtTime(this.musicOn ? MUSIC_VOLUME : 0, this.ctx.currentTime, 0.1);
+    if (this.musicOut && this.ctx) this.musicOut.gain.setTargetAtTime(this.musicOn ? MUSIC_VOLUME * this.musicLevel : 0, this.ctx.currentTime, 0.1);
+  }
+
+  /** Sets the music and sound volumes (0–1). */
+  setVolumes(music: number, sound: number): void {
+    this.musicLevel = music;
+    this.soundLevel = sound;
+    if (!this.ctx) return;
+    this.musicOut?.gain.setTargetAtTime(this.musicOn ? MUSIC_VOLUME * music : 0, this.ctx.currentTime, 0.05);
+    this.sfx?.gain.setTargetAtTime(SFX_VOLUME * sound, this.ctx.currentTime, 0.05);
   }
 
   toggleSound(): void {

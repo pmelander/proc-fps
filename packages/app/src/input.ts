@@ -25,6 +25,9 @@ export class InputSampler {
   private wantLast = false;
   private lastWeapon = 0;
   private heldWeapon = 0;
+  /** Mouse sensitivity as a multiple of the tuned default, and mouse up looking down (options.ts). */
+  sensitivity = 1;
+  invertLook = false;
 
   constructor(private readonly element: HTMLElement) {
     addEventListener('keydown', (e) => {
@@ -99,8 +102,8 @@ export class InputSampler {
     this.wantSlot = -1;
     this.wantStep = 0;
     this.wantLast = false;
-    this.pendingTurn += -this.mouseDX * MOUSE_SENSITIVITY + (k('ArrowLeft') - k('ArrowRight')) * KEY_TURN;
-    this.pendingLook += -this.mouseDY * MOUSE_SENSITIVITY;
+    this.pendingTurn += -this.mouseDX * MOUSE_SENSITIVITY * this.sensitivity + (k('ArrowLeft') - k('ArrowRight')) * KEY_TURN;
+    this.pendingLook += (this.invertLook ? 1 : -1) * this.mouseDY * MOUSE_SENSITIVITY * this.sensitivity;
     frame.turn = Math.max(-MAX_TURN, Math.min(MAX_TURN, this.pendingTurn));
     frame.look = Math.max(-MAX_LOOK, Math.min(MAX_LOOK, this.pendingLook));
     this.pendingTurn -= frame.turn;
