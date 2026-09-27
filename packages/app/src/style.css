@@ -62,7 +62,7 @@ canvas[hidden] {
 }
 #compass {
   position: fixed;
-  top: 10px;
+  top: 42px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -111,28 +111,121 @@ canvas[hidden] {
   box-shadow: 0 0 0 1px rgb(0 0 0 / 0.6);
   pointer-events: none;
 }
-#health {
+/* Health: a bar across the top centre, the compass just under it. */
+#healthbar {
   position: fixed;
-  left: 16px;
-  bottom: 12px;
-  font: 700 38px/1 ui-monospace, monospace;
-  color: #c8f0a0;
-  text-shadow: 2px 2px 0 #000;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(320px, 44vw);
+  height: 18px;
+  border: 2px solid rgb(0 0 0 / 0.75);
+  background: rgb(0 0 0 / 0.45);
+  box-shadow: 0 0 0 1px rgb(242 176 74 / 0.35);
   pointer-events: none;
 }
-#health::after {
-  content: ' HP';
-  font-size: 16px;
-  color: #8f8a80;
+#healthbar .fill {
+  height: 100%;
+  width: 100%;
+  background: #6fd24a;
+  transition: width 0.15s steps(4);
 }
-#health.low {
+#healthbar.mid .fill {
+  background: #e8b830;
+}
+#healthbar.low .fill {
+  background: #ff4a3a;
+  animation: low-health 0.6s steps(2) infinite;
+}
+@keyframes low-health {
+  50% {
+    opacity: 0.55;
+  }
+}
+#healthbar .value {
+  position: absolute;
+  inset: 0;
+  font: 700 13px/18px ui-monospace, monospace;
+  text-align: center;
+  color: #fff;
+  text-shadow: 1px 1px 0 #000;
+}
+/* Ammo: the type, a pip per round in the cell, and the (infinite) reserve, bottom right. */
+#ammo {
+  position: fixed;
+  right: 18px;
+  bottom: 16px;
+  padding: 8px 12px 9px;
+  min-width: 170px;
+  background: rgb(0 0 0 / 0.45);
+  border: 2px solid rgb(0 0 0 / 0.7);
+  box-shadow: 0 0 0 1px rgb(242 176 74 / 0.3);
+  font: 700 12px/1.2 ui-monospace, monospace;
+  color: #f2b04a;
+  text-shadow: 1px 1px 0 #000;
+  pointer-events: none;
+  z-index: 1;
+}
+#ammo .type {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #d8d2c4;
+}
+#ammo .cell {
+  width: 8px;
+  height: 12px;
+  background: var(--glow, #33b3ff);
+  box-shadow: 0 0 6px var(--glow, #33b3ff);
+}
+#ammo .pips {
+  display: flex;
+  gap: 4px;
+  margin: 7px 0 5px;
+  height: 22px;
+  align-items: flex-end;
+}
+#ammo .pip {
+  width: 12px;
+  height: 22px;
+  border: 2px solid rgb(0 0 0 / 0.8);
+  background: rgb(255 255 255 / 0.08);
+}
+#ammo .pip.full {
+  background: var(--glow, #33b3ff);
+  box-shadow: 0 0 5px var(--glow, #33b3ff);
+}
+#ammo .reloading {
+  flex: 1;
+  height: 22px;
+  border: 2px solid rgb(0 0 0 / 0.8);
+  background: linear-gradient(90deg, var(--glow, #33b3ff) var(--p, 0%), rgb(255 255 255 / 0.08) var(--p, 0%));
+  font: 700 11px/18px ui-monospace, monospace;
+  text-align: center;
+  color: #fff;
+  letter-spacing: 0.12em;
+}
+#ammo .count {
+  font-size: 22px;
+  color: #fff;
+}
+#ammo .count b {
+  color: #fff;
+}
+#ammo .reserve {
+  color: #f2b04a;
+  font-size: 20px;
+}
+#ammo.empty .count b {
   color: #ff5a4a;
 }
-/* Keys held (main.ts): a row of key icons above the health. */
+/* Keys held (main.ts): a row of key icons, bottom left. */
 #keys {
   position: fixed;
   left: 12px;
-  bottom: 54px;
+  bottom: 12px;
   display: flex;
   gap: 2px;
   pointer-events: none;

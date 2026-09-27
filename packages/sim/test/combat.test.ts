@@ -7,6 +7,8 @@ import {
   ENEMY_DEFS,
   FIRE_COOLDOWN,
   HEALTH_PICKUP,
+  MAG_SIZE,
+  RELOAD_TICKS,
   MELEE_DAMAGE,
   PELLETS,
   PLAYER_DAMAGE,
@@ -81,6 +83,54 @@ describe('player weapon', () => {
     const walled = sim(arena({ w: 3, h: 1, doorAt: 3, things: [[EnemyType.Grunt, 5, 0]] }));
     walled.step({ fire: true });
     expect(walled.state.enemies[0]!.hp).toBe(ENEMY_DEFS[EnemyType.Grunt].hp);
+  });
+
+  it('fires a cell of MAG_SIZE shots, then reloads by itself before firing again', () => {
+    const { state, step } = sim(arena({ w: 8, h: 3, py: 1 }));
+    step({ turn: -Math.PI / 2 }); // face the wall
+    const shots: number[] = [];
+    let reloadAt = -1;
+    let reloadedAt = -1;
+    for (let t = 0; t < MAG_SIZE * FIRE_COOLDOWN + RELOAD_TICKS + 5; t++) {
+      step({ fire: true });
+      if (events(state, 'shot').length) shots.push(state.tick);
+      if (events(state, 'reload').length) reloadAt = state.tick;
+      if (events(state, 'reloaded').length) reloadedAt = state.tick;
+    }
+    // Eight shots a cooldown apart; the eighth empties the cell and starts the reload.
+    expect(shots.slice(0, MAG_SIZE + 1).map((t) => t - shots[0]!)).toEqual([...Array.from({ length: MAG_SIZE }, (_, i) => i * FIRE_COOLDOWN), (MAG_SIZE - 1) * FIRE_COOLDOWN + RELOAD_TICKS]);
+    expect(reloadAt).toBe(shots[MAG_SIZE - 1]);
+    expect(reloadedAt - reloadAt).toBe(RELOAD_TICKS);
+    expect(state.player.mag).toBe(MAG_SIZE - (shots.length - MAG_SIZE));
+  });
+
+  it('reloads early with R, and never with a full cell', () => {
+    const { state, step } = sim(arena({ w: 8, h: 3, py: 1 }));
+    step({ turn: -Math.PI / 2 });
+    step({ reload: true });
+    expect(events(state, 'reload')).toEqual([]);
+    step({ fire: true });
+    expect(state.player.mag).toBe(MAG_SIZE - 1);
+    step({ reload: true });
+    expect(events(state, 'reload')).toHaveLength(1);
+    // No shots through the reload, then a full cell.
+    let shot = false;
+    for (let t = 0; t < RELOAD_TICKS - 2; t++) {
+      step({ fire: true });
+      shot ||= events(state, 'shot').length > 0;
+    }
+    expect(shot).toBe(false);
+    step({}, 2);
+    expect([state.player.mag, state.player.reload]).toEqual([MAG_SIZE, 0]);
+  });
+
+  it('still strikes in melee while reloading', () => {
+    const { state, step } = sim(arena({ w: 6, h: 1, things: [[EnemyType.Grunt, 1, 0]] }));
+    state.player.mag = 1;
+    step({ reload: true });
+    expect(state.player.reload).toBeGreaterThan(0);
+    step({ fire: true });
+    expect(events(state, 'melee')).toEqual([{ type: 'melee', enemy: 0 }]);
   });
 
   it('wakes enemies with gunfire, but not through a closed door', () => {

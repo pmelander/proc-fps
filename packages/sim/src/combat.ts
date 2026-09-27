@@ -1,5 +1,6 @@
 import {
   FIRE_COOLDOWN,
+  MAG_SIZE,
   MELEE_COOLDOWN,
   MELEE_DAMAGE,
   MELEE_REACH,
@@ -9,6 +10,7 @@ import {
   PLAYER_EYE_HEIGHT,
   PLAYER_HEIGHT,
   PLAYER_RADIUS,
+  RELOAD_TICKS,
   WEAPON_RANGE,
   dcos,
   dsin,
@@ -37,11 +39,22 @@ export function hurtPlayer(state: SimState, amount: number): void {
 /**
  * Fires when the trigger is held and the weapon is ready. An enemy right in front (within
  * MELEE_REACH and 45° of the aim) takes an automatic melee strike; otherwise the shotgun fires
- * PELLETS pellets in a fixed spread, each hitting the nearest enemy before any wall.
+ * PELLETS pellets in a fixed spread, each hitting the nearest enemy before any wall. Each shot
+ * spends one of the cell's MAG_SIZE rounds; the last starts a RELOAD_TICKS reload (so does
+ * `reload`, early), and nothing fires until it ends. Melee needs no rounds.
  */
-export function playerFire(world: World, state: SimState, trigger: boolean): void {
+export function playerFire(world: World, state: SimState, trigger: boolean, reload = false): void {
   const p = state.player;
   if (p.fireCooldown > 0) p.fireCooldown--;
+  if (p.reload > 0 && --p.reload === 0) {
+    p.mag = MAG_SIZE;
+    state.events.push({ type: 'reloaded' });
+  }
+  const startReload = () => {
+    p.reload = RELOAD_TICKS;
+    state.events.push({ type: 'reload' });
+  };
+  if (reload && p.reload === 0 && p.mag < MAG_SIZE) startReload();
   if (!trigger || p.fireCooldown > 0) return;
 
   const fx = dcos(p.angle);
@@ -60,8 +73,11 @@ export function playerFire(world: World, state: SimState, trigger: boolean): voi
     return;
   }
 
+  // Melee needs no ammo; a shot needs a loaded cell.
+  if (p.reload > 0) return;
   p.fireCooldown = FIRE_COOLDOWN;
   state.events.push({ type: 'shot' });
+  if (--p.mag === 0) startReload();
   makeNoise(world, state);
   const ox = p.x;
   const oy = p.y;

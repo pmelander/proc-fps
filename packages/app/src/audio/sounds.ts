@@ -11,7 +11,8 @@ export type SoundId =
   | 'door' | 'locked' | 'key' | 'health' | 'secret' | 'exit' | 'exitHum' | 'step'
   | 'windup' | 'windupMelee' | 'windupHitscan'
   | 'launch' | 'melee' | 'snipe'
-  | 'charge' | 'punch' | 'gib';
+  | 'charge' | 'punch' | 'gib'
+  | 'reload' | 'reloaded';
 
 type Recipe = Voice[];
 
@@ -25,6 +26,17 @@ const RECIPES: Record<SoundId, Recipe> = {
   ],
   // The coils recharging: a rising whine through the cooldown.
   charge: [{ wave: 'sine', freq: 260, freqEnd: 1100, attack: 0.05, sustain: 0.3, release: 0.12, volume: 0.18, vibrato: { depth: 0.03, rate: 24 } }],
+  // Reloading: the spent cell ejects with a hiss, a fresh one slides in and charges up.
+  reload: [
+    { wave: 'noise', freq: 2400, freqEnd: 600, attack: 0, sustain: 0.03, release: 0.12, volume: 0.35 },
+    { wave: 'square', freq: 220, freqEnd: 160, attack: 0.25, sustain: 0.03, release: 0.05, volume: 0.25, duty: 0.3 },
+    { wave: 'sine', freq: 180, freqEnd: 950, attack: 0.35, sustain: 0.55, release: 0.1, volume: 0.18, vibrato: { depth: 0.02, rate: 20 } },
+  ],
+  // Locked and ready: a hard double click.
+  reloaded: [
+    { wave: 'square', freq: 1300, freqEnd: 500, attack: 0, sustain: 0.01, release: 0.04, volume: 0.35, duty: 0.25 },
+    { wave: 'noise', freq: 3000, freqEnd: 1200, attack: 0.05, sustain: 0.005, release: 0.04, volume: 0.3 },
+  ],
   punch: [
     { wave: 'sine', freq: 140, freqEnd: 45, attack: 0, sustain: 0.02, release: 0.12, volume: 0.8 },
     { wave: 'noise', freq: 900, freqEnd: 200, attack: 0, sustain: 0.01, release: 0.08, volume: 0.4 },

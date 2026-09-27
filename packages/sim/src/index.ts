@@ -7,6 +7,8 @@ export * from './replay.js';
 export {
   ENEMY_DEFS,
   FIRE_COOLDOWN,
+  MAG_SIZE,
+  RELOAD_TICKS,
   MELEE_DAMAGE,
   MELEE_REACH,
   PELLETS,

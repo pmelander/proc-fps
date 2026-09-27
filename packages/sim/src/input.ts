@@ -14,6 +14,8 @@ export interface InputFrame {
   run: boolean;
   fire: boolean;
   use: boolean;
+  /** Reload the weapon now (it also reloads by itself when empty). */
+  reload: boolean;
 }
 
 export const EMPTY_INPUT: Readonly<InputFrame> = Object.freeze({
@@ -24,6 +26,7 @@ export const EMPTY_INPUT: Readonly<InputFrame> = Object.freeze({
   run: false,
   fire: false,
   use: false,
+  reload: false,
 });
 
 /** Angles are quantized so replays are compact and independent of mouse float noise. */
@@ -40,5 +43,7 @@ export function quantizeInput(i: InputFrame): InputFrame {
     run: i.run,
     fire: i.fire,
     use: i.use,
+    // Replays recorded before magazines have no reload input.
+    reload: i.reload ?? false,
   };
 }

@@ -1,4 +1,4 @@
-import { DEG_TO_RAD, PLAYER_MAX_HEALTH, ThingType, isEnemyThing, type EnemyType, type Heading } from '@proc-fps/core';
+import { DEG_TO_RAD, MAG_SIZE, PLAYER_MAX_HEALTH, ThingType, isEnemyThing, type EnemyType, type Heading } from '@proc-fps/core';
 import type { World } from './world.js';
 
 /** No buffered step. */
@@ -46,6 +46,10 @@ export interface PlayerState {
   health: number;
   /** Ticks until the weapon can fire again. */
   fireCooldown: number;
+  /** Shots left in the weapon's cell (MAG_SIZE when full). */
+  mag: number;
+  /** Ticks left of a reload in progress; 0 when not reloading. */
+  reload: number;
   /** Ticks spent on a damaging floor since it last hurt. */
   hazardTicks: number;
 }
@@ -109,6 +113,9 @@ export type SimEvent =
   | { type: 'health'; amount: number }
   | { type: 'secret'; secret: number }
   | { type: 'shot' }
+  /** A reload started (the cell ran dry, or R), and finished. */
+  | { type: 'reload' }
+  | { type: 'reloaded' }
   | { type: 'hurt'; amount: number }
   | { type: 'hit'; enemy: number }
   /** An automatic melee strike landed. */
@@ -192,6 +199,8 @@ export function createSimState(world: World): SimState {
       pitch: 0,
       health: PLAYER_MAX_HEALTH,
       fireCooldown: 0,
+      mag: MAG_SIZE,
+      reload: 0,
       hazardTicks: 0,
     },
     doors: world.doors.map(() => 0),

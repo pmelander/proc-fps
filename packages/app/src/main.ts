@@ -1,4 +1,4 @@
-import { CELL_SIZE, DoorKind, HEADING_DX, HEADING_DY, PLAYER_EYE_HEIGHT, STEP_TICKS, TICK_DT, isEnemyThing, type MapData } from '@proc-fps/core';
+import { CELL_SIZE, DoorKind, MAG_SIZE, RELOAD_TICKS, HEADING_DX, HEADING_DY, PLAYER_EYE_HEIGHT, STEP_TICKS, TICK_DT, isEnemyThing, type MapData } from '@proc-fps/core';
 import { GENERATOR_VERSION, generate, isLevelType, validateGenerated, type LevelType } from '@proc-fps/gen';
 import { BASELINE_LOOKS, HIDDEN_OFFSET, LevelRenderer, SpriteShape, THEME_COLORS, WebGL2Backend, enemyLooks, spriteTile, type Sprite } from '@proc-fps/render';
 import {
@@ -160,6 +160,7 @@ const PROJECTILE_SIZE = 14;
 /** Events that play a sound with no position (the player's own). */
 const SOUND_OF: Partial<Record<string, SoundId>> = {
   shot: 'shot', hurt: 'hurt', death: 'death', locked: 'locked', key: 'key', health: 'health', secret: 'secret', exit: 'exit',
+  reload: 'reload', reloaded: 'reloaded',
 };
 const FLASH_SECONDS = 0.12;
 /** Kill sounds pitch down with size; gib counts grow with it. */
@@ -250,7 +251,14 @@ function main(): void {
   const prompt = document.getElementById('prompt') as HTMLDivElement;
   const keysHud = document.getElementById('keys') as HTMLDivElement;
   let shownKeys = -1;
-  const health = document.getElementById('health') as HTMLDivElement;
+  const healthBar = document.getElementById('healthbar') as HTMLDivElement;
+  const healthFill = healthBar.querySelector('.fill') as HTMLDivElement;
+  const healthValue = healthBar.querySelector('.value') as HTMLSpanElement;
+  let shownHealth = -1;
+  const ammo = document.getElementById('ammo') as HTMLDivElement;
+  const ammoPips = ammo.querySelector('.pips') as HTMLDivElement;
+  const ammoCount = ammo.querySelector('.count b') as HTMLElement;
+  let shownAmmo = '';
   const gore = new Gore();
   const throws: Throws = new Map();
   let joltUntil = 0;
@@ -266,6 +274,8 @@ function main(): void {
   // The weapon's coils glow in the theme's light colour.
   const theme = THEME_COLORS[(map.meta.theme ?? 'base') as keyof typeof THEME_COLORS] ?? THEME_COLORS.base;
   const weapon = new Weapon(document.getElementById('gun') as HTMLCanvasElement, theme.techLight);
+  // The ammo pips glow in the same colour as the gun's coils.
+  document.documentElement.style.setProperty('--glow', `rgb(${theme.techLight.map((c) => Math.round(c * 255)).join(' ')})`);
   const world = createWorld(map);
   const state = createSimState(world);
   let prev: PlayerState = clonePlayer(state.player);
@@ -401,8 +411,10 @@ function main(): void {
           weapon.fire(now);
           renderer.flash = 1;
           joltUntil = now + JOLT_SECONDS;
-          window.setTimeout(() => audio.play('charge'), 90);
+          // The coils recharge between shots; the last shot's reload has its own sound.
+          if (state.player.reload === 0) window.setTimeout(() => audio.play('charge'), 90);
         }
+        if (e.type === 'reload') weapon.reload(now, RELOAD_TICKS * TICK_DT);
         if (e.type === 'hurt') {
           hurtUntil = now + FLASH_SECONDS * 2;
           joltUntil = now + JOLT_SECONDS;
@@ -444,10 +456,27 @@ function main(): void {
     renderer.flash = Math.max(0, renderer.flash - dt * 12);
     canvas.style.transform = now < joltUntil ? `translate(${(Math.random() - 0.5) * 10}px, ${(Math.random() - 0.5) * 8}px)` : '';
     renderer.render(view, now, [...buildSprites(world, state, prevEnemies, t, view, spawnAngles, throws, now), ...gore.sprites(goreWorld)]);
-    weapon.update(now, dt, state.player.stepTick / STEP_TICKS);
+    weapon.update(now, dt, state.player.stepTick / STEP_TICKS, p.mag / MAG_SIZE);
 
-    health.textContent = String(p.health);
-    health.classList.toggle('low', p.health <= PLAYER_MAX_HEALTH / 4);
+    if (p.health !== shownHealth) {
+      shownHealth = p.health;
+      const f = Math.max(0, p.health) / PLAYER_MAX_HEALTH;
+      healthFill.style.width = `${Math.round(Math.min(1, f) * 100)}%`;
+      healthValue.textContent = String(Math.max(0, p.health));
+      healthBar.classList.toggle('mid', f <= 0.5 && f > 0.25);
+      healthBar.classList.toggle('low', f <= 0.25);
+    }
+    // Ammo: a pip per round, or the reload's progress while the cell refills.
+    const reloadDone = p.reload > 0 ? Math.round((1 - p.reload / RELOAD_TICKS) * 20) * 5 : -1;
+    const ammoKey = `${p.mag}|${reloadDone}`;
+    if (ammoKey !== shownAmmo) {
+      shownAmmo = ammoKey;
+      ammoPips.innerHTML = reloadDone >= 0
+        ? `<div class="reloading" style="--p: ${reloadDone}%">RELOADING</div>`
+        : Array.from({ length: MAG_SIZE }, (_, i) => `<div class="pip${i < p.mag ? ' full' : ''}"></div>`).join('');
+      ammoCount.textContent = String(p.mag);
+      ammo.classList.toggle('empty', p.mag === 0);
+    }
     hurtFlash.hidden = now >= hurtUntil;
     const ending = state.dead ? 'dead' : state.won ? 'won' : '';
     if (end.dataset.state !== ending) {

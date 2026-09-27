@@ -3,8 +3,9 @@
  * canvas and shown large and pixelated. It is held to the right and seen from above and behind,
  * so the top and side of the shroud recede towards the crosshair (never a view into the muzzle).
  * Coils and an energy cell glow in the level theme's light colour; each shot flares them white-hot,
- * then a charge sweeps back up the coils through the cooldown. It kicks, swings for melee strikes
- * and bobs with the player's steps. Render-only: the sim never sees it.
+ * then a charge sweeps back up the coils through the cooldown. The energy cell on its side shows
+ * the rounds left in the magazine; a reload dips the gun, tilts it and refills the cell. It kicks,
+ * swings for melee strikes and bobs with the player's steps. Render-only: the sim never sees it.
  */
 const W = 160;
 const H = 110;
@@ -27,6 +28,8 @@ export class Weapon {
   private kick = 0;
   private swing = 0;
   private shotAt = -10;
+  private reloadAt = -10;
+  private reloadSeconds = 1;
   private drawnKey = '';
 
   constructor(private readonly canvas: HTMLCanvasElement, private readonly glow: Rgb) {
@@ -44,8 +47,17 @@ export class Weapon {
     this.swing = 1;
   }
 
-  /** Per frame: `bob` is the step's progress (0–1, 0 when standing). */
-  update(now: number, dt: number, bob: number): void {
+  /** A reload lasting `seconds` starts now. */
+  reload(now: number, seconds: number): void {
+    this.reloadAt = now;
+    this.reloadSeconds = seconds;
+  }
+
+  /**
+   * Per frame: `bob` is the step's progress (0–1, 0 when standing); `mag` the magazine's fill
+   * (rounds left / size).
+   */
+  update(now: number, dt: number, bob: number, mag = 1): void {
     this.kick *= Math.exp(-dt * 11);
     this.swing *= Math.exp(-dt * 8);
     const since = now - this.shotAt;
@@ -54,18 +66,25 @@ export class Weapon {
     const charge = Math.round(Math.min(1, Math.max(0, since / RECHARGE)) * 12) / 12;
     const heat = Math.round(Math.max(0, 1 - since / 0.25) * 8) / 8;
     const pulse = Math.round((0.5 + 0.5 * Math.sin(now * 5)) * 4) / 4;
-    const key = `${charge}|${heat}|${flash}|${pulse}`;
+    // Reloading: 0 → 1 through the reload; the cell refills with it and the coils stay dark.
+    const r = (now - this.reloadAt) / this.reloadSeconds;
+    const reloading = r >= 0 && r < 1;
+    const cell = reloading ? Math.round(Math.max(0, (r - 0.35) / 0.55) * 16) / 16 : Math.round(mag * 16) / 16;
+    const coils = reloading ? 0 : charge;
+    const key = `${coils}|${heat}|${flash}|${pulse}|${cell}`;
     if (key !== this.drawnKey) {
-      this.draw(charge, heat, flash, pulse);
+      this.draw(coils, heat, flash, pulse, Math.min(1, cell));
       this.drawnKey = key;
     }
     const sway = Math.sin(bob * Math.PI);
-    const x = -25 - this.swing * 18 + sway * 2;
-    const y = this.kick * 14 + this.swing * 10 + sway * 3;
-    this.canvas.style.transform = `translate(${x}%, ${y}%) rotate(${-this.kick * 5 - this.swing * 34}deg)`;
+    // The reload dips the gun down and rolls it inward, then brings it back up.
+    const dip = reloading ? Math.sin(Math.PI * Math.min(1, r * 1.15)) : 0;
+    const x = -25 - this.swing * 18 + sway * 2 - dip * 6;
+    const y = this.kick * 14 + this.swing * 10 + sway * 3 + dip * 22;
+    this.canvas.style.transform = `translate(${x}%, ${y}%) rotate(${-this.kick * 5 - this.swing * 34 - dip * 16}deg)`;
   }
 
-  private draw(charge: number, heat: number, flash: boolean, pulse: number): void {
+  private draw(charge: number, heat: number, flash: boolean, pulse: number, cellFill: number): void {
     const c = this.ctx;
     c.clearRect(0, 0, W, H);
     const rgb = (k: Rgb, a = 1) => `rgb(${k.map((v) => Math.round(Math.min(1, v) * 255)).join(' ')} / ${a})`;
@@ -134,11 +153,11 @@ export class Weapon {
       const bright = Math.max(heat, lit * (0.75 + 0.25 * pulse));
       band(t, t + 0.035, rgb(mixc([0.06, 0.07, 0.08], glowNow, bright)));
     });
-    // Energy cell on the side, filling with the charge.
+    // Energy cell on the side: the magazine, full to empty.
     const cell0 = 0.18;
     const cell1 = 0.36;
     poly('#0b0c0f', [at(cell0, LOW, 0.25), at(cell0, LOW, 0.8), at(cell1, LOW, 0.8), at(cell1, LOW, 0.25)]);
-    const fill = cell0 + (cell1 - cell0) * charge;
+    const fill = cell0 + (cell1 - cell0) * cellFill;
     poly(rgb(mixc([0.1, 0.1, 0.1], glowNow, 0.6 + 0.4 * pulse)), [at(cell0, LOW, 0.35), at(cell0, LOW, 0.7), at(fill, LOW, 0.7), at(fill, LOW, 0.35)]);
     // The emitter at the tip, seen from above: a glowing slot, not a bore.
     poly(rgb(mixc(this.glow, [1, 1, 1], heat)), [spine(0.97, 0.25), spine(0.97, 0.75), spine(1, 0.72), spine(1, 0.28)]);

@@ -15,7 +15,12 @@
     <div id="prompt" hidden></div>
     <div id="crosshair"></div>
     <canvas id="gun"></canvas>
-    <div id="health">100</div>
+    <div id="healthbar"><div class="fill"></div><span class="value">100</span></div>
+    <div id="ammo">
+      <div class="type"><span class="cell"></span>Scatter cell</div>
+      <div class="pips"></div>
+      <div class="count"><b>8</b> / 8 <span class="reserve">∞</span></div>
+    </div>
     <div id="keys"></div>
     <div id="hurt" hidden></div>
     <div id="end" hidden></div>
@@ -24,6 +29,7 @@
       <p>The game pauses whenever this screen shows; Esc brings it back.</p>
       <p>WASD steps one square, mouse looks freely. The arrow at the top shows which way W goes.</p>
       <p>Click or hold the mouse button to shoot where you aim. Sidestep what enemies throw.</p>
+      <p>Ammo is infinite, but a cell holds 8 shots: it reloads itself when empty, or press R.</p>
       <p>Doors open when you walk into them. Key doors open with E or Space once you have the key.</p>
       <p>Each level of a run is harder. Hold Tab for the map, F2 starts a new run, F8 saves a replay. M music, N sound.</p>
       <p><a href="./browse.html">Seed browser</a></p>

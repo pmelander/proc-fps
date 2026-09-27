@@ -46,6 +46,7 @@ export class InputSampler {
       run: this.keys.has('ShiftLeft') || this.keys.has('ShiftRight'),
       fire: this.fire,
       use: this.keys.has('KeyE') || this.keys.has('Space'),
+      reload: this.keys.has('KeyR'),
     };
     this.mouseDX = 0;
     this.mouseDY = 0;

@@ -85,13 +85,17 @@ npm run gen:stats -- --seeds 10000 [--level n]   # health check + distributions 
 
 **Verified:**
 - The typecheck is clean.
-- 96 tests pass.
+- 99 tests pass.
 - 2000 seeds produce 0 validation failures (about 12 ms per map including validation).
 - The production build succeeds (about 45 kB JS).
 - Headless Chromium (SwiftShader) renders correctly.
 
 **Not yet verified:** real mouse and keyboard play. Pointer lock can't run headless.
 
+- Gun play: a magazine (after M12):
+  - Ammo stays infinite, but the scattergun's cell holds `MAG_SIZE` (8) shots. The eighth starts a `RELOAD_TICKS` (78, 1.3 s) reload; R reloads early (a new `reload` input, so replays hold; older replays read it as false). Nothing fires during a reload, but the automatic melee strike still does. The sim emits `reload` and `reloaded`.
+  - The gun's side cell shows the rounds left; a reload dips and rolls the gun while the cell refills, with an eject-and-charge sound and a double click when ready.
+  - HUD: a health bar top centre (green, amber at half, flashing red at a quarter) with the compass under it; bottom right the ammo type (scatter cell), a glowing pip per round in the theme's light colour, the count and an infinite reserve, and a progress bar while reloading. Held keys moved to the bottom left.
 - Level types and verticality (M12):
   - Three types (`gen/src/levels.ts`), each a profile of mission size, room sizes, storey count and how storeys join. **Compound:** one storey, wide, more rooms, detours and dead ends, bigger rooms; hordes and flanking. **Ascent:** start on storey 0, the gate, boss and exit at the top of 3–5 storeys. **Descent:** the same upside down, taken mostly by drops. A run paces them by level (`levelTypeFor`): compound, ascent, compound, descent, …; `?seed=<s>&type=<t>` and the seed browser's type menu pick one.
   - Storeys come from each room's progress along the critical path (`MissionNode.progress`: 0 at the start, 1 at the gate, boss and exit, spread evenly along both arcs of the main cycle; branches take their host's), so the climb or fall spreads over the whole level. A connection climbs at most two storeys (a tall lift); fewer storeys when the mission is too short.
@@ -210,5 +214,6 @@ In the map format a door is a one-cell sector with its kind in `Sector.special` 
 
 Ideas noted during play-testing, not yet scheduled. Each line points at whatever already exists for it.
 
-- Empty: M11 took procedural enemies, their contrast with the theme, and the exit.
+- **Heavier, slower tempo.** The player is a lumbering beast in heavy armour (think Space Marine), and the game currently feels too fast. Slow all movement down a bit, mouse look included, so there is more time to react when overwhelmed. Levers: `STEP_TICKS` (tuned together with enemy step timers and projectile speeds, see invariant 7), the turn rate and mouse sensitivity in `app/src/input.ts`, and perhaps a cap on turn speed per tick in the sim.
+- **Damage direction indicators.** When hit, a red glow on the screen edge the damage came from (left, right, behind, ahead). Needs the source position on the `hurt` event (enemy, projectile or hitscan origin; none for hazards) and a HUD overlay in the app.
 

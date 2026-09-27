@@ -23,6 +23,12 @@ export const HAZARD_TICKS = 30;
  * With an enemy right in front, firing is an automatic melee strike instead.
  */
 export const FIRE_COOLDOWN = 36;
+/**
+ * Ammo is infinite, but the scattergun's cell holds MAG_SIZE shots; the last one starts a reload
+ * (R reloads early). RELOAD_TICKS is a little over two shots' cooldown: running dry costs you.
+ */
+export const MAG_SIZE = 8;
+export const RELOAD_TICKS = 78;
 export const PELLETS = 8;
 export const PLAYER_DAMAGE = 12;
 export const WEAPON_RANGE = 4096;
